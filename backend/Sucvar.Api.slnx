@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Sucvar.Api/Sucvar.Api.csproj" />
+    <Project Path="src/Sucvar.Application/Sucvar.Application.csproj" />
+    <Project Path="src/Sucvar.Domain/Sucvar.Domain.csproj" />
+    <Project Path="src/Sucvar.Infrastructure/Sucvar.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Sucvar.Tests/Sucvar.Tests.csproj" />
+  </Folder>
+</Solution>

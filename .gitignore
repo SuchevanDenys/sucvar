@@ -1,0 +1,20 @@
+# Secrete & Variabile de mediu
+.env
+.env.*
+!.env.example
+appsettings.Development.json
+appsettings.Local.json
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+
+# .NET
+bin/
+obj/
+*.user
+*.suo
+
+# macOS
+.DS_Store

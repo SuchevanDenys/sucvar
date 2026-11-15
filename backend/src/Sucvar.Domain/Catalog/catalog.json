@@ -1,0 +1,2330 @@
+{
+ "spaceModes": {
+  "interiors": {
+   "labelRo": "Interioare",
+   "labelEn": "Interiors",
+   "spaces": [
+    {
+     "id": "living room",
+     "labelRo": "Living / Open-Space",
+     "labelEn": "Living / Open-Space",
+     "scenePrompt": "fully furnished modern living room featuring a large comfortable sofa, two armchairs, coffee table, TV media unit, area rug, floor lamp, curtains",
+     "layouts": [
+      {
+       "id": "open_lounge",
+       "labelRo": "Open-space (canapea pe axul TV + zonă dining)",
+       "labelEn": "Open-space (sofa on TV axis + dining area)",
+       "prompt": "open-plan layout, sofa facing the media wall, dining table near the window"
+      },
+      {
+       "id": "sectional_media_wall",
+       "labelRo": "Colțar modular + perete media cu rafturi încorporate",
+       "labelEn": "Sectional sofa + media wall with built-in shelving",
+       "prompt": "L-shaped sectional sofa facing a media wall with built-in shelving"
+      }
+     ],
+     "scenarios": [
+      {
+       "id": "liv_fireplace",
+       "labelRo": "Șemineu cu bioetanol & perete de piatră",
+       "labelEn": "Bioethanol fireplace & stone feature wall",
+       "prompt": "linear fireplace in stone feature wall",
+       "materialRo": "Piatră naturală placată, focar bioetanol, nișă TV încastrată",
+       "materialEn": "Stone cladding, bioethanol burner, recessed TV niche"
+      },
+      {
+       "id": "liv_dining",
+       "labelRo": "Zonă de dining integrată (masă 6 persoane)",
+       "labelEn": "Integrated dining zone (seats 6)",
+       "prompt": "integrated dining table for six, pendant light",
+       "materialRo": "Masă extensibilă, scaune tapițate, corp de iluminat suspendat",
+       "materialEn": "Extendable table, upholstered chairs, pendant fixture"
+      },
+      {
+       "id": "liv_library",
+       "labelRo": "Bibliotecă încorporată & colț de lectură",
+       "labelEn": "Built-in library & reading nook",
+       "prompt": "built-in bookshelves, reading nook armchair",
+       "materialRo": "Rafturi MDF până în tavan, iluminat LED în nișe",
+       "materialEn": "Floor-to-ceiling MDF shelving, LED niche lighting"
+      },
+      {
+       "id": "liv_terrace",
+       "labelRo": "Ieșire spre terasă prin uși glisante",
+       "labelEn": "Terrace access via sliding doors",
+       "prompt": "floor-to-ceiling sliding glass doors to terrace",
+       "materialRo": "Tâmplărie glisantă aluminiu, sticlă triplă, prag îngropat",
+       "materialEn": "Aluminium lift-slide frames, triple glazing, flush threshold"
+      }
+     ],
+     "defaults": {
+      "width": 4.5,
+      "length": 6,
+      "height": 2.7,
+      "doorsCount": 1,
+      "windowsCount": 2
+     },
+     "sizePresets": {
+      "compact": {
+       "width": 3.6,
+       "length": 5
+      },
+      "spacious": {
+       "width": 6,
+       "length": 8
+      }
+     },
+     "targetLux": 200,
+     "fitout": {
+      "economy": 150,
+      "standard": 300,
+      "luxury": 650,
+      "labelRo": "Mobilier living",
+      "labelEn": "Living room furniture"
+     },
+     "finishFactor": 1,
+     "costBasis": "facade",
+     "hardscapeShare": 0.4
+    },
+    {
+     "id": "kitchen",
+     "labelRo": "Bucătărie",
+     "labelEn": "Kitchen",
+     "scenePrompt": "fully furnished modern kitchen with fitted cabinetry, kitchen island with bar stools, built-in appliances, pendant lights",
+     "layouts": [
+      {
+       "id": "l_island",
+       "labelRo": "Bucătărie în L + insulă centrală (triunghi ergonomic)",
+       "labelEn": "L-shape kitchen + central island (work triangle)",
+       "prompt": "L-shaped ergonomic layout, central marble island, sink by the window"
+      },
+      {
+       "id": "u_shape",
+       "labelRo": "Configurație în U pe 3 pereți (depozitare maximă)",
+       "labelEn": "U-shape, 3-wall configuration (max storage)",
+       "prompt": "U-shaped layout on three walls, tall pantry cabinets, LED counter lighting"
+      }
+     ],
+     "scenarios": [
+      {
+       "id": "kit_island",
+       "labelRo": "Insulă centrală & electrocasnice încorporate",
+       "labelEn": "Central island & built-in appliances",
+       "prompt": "central island with built-in hob and oven",
+       "materialRo": "Blat cuarț 20 mm, plită inducție încastrată, hotă insulară",
+       "materialEn": "Quartz top 20 mm, flush induction hob, island hood"
+      },
+      {
+       "id": "kit_linear",
+       "labelRo": "Bucătărie liniară compactă",
+       "labelEn": "Compact linear kitchen",
+       "prompt": "compact single-wall linear kitchen",
+       "materialRo": "Corpuri 60 cm modulare, electrocasnice 60 cm, blat 38 mm",
+       "materialEn": "Modular 60 cm units, 60 cm appliances, 38 mm worktop"
+      },
+      {
+       "id": "kit_dining",
+       "labelRo": "Open-space cu zonă de dining",
+       "labelEn": "Open-plan with dining area",
+       "prompt": "open-plan kitchen flowing into dining table",
+       "materialRo": "Masă dining 160 cm, iluminat suspendat pe două puncte",
+       "materialEn": "160 cm dining table, two-point pendant lighting"
+      },
+      {
+       "id": "kit_pantry",
+       "labelRo": "Cămară walk-in & coloane ascunse",
+       "labelEn": "Walk-in pantry & concealed columns",
+       "prompt": "tall handleless pantry columns, hidden storage",
+       "materialRo": "Coloane H 240 cm, uși push-to-open, sertare organizate",
+       "materialEn": "240 cm columns, push-to-open doors, organised drawers"
+      }
+     ],
+     "defaults": {
+      "width": 3.5,
+      "length": 4.5,
+      "height": 2.6,
+      "doorsCount": 1,
+      "windowsCount": 1
+     },
+     "sizePresets": {
+      "compact": {
+       "width": 2.5,
+       "length": 3.5
+      },
+      "spacious": {
+       "width": 5,
+       "length": 6.5
+      }
+     },
+     "targetLux": 300,
+     "fitout": {
+      "economy": 420,
+      "standard": 800,
+      "luxury": 1600,
+      "labelRo": "Mobilier bucătărie & electrocasnice",
+      "labelEn": "Kitchen cabinetry & appliances"
+     },
+     "finishFactor": 1.15,
+     "costBasis": "facade",
+     "hardscapeShare": 0.4
+    },
+    {
+     "id": "master bedroom",
+     "labelRo": "Dormitor",
+     "labelEn": "Bedroom",
+     "scenePrompt": "fully furnished modern bedroom featuring a luxury upholstered king bed, two nightstands with lamps, integrated ambient lighting, custom wardrobe, bedding and curtains",
+     "layouts": [
+      {
+       "id": "bed_symmetric",
+       "labelRo": "Pat central pe peretele tăbliei + noptiere simetrice",
+       "labelEn": "Centered bed on headboard wall + symmetrical nightstands",
+       "prompt": "king bed centered on the headboard wall, symmetrical nightstands, wall sconces"
+      },
+      {
+       "id": "bed_wardrobe_wall",
+       "labelRo": "Perete de dulapuri încorporate + colț de lectură",
+       "labelEn": "Built-in wardrobe wall + reading corner",
+       "prompt": "floor-to-ceiling built-in wardrobe wall, king bed, reading armchair by the window"
+      }
+     ],
+     "scenarios": [
+      {
+       "id": "bed_headboard",
+       "labelRo": "Perete accent cu tăblie lambrisată",
+       "labelEn": "Accent wall with panelled headboard",
+       "prompt": "panelled headboard accent wall, wall sconces",
+       "materialRo": "Lambriu MDF vopsit, aplice cu braț reglabil",
+       "materialEn": "Painted MDF panelling, swing-arm sconces"
+      },
+      {
+       "id": "bed_suite",
+       "labelRo": "Suită parentală cu dressing & baie",
+       "labelEn": "Master suite with dressing & ensuite",
+       "prompt": "master suite with open dressing area",
+       "materialRo": "Sticlă securizată 8 mm, ușă pivotantă, pardoseală continuă",
+       "materialEn": "8 mm tempered glass, pivot door, continuous flooring"
+      },
+      {
+       "id": "bed_blackout",
+       "labelRo": "Draperii blackout & lumină ambientală",
+       "labelEn": "Blackout curtains & ambient light",
+       "prompt": "full-height blackout curtains, cove lighting",
+       "materialRo": "Draperii dublu-strat pe șină ascunsă, bandă LED 2700 K",
+       "materialEn": "Double-layer curtains on recessed track, 2700 K LED strip"
+      },
+      {
+       "id": "bed_workspace",
+       "labelRo": "Colț de birou integrat în dormitor",
+       "labelEn": "Integrated desk corner",
+       "prompt": "compact built-in desk corner by the window",
+       "materialRo": "Blat suspendat 60 cm, priză integrată, corp liniar",
+       "materialEn": "60 cm floating desk, integrated outlet, linear lamp"
+      }
+     ],
+     "defaults": {
+      "width": 3.8,
+      "length": 4.5,
+      "height": 2.6,
+      "doorsCount": 1,
+      "windowsCount": 1
+     },
+     "sizePresets": {
+      "compact": {
+       "width": 3,
+       "length": 3.6
+      },
+      "spacious": {
+       "width": 5,
+       "length": 6
+      }
+     },
+     "targetLux": 150,
+     "fitout": {
+      "economy": 170,
+      "standard": 340,
+      "luxury": 760,
+      "labelRo": "Mobilier dormitor & dulapuri",
+      "labelEn": "Bedroom furniture & wardrobes"
+     },
+     "finishFactor": 1,
+     "costBasis": "facade",
+     "hardscapeShare": 0.4
+    },
+    {
+     "id": "bathroom",
+     "labelRo": "Baie / Spa",
+     "labelEn": "Bathroom / Spa",
+     "scenePrompt": "fully finished modern bathroom with vanity unit and mirror, walk-in shower, toilet, towel radiator, recessed lighting",
+     "layouts": [
+      {
+       "id": "bath_walkin",
+       "labelRo": "Duș walk-in + lavoar suspendat pe peretele opus",
+       "labelEn": "Walk-in shower + wall-hung vanity opposite",
+       "prompt": "walk-in shower with glass screen, floating vanity, large mirror"
+      },
+      {
+       "id": "bath_tub_window",
+       "labelRo": "Cadă sub fereastră + vanity dublu",
+       "labelEn": "Bathtub under window + double vanity",
+       "prompt": "bathtub under the window, double vanity, wall niches"
+      }
+     ],
+     "scenarios": [
+      {
+       "id": "bath_walkin",
+       "labelRo": "Duș walk-in & plăci format mare",
+       "labelEn": "Walk-in shower & large-format tiles",
+       "prompt": "walk-in shower, large-format porcelain slabs",
+       "materialRo": "Gresie 120×60 rectificată, rigolă liniară, sticlă 8 mm",
+       "materialEn": "Rectified 120×60 tiles, linear drain, 8 mm glass"
+      },
+      {
+       "id": "bath_tub",
+       "labelRo": "Cadă freestanding & lumină ambientală",
+       "labelEn": "Freestanding tub & ambient lighting",
+       "prompt": "freestanding bathtub, soft ambient cove light",
+       "materialRo": "Cadă acril/piatră compozită, baterie pe pardoseală, LED 2700 K",
+       "materialEn": "Acrylic/composite tub, floor-mounted tap, 2700 K LED"
+      },
+      {
+       "id": "bath_double",
+       "labelRo": "Lavoar dublu & oglinzi iluminate",
+       "labelEn": "Double vanity & lit mirrors",
+       "prompt": "double floating vanity, backlit mirrors",
+       "materialRo": "Blat cuarț, oglinzi LED antiaburire, sifoane ascunse",
+       "materialEn": "Quartz top, anti-fog LED mirrors, concealed traps"
+      },
+      {
+       "id": "bath_sauna",
+       "labelRo": "Colț de spa: saună infraroșu & duș ploaie",
+       "labelEn": "Spa corner: infrared sauna & rain shower",
+       "prompt": "infrared sauna cabin, rain shower, natural stone",
+       "materialRo": "Cabină saună lemn cedru, duș cap 30 cm, piatră naturală",
+       "materialEn": "Cedar sauna cabin, 30 cm rain head, natural stone"
+      }
+     ],
+     "defaults": {
+      "width": 2.2,
+      "length": 3,
+      "height": 2.5,
+      "doorsCount": 1,
+      "windowsCount": 1
+     },
+     "sizePresets": {
+      "compact": {
+       "width": 1.7,
+       "length": 2.4
+      },
+      "spacious": {
+       "width": 3.2,
+       "length": 4
+      }
+     },
+     "targetLux": 200,
+     "fitout": {
+      "economy": 480,
+      "standard": 900,
+      "luxury": 1900,
+      "labelRo": "Obiecte sanitare, vanity & cabină duș",
+      "labelEn": "Sanitaryware, vanity & shower"
+     },
+     "finishFactor": 1.6,
+     "costBasis": "facade",
+     "hardscapeShare": 0.4
+    },
+    {
+     "id": "home office",
+     "labelRo": "Birou / Home Office",
+     "labelEn": "Home Office",
+     "scenePrompt": "fully furnished home office featuring a large wooden desk, ergonomic office chair, built-in bookshelves, task lamp, area rug, laptop on the desk",
+     "layouts": [
+      {
+       "id": "desk_window",
+       "labelRo": "Birou orientat spre fereastră + biblioteci încorporate",
+       "labelEn": "Desk facing the window + built-in bookshelves",
+       "prompt": "desk placed in front of the window, built-in bookshelves on the side wall"
+      },
+      {
+       "id": "desk_l_shape",
+       "labelRo": "Birou în L pe perete + rafturi până în tavan",
+       "labelEn": "L-shaped wall desk + floor-to-ceiling shelving",
+       "prompt": "L-shaped desk along the wall, floor-to-ceiling shelving, focused task lighting"
+      }
+     ],
+     "scenarios": [
+      {
+       "id": "off_standing",
+       "labelRo": "Birou reglabil electric & dual-monitor",
+       "labelEn": "Standing desk & dual-monitor setup",
+       "prompt": "electric standing desk with dual monitors",
+       "materialRo": "Blat 160×75, motor dublu, braț monitor, management cabluri",
+       "materialEn": "160×75 top, dual motor, monitor arm, cable management"
+      },
+      {
+       "id": "off_meeting",
+       "labelRo": "Colț de întâlniri pentru clienți",
+       "labelEn": "Client meeting corner",
+       "prompt": "small round meeting table with two chairs",
+       "materialRo": "Masă Ø90, scaune tapițate, panou acustic",
+       "materialEn": "Ø90 table, upholstered chairs, acoustic panel"
+      },
+      {
+       "id": "off_acoustic",
+       "labelRo": "Panouri acustice & izolare fonică",
+       "labelEn": "Acoustic panels & sound insulation",
+       "prompt": "acoustic wall panels, quiet focused atmosphere",
+       "materialRo": "Panouri fonoabsorbante PET, ușă cu garnitură",
+       "materialEn": "PET acoustic panels, gasketed door"
+      },
+      {
+       "id": "off_library",
+       "labelRo": "Perete bibliotecă cu scară de rafturi",
+       "labelEn": "Library wall with shelving ladder",
+       "prompt": "wall-to-wall library with rolling ladder",
+       "materialRo": "Rafturi stejar 220 cm, scară pe șină, iluminat în nișe",
+       "materialEn": "220 cm oak shelving, rail ladder, niche lighting"
+      }
+     ],
+     "defaults": {
+      "width": 3,
+      "length": 3.5,
+      "height": 2.6,
+      "doorsCount": 1,
+      "windowsCount": 1
+     },
+     "sizePresets": {
+      "compact": {
+       "width": 2.2,
+       "length": 2.8
+      },
+      "spacious": {
+       "width": 4,
+       "length": 5
+      }
+     },
+     "targetLux": 500,
+     "fitout": {
+      "economy": 130,
+      "standard": 260,
+      "luxury": 560,
+      "labelRo": "Mobilier birou & biblioteci",
+      "labelEn": "Office furniture & bookcases"
+     },
+     "finishFactor": 1,
+     "costBasis": "facade",
+     "hardscapeShare": 0.4
+    },
+    {
+     "id": "entryway",
+     "labelRo": "Hol / Intrare",
+     "labelEn": "Hall / Entryway",
+     "scenePrompt": "fully furnished modern entryway with a built-in shoe cabinet, bench, wall mirror, coat hooks, console table, pendant light",
+     "layouts": [
+      {
+       "id": "hall_cabinet",
+       "labelRo": "Dulap încastrat pe un perete + bancă de încălțat",
+       "labelEn": "Built-in cabinet wall + shoe bench",
+       "prompt": "full-height built-in cabinet wall, bench seat, tall mirror"
+      },
+      {
+       "id": "hall_console",
+       "labelRo": "Consolă centrală + oglindă mare + cuier",
+       "labelEn": "Console + large mirror + coat rack",
+       "prompt": "slim console table, oversized mirror, coat rack"
+      }
+     ],
+     "scenarios": [
+      {
+       "id": "hall_storage",
+       "labelRo": "Dulap încorporat & bancă de încălțat",
+       "labelEn": "Built-in storage & shoe bench",
+       "prompt": "built-in cabinetry with integrated bench",
+       "materialRo": "Corp PAL 18 mm, bancă tapițată, sertare pantofi",
+       "materialEn": "18 mm PAL carcass, upholstered bench, shoe drawers"
+      },
+      {
+       "id": "hall_mirror",
+       "labelRo": "Oglindă full-height & iluminat accent",
+       "labelEn": "Full-height mirror & accent lighting",
+       "prompt": "full-height mirror with accent wall lighting",
+       "materialRo": "Oglindă 6 mm, bandă LED perimetrală",
+       "materialEn": "6 mm mirror, perimeter LED strip"
+      },
+      {
+       "id": "hall_tile",
+       "labelRo": "Pardoseală rezistentă din gresie mare",
+       "labelEn": "Durable large-format tile floor",
+       "prompt": "large-format stone-look tile floor",
+       "materialRo": "Gresie 80×80 antiderapantă R10",
+       "materialEn": "Anti-slip R10 80×80 tiles"
+      }
+     ],
+     "defaults": {
+      "width": 2,
+      "length": 4,
+      "height": 2.6,
+      "doorsCount": 2,
+      "windowsCount": 0
+     },
+     "sizePresets": {
+      "compact": {
+       "width": 1.5,
+       "length": 3
+      },
+      "spacious": {
+       "width": 3,
+       "length": 5.5
+      }
+     },
+     "targetLux": 100,
+     "fitout": {
+      "economy": 120,
+      "standard": 240,
+      "luxury": 520,
+      "labelRo": "Mobilier hol & depozitare",
+      "labelEn": "Hall furniture & storage"
+     },
+     "finishFactor": 1,
+     "costBasis": "facade",
+     "hardscapeShare": 0.4
+    },
+    {
+     "id": "attic loft",
+     "labelRo": "Mansardă",
+     "labelEn": "Attic Loft",
+     "scenePrompt": "fully furnished attic loft room with sloped ceiling, exposed timber beams, skylight windows, cozy sofa, bed or desk, built-in under-eave storage",
+     "layouts": [
+      {
+       "id": "attic_open",
+       "labelRo": "Spațiu deschis sub șarpantă + grinzi aparente",
+       "labelEn": "Open plan under the roof + exposed beams",
+       "prompt": "open attic under pitched roof, exposed timber beams, skylights"
+      },
+      {
+       "id": "attic_zoned",
+       "labelRo": "Zonare: dormit + lucru sub luminatoare",
+       "labelEn": "Zoned: sleeping + working under skylights",
+       "prompt": "sleeping area and desk zone, roof windows, eave storage"
+      }
+     ],
+     "scenarios": [
+      {
+       "id": "attic_skylight",
+       "labelRo": "Ferestre de mansardă & lumină zenitală",
+       "labelEn": "Roof windows & zenithal light",
+       "prompt": "large roof windows flooding the room with light",
+       "materialRo": "Ferestre Velux 78×140, rulouri exterioare de protecție solară",
+       "materialEn": "78×140 roof windows, external solar-shading blinds"
+      },
+      {
+       "id": "attic_eave",
+       "labelRo": "Depozitare încorporată sub streașină",
+       "labelEn": "Built-in under-eave storage",
+       "prompt": "custom built-in storage along low sloped walls",
+       "materialRo": "Dulapuri pe comandă la înclinație, sertare pe ghidaje",
+       "materialEn": "Custom sloped-wall units, full-extension drawers"
+      },
+      {
+       "id": "attic_beams",
+       "labelRo": "Grinzi aparente restaurate",
+       "labelEn": "Restored exposed beams",
+       "prompt": "restored exposed wooden roof beams, white walls",
+       "materialRo": "Grinzi lemn tratate ignifug, izolație 20 cm sub căprior",
+       "materialEn": "Fire-treated timber, 20 cm under-rafter insulation"
+      },
+      {
+       "id": "attic_suite",
+       "labelRo": "Mansardă ca suită de oaspeți cu mini-baie",
+       "labelEn": "Guest suite with mini-bath",
+       "prompt": "attic guest suite with compact ensuite shower",
+       "materialRo": "Baie prefabricată compactă, ventilație mecanică",
+       "materialEn": "Compact prefab bathroom, mechanical ventilation"
+      }
+     ],
+     "defaults": {
+      "width": 4.5,
+      "length": 7,
+      "height": 2.4,
+      "doorsCount": 1,
+      "windowsCount": 2
+     },
+     "sizePresets": {
+      "compact": {
+       "width": 3.5,
+       "length": 5
+      },
+      "spacious": {
+       "width": 6,
+       "length": 9
+      }
+     },
+     "targetLux": 200,
+     "fitout": {
+      "economy": 160,
+      "standard": 320,
+      "luxury": 700,
+      "labelRo": "Mobilier mansardă & depozitare sub streașină",
+      "labelEn": "Loft furniture & eave storage"
+     },
+     "finishFactor": 1.1,
+     "costBasis": "facade",
+     "hardscapeShare": 0.4
+    },
+    {
+     "id": "walk-in closet",
+     "labelRo": "Dressing / Walk-in Closet",
+     "labelEn": "Walk-in Closet",
+     "scenePrompt": "fully fitted walk-in closet with floor-to-ceiling wardrobes, hanging rails, shelves, drawers island, mirror, integrated LED lighting",
+     "layouts": [
+      {
+       "id": "closet_u",
+       "labelRo": "Dressing în U cu insulă de sertare",
+       "labelEn": "U-shaped closet with drawer island",
+       "prompt": "U-shaped wardrobe system, central drawer island with glass top"
+      },
+      {
+       "id": "closet_parallel",
+       "labelRo": "Două pereți paraleli + oglindă la capăt",
+       "labelEn": "Two parallel walls + end mirror",
+       "prompt": "parallel wardrobe walls, full-length mirror at the end"
+      }
+     ],
+     "scenarios": [
+      {
+       "id": "clo_island",
+       "labelRo": "Insulă centrală cu sertare & blat sticlă",
+       "labelEn": "Central island with glass-top drawers",
+       "prompt": "central island with glass-top drawers",
+       "materialRo": "Sertare soft-close, blat sticlă 8 mm, separatoare",
+       "materialEn": "Soft-close drawers, 8 mm glass top, dividers"
+      },
+      {
+       "id": "clo_led",
+       "labelRo": "Iluminat LED integrat cu senzor",
+       "labelEn": "Integrated LED with motion sensor",
+       "prompt": "integrated LED strips with motion sensor",
+       "materialRo": "Profile LED 3000 K, senzor PIR pe ușă",
+       "materialEn": "3000 K LED profiles, PIR door sensor"
+      },
+      {
+       "id": "clo_shoes",
+       "labelRo": "Perete dedicat pantofi & genți",
+       "labelEn": "Dedicated shoe & bag wall",
+       "prompt": "illuminated shoe and handbag display wall",
+       "materialRo": "Rafturi înclinate, fund oglindă, vitrină sticlă",
+       "materialEn": "Angled shelves, mirrored back, glass display"
+      }
+     ],
+     "defaults": {
+      "width": 2.2,
+      "length": 3,
+      "height": 2.6,
+      "doorsCount": 1,
+      "windowsCount": 0
+     },
+     "sizePresets": {
+      "compact": {
+       "width": 1.8,
+       "length": 2.4
+      },
+      "spacious": {
+       "width": 3.2,
+       "length": 4
+      }
+     },
+     "targetLux": 200,
+     "fitout": {
+      "economy": 380,
+      "standard": 720,
+      "luxury": 1500,
+      "labelRo": "Sistem dressing pe comandă",
+      "labelEn": "Custom closet system"
+     },
+     "finishFactor": 0.9,
+     "costBasis": "facade",
+     "hardscapeShare": 0.4
+    },
+    {
+     "id": "commercial cafe",
+     "labelRo": "Spațiu Comercial / Cafenea",
+     "labelEn": "Commercial / Café",
+     "scenePrompt": "stylish commercial cafe interior with service counter, espresso machine, bar stools, small tables with chairs, pendant lights, display shelving",
+     "layouts": [
+      {
+       "id": "cafe_counter",
+       "labelRo": "Tejghea frontală + locuri la geam",
+       "labelEn": "Front counter + window seating",
+       "prompt": "long service counter, window bench seating, small round tables"
+      },
+      {
+       "id": "cafe_lounge",
+       "labelRo": "Zonă lounge + bar lateral",
+       "labelEn": "Lounge zone + side bar",
+       "prompt": "lounge sofas, side bar with stools, warm pendant lighting"
+      }
+     ],
+     "scenarios": [
+      {
+       "id": "caf_counter",
+       "labelRo": "Tejghea de servire cu vitrină frigorifică",
+       "labelEn": "Service counter with chilled display",
+       "prompt": "long service counter with chilled pastry display",
+       "materialRo": "Tejghea corian, vitrină refrigerată 1.5 m, espressor profesional",
+       "materialEn": "Solid-surface counter, 1.5 m chilled display, pro espresso"
+      },
+      {
+       "id": "caf_window",
+       "labelRo": "Bar la geam & scaune înalte",
+       "labelEn": "Window bar & high stools",
+       "prompt": "window bar with high stools facing the street",
+       "materialRo": "Blat lemn masiv 40 mm, taburete h 75 cm",
+       "materialEn": "40 mm solid timber top, 75 cm stools"
+      },
+      {
+       "id": "caf_lounge",
+       "labelRo": "Zonă lounge cu canapele & lumină caldă",
+       "labelEn": "Lounge zone with sofas & warm light",
+       "prompt": "cozy lounge corner, velvet sofas, warm light",
+       "materialRo": "Canapele tapițate ignifug (M1), corpuri 2700 K",
+       "materialEn": "Fire-rated upholstery (M1), 2700 K fixtures"
+      },
+      {
+       "id": "caf_acoustic",
+       "labelRo": "Tavan acustic & materiale rezistente",
+       "labelEn": "Acoustic ceiling & hard-wearing finishes",
+       "prompt": "acoustic baffle ceiling, durable terrazzo floor",
+       "materialRo": "Baffle fonoabsorbant, pardoseală terrazzo, pereți lavabili",
+       "materialEn": "Acoustic baffles, terrazzo floor, washable walls"
+      }
+     ],
+     "defaults": {
+      "width": 6,
+      "length": 9,
+      "height": 3.2,
+      "doorsCount": 2,
+      "windowsCount": 3
+     },
+     "sizePresets": {
+      "compact": {
+       "width": 4.5,
+       "length": 6.5
+      },
+      "spacious": {
+       "width": 9,
+       "length": 14
+      }
+     },
+     "targetLux": 300,
+     "fitout": {
+      "economy": 260,
+      "standard": 520,
+      "luxury": 1100,
+      "labelRo": "Mobilier HoReCa, tejghea & echipamente",
+      "labelEn": "HoReCa furniture, counter & equipment"
+     },
+     "finishFactor": 1.2,
+     "costBasis": "facade",
+     "hardscapeShare": 0.4
+    }
+   ]
+  },
+  "exteriors": {
+   "labelRo": "Exterioare & Fațade",
+   "labelEn": "Exteriors & Facades",
+   "spaces": [
+    {
+     "id": "modern villa exterior",
+     "labelRo": "Fațadă Casă / Vilă",
+     "labelEn": "House / Villa Facade",
+     "scenePrompt": "modern single-family villa exterior with a finished facade, entrance door, landscaped front garden, driveway",
+     "layouts": [
+      {
+       "id": "ventilated_facade",
+       "labelRo": "Fațadă ventilată cu lemn termotratat și sticlă panoramică",
+       "labelEn": "Ventilated facade with thermo-wood and panoramic glass",
+       "prompt": "thermo-treated wood cladding, large floor-to-ceiling black aluminum windows, warm wall sconces"
+      },
+      {
+       "id": "minimal_white",
+       "labelRo": "Tencuială albă + accente de piatră naturală (ardezie)",
+       "labelEn": "White render + natural slate stone accents",
+       "prompt": "white minimalist render, dark slate stone accent wall, architectural driveway lighting"
+      }
+     ],
+     "scenarios": [
+      {
+       "id": "fac_wood",
+       "labelRo": "Placări din lemn termotratat",
+       "labelEn": "Thermo-wood cladding accents",
+       "prompt": "thermo-treated wood cladding accents",
+       "materialRo": "Riflaj pin termotratat 20×120, sistem ventilat",
+       "materialEn": "20×120 thermo-pine boards, ventilated system"
+      },
+      {
+       "id": "fac_glass",
+       "labelRo": "Vitraje panoramice & tâmplărie neagră",
+       "labelEn": "Panoramic glazing & black frames",
+       "prompt": "panoramic glazing with slim black frames",
+       "materialRo": "Tâmplărie aluminiu cu ruptură termică, sticlă Low-E",
+       "materialEn": "Thermally broken aluminium, Low-E glass"
+      },
+      {
+       "id": "fac_roof",
+       "labelRo": "Acoperiș plat cu atic & streașină lungă",
+       "labelEn": "Flat roof with parapet & deep eaves",
+       "prompt": "flat roof with deep cantilevered eaves",
+       "materialRo": "Hidroizolație membrană PVC, atic termoizolat",
+       "materialEn": "PVC membrane waterproofing, insulated parapet"
+      },
+      {
+       "id": "fac_light",
+       "labelRo": "Iluminat arhitectural de fațadă",
+       "labelEn": "Architectural facade lighting",
+       "prompt": "architectural wall-wash facade lighting at dusk",
+       "materialRo": "Aplice IP65 up/down 3000 K, proiectoare de grădină",
+       "materialEn": "IP65 up/down sconces 3000 K, garden spotlights"
+      }
+     ],
+     "defaults": {
+      "width": 9,
+      "length": 11,
+      "height": 6.5,
+      "doorsCount": 2,
+      "windowsCount": 8
+     },
+     "sizePresets": {
+      "compact": {
+       "width": 7,
+       "length": 9,
+       "height": 5.5
+      },
+      "spacious": {
+       "width": 12,
+       "length": 15,
+       "height": 7.5
+      }
+     },
+     "targetLux": 30,
+     "fitout": {
+      "economy": 55,
+      "standard": 110,
+      "luxury": 240,
+      "labelRo": "Tâmplărie, copertină & intrare",
+      "labelEn": "Joinery, canopy & entrance"
+     },
+     "finishFactor": 1,
+     "costBasis": "facade",
+     "hardscapeShare": 0.4
+    },
+    {
+     "id": "terrace pergola",
+     "labelRo": "Terasă & Pergolă",
+     "labelEn": "Terrace & Pergola",
+     "scenePrompt": "covered terrace with an aluminum pergola, outdoor sofa set, dining table with chairs, planters, string lights",
+     "layouts": [
+      {
+       "id": "terr_lounge",
+       "labelRo": "Lounge + dining sub pergolă",
+       "labelEn": "Lounge + dining under the pergola",
+       "prompt": "pergola over lounge and dining zones, decking floor"
+      },
+      {
+       "id": "terr_firepit",
+       "labelRo": "Zonă de foc & scaune joase",
+       "labelEn": "Fire pit zone + low seating",
+       "prompt": "fire pit with low lounge seating, timber deck"
+      }
+     ],
+     "scenarios": [
+      {
+       "id": "ter_bio",
+       "labelRo": "Pergolă bioclimatică cu lamele reglabile",
+       "labelEn": "Bioclimatic pergola with louvres",
+       "prompt": "bioclimatic pergola with adjustable louvres",
+       "materialRo": "Aluminiu 6060 T5, lamele 0–135°, senzor ploaie/vânt",
+       "materialEn": "6060 T5 aluminium, 0–135° louvres, rain/wind sensor"
+      },
+      {
+       "id": "ter_deck",
+       "labelRo": "Deck WPC antiderapant",
+       "labelEn": "Anti-slip WPC decking",
+       "prompt": "warm composite deck flooring",
+       "materialRo": "WPC 140×25 antiderapant, subconstrucție ventilată",
+       "materialEn": "Anti-slip 140×25 WPC, ventilated substructure"
+      },
+      {
+       "id": "ter_screen",
+       "labelRo": "Paravane & perdele exterioare",
+       "labelEn": "Privacy screens & outdoor curtains",
+       "prompt": "slatted privacy screens, outdoor curtains",
+       "materialRo": "Lamele aluminiu aspect lemn, draperii impermeabile",
+       "materialEn": "Wood-look aluminium slats, waterproof drapes"
+      },
+      {
+       "id": "ter_heater",
+       "labelRo": "Încălzire cu infraroșu & iluminat ambiental",
+       "labelEn": "Infrared heating & ambient lighting",
+       "prompt": "infrared heaters and soft ambient lighting",
+       "materialRo": "Radiatoare IR 2 kW IP65, ghirlande LED",
+       "materialEn": "2 kW IP65 IR heaters, LED festoons"
+      }
+     ],
+     "defaults": {
+      "width": 4,
+      "length": 6,
+      "height": 2.8,
+      "doorsCount": 1,
+      "windowsCount": 0
+     },
+     "sizePresets": {
+      "compact": {
+       "width": 3,
+       "length": 4
+      },
+      "spacious": {
+       "width": 6,
+       "length": 9
+      }
+     },
+     "targetLux": 50,
+     "fitout": {
+      "economy": 90,
+      "standard": 190,
+      "luxury": 420,
+      "labelRo": "Pergolă, mobilier & accesorii",
+      "labelEn": "Pergola, furniture & accessories"
+     },
+     "finishFactor": 1,
+     "costBasis": "surface",
+     "hardscapeShare": 0.4
+    },
+    {
+     "id": "balcony",
+     "labelRo": "Balcon / Logie",
+     "labelEn": "Balcony / Loggia",
+     "scenePrompt": "cozy urban balcony with a bistro table and chairs, planters, railing, wooden deck tiles, string lights",
+     "layouts": [
+      {
+       "id": "balc_bistro",
+       "labelRo": "Set bistro + jardiniere pe balustradă",
+       "labelEn": "Bistro set + railing planters",
+       "prompt": "bistro table for two, railing planters, deck tiles"
+      },
+      {
+       "id": "balc_lounge",
+       "labelRo": "Banchetă încorporată cu depozitare",
+       "labelEn": "Built-in bench with storage",
+       "prompt": "built-in storage bench with cushions, vertical garden"
+      }
+     ],
+     "scenarios": [
+      {
+       "id": "bal_greens",
+       "labelRo": "Grădină verticală & jardiniere",
+       "labelEn": "Vertical garden & planters",
+       "prompt": "vertical garden wall with planters",
+       "materialRo": "Panouri modulare irigate, jardiniere aluminiu",
+       "materialEn": "Irrigated modular panels, aluminium planters"
+      },
+      {
+       "id": "bal_glazed",
+       "labelRo": "Închidere cu vitraj glisant (logie)",
+       "labelEn": "Sliding glazing enclosure (loggia)",
+       "prompt": "frameless sliding glass enclosure",
+       "materialRo": "Sistem glisant fără ramă 8 mm, ancorare certificată",
+       "materialEn": "Frameless 8 mm sliding system, certified anchoring"
+      },
+      {
+       "id": "bal_deck",
+       "labelRo": "Dale de lemn & mobilier pliabil",
+       "labelEn": "Wooden deck tiles & foldable furniture",
+       "prompt": "click-in wooden deck tiles, folding furniture",
+       "materialRo": "Dale acacia 30×30 clic, mobilier pliabil",
+       "materialEn": "Click-in acacia 30×30 tiles, folding furniture"
+      }
+     ],
+     "defaults": {
+      "width": 1.6,
+      "length": 4,
+      "height": 2.5,
+      "doorsCount": 1,
+      "windowsCount": 0
+     },
+     "sizePresets": {
+      "compact": {
+       "width": 1.2,
+       "length": 2.5
+      },
+      "spacious": {
+       "width": 2.2,
+       "length": 6
+      }
+     },
+     "targetLux": 50,
+     "fitout": {
+      "economy": 60,
+      "standard": 130,
+      "luxury": 300,
+      "labelRo": "Mobilier balcon & jardiniere",
+      "labelEn": "Balcony furniture & planters"
+     },
+     "finishFactor": 1,
+     "costBasis": "surface",
+     "hardscapeShare": 0.4
+    },
+    {
+     "id": "poolside deck",
+     "labelRo": "Zonă Piscină & Lounge",
+     "labelEn": "Poolside Deck & Lounge",
+     "scenePrompt": "poolside deck with a rectangular swimming pool, timber deck, sun loungers, parasol, outdoor planters",
+     "layouts": [
+      {
+       "id": "pool_deck",
+       "labelRo": "Piscină dreptunghiulară + deck din lemn + șezlonguri",
+       "labelEn": "Rectangular pool + timber deck + sun loungers",
+       "prompt": "rectangular pool with timber deck, sun loungers, ambient garden lighting"
+      },
+      {
+       "id": "pool_infinity",
+       "labelRo": "Piscină infinity + zonă lounge",
+       "labelEn": "Infinity pool + lounge area",
+       "prompt": "infinity edge pool, lounge area, glass balustrade"
+      }
+     ],
+     "scenarios": [
+      {
+       "id": "pool_infinity",
+       "labelRo": "Piscină infinity cu margine de preaplin",
+       "labelEn": "Infinity-edge pool",
+       "prompt": "infinity edge pool overlooking the garden",
+       "materialRo": "Beton armat hidroizolat, mozaic sticlă, skimmer ascuns",
+       "materialEn": "Waterproofed RC, glass mosaic, hidden skimmer"
+      },
+      {
+       "id": "pool_lounge",
+       "labelRo": "Șezlonguri & zonă de umbră",
+       "labelEn": "Sun loungers & shade area",
+       "prompt": "sun loungers under large parasol and shade sail",
+       "materialRo": "Șezlonguri aluminiu/textilenă, parasol Ø350",
+       "materialEn": "Aluminium/textilene loungers, Ø350 parasol"
+      },
+      {
+       "id": "pool_light",
+       "labelRo": "Iluminat subacvatic & de ambient",
+       "labelEn": "Underwater & ambient lighting",
+       "prompt": "glowing underwater pool lights at dusk",
+       "materialRo": "Proiectoare LED RGB IP68, alimentare 12 V",
+       "materialEn": "IP68 RGB LED lights, 12 V supply"
+      },
+      {
+       "id": "pool_bar",
+       "labelRo": "Bar exterior & duș de piscină",
+       "labelEn": "Outdoor bar & pool shower",
+       "prompt": "outdoor bar counter and pool shower",
+       "materialRo": "Tejghea piatră, duș inox, bar cu frigider exterior",
+       "materialEn": "Stone counter, stainless shower, outdoor fridge bar"
+      }
+     ],
+     "defaults": {
+      "width": 8,
+      "length": 12,
+      "height": 2.5,
+      "doorsCount": 0,
+      "windowsCount": 0
+     },
+     "sizePresets": {
+      "compact": {
+       "width": 6,
+       "length": 9
+      },
+      "spacious": {
+       "width": 10,
+       "length": 16
+      }
+     },
+     "targetLux": 50,
+     "fitout": {
+      "economy": 160,
+      "standard": 330,
+      "luxury": 700,
+      "labelRo": "Piscină, deck & șezlonguri",
+      "labelEn": "Pool, deck & loungers"
+     },
+     "finishFactor": 1,
+     "costBasis": "surface",
+     "hardscapeShare": 0.4
+    }
+   ]
+  },
+  "gardens": {
+   "labelRo": "Grădini & Peisagistică",
+   "labelEn": "Gardens & Landscape",
+   "spaces": [
+    {
+     "id": "residential garden",
+     "labelRo": "Grădină Rezidențială",
+     "labelEn": "Residential Garden",
+     "scenePrompt": "landscaped residential garden with a green lawn, ornamental shrubs, trees, flower beds, stone pathway, low garden lights",
+     "layouts": [
+      {
+       "id": "garden_lawn",
+       "labelRo": "Gazon central + borduri florale + alee",
+       "labelEn": "Central lawn + flower borders + path",
+       "prompt": "central lawn, layered flower borders, curved stone path"
+      },
+      {
+       "id": "garden_terraced",
+       "labelRo": "Terase la nivele cu ziduri de sprijin",
+       "labelEn": "Terraced levels with retaining walls",
+       "prompt": "terraced garden levels, low stone retaining walls, steps"
+      }
+     ],
+     "scenarios": [
+      {
+       "id": "gar_perennial",
+       "labelRo": "Straturi de graminee & perene",
+       "labelEn": "Layered grasses & perennials",
+       "prompt": "layered ornamental grasses and perennial beds",
+       "materialRo": "Graminee, lavandă, hortensii; mulci și irigație prin picurare",
+       "materialEn": "Grasses, lavender, hydrangea; mulch and drip irrigation"
+      },
+      {
+       "id": "gar_trees",
+       "labelRo": "Arbori ornamentali & pâlcuri umbrite",
+       "labelEn": "Ornamental trees & shaded groves",
+       "prompt": "ornamental trees casting dappled shade",
+       "materialRo": "Arbori 8–10 cm girth, ancorare subterană",
+       "materialEn": "8–10 cm girth trees, underground anchoring"
+      },
+      {
+       "id": "gar_light",
+       "labelRo": "Iluminat peisager jos & spoturi pe arbori",
+       "labelEn": "Low landscape lighting & tree uplights",
+       "prompt": "low path lights and tree uplighting at dusk",
+       "materialRo": "Balize LED IP65 12 V, proiectoare reglabile",
+       "materialEn": "IP65 12 V bollards, adjustable uplights"
+      },
+      {
+       "id": "gar_water",
+       "labelRo": "Luciu de apă & peisaj acvatic",
+       "labelEn": "Water feature & pond",
+       "prompt": "small natural water feature with stone edge",
+       "materialRo": "Lac cu geomembrană EPDM, pompă recirculare",
+       "materialEn": "EPDM-lined pond, recirculation pump"
+      }
+     ],
+     "defaults": {
+      "width": 12,
+      "length": 20,
+      "height": 3,
+      "doorsCount": 0,
+      "windowsCount": 0
+     },
+     "sizePresets": {
+      "compact": {
+       "width": 8,
+       "length": 12
+      },
+      "spacious": {
+       "width": 20,
+       "length": 30
+      }
+     },
+     "targetLux": 30,
+     "fitout": {
+      "economy": 30,
+      "standard": 70,
+      "luxury": 160,
+      "labelRo": "Mobilier, iluminat decorativ & irigații",
+      "labelEn": "Furniture, decorative lighting & irrigation"
+     },
+     "finishFactor": 1,
+     "costBasis": "surface",
+     "hardscapeShare": 0.3
+    },
+    {
+     "id": "outdoor pavilion",
+     "labelRo": "Foișor & Bucătărie de Vară",
+     "labelEn": "Pavilion & Outdoor Kitchen",
+     "scenePrompt": "garden pavilion with outdoor kitchen, built-in barbecue, dining table with chairs, timber roof structure, pendant lights",
+     "layouts": [
+      {
+       "id": "pav_bbq",
+       "labelRo": "Bucătărie liniară + masă lungă dining",
+       "labelEn": "Linear kitchen + long dining table",
+       "prompt": "linear outdoor kitchen with barbecue, long dining table"
+      },
+      {
+       "id": "pav_lounge",
+       "labelRo": "Foișor cu șemineu & zonă lounge",
+       "labelEn": "Pavilion with fireplace & lounge",
+       "prompt": "timber pavilion with stone fireplace and lounge seating"
+      }
+     ],
+     "scenarios": [
+      {
+       "id": "pav_kitchen",
+       "labelRo": "Bucătărie de vară cu grătar & plită",
+       "labelEn": "Summer kitchen with grill & hob",
+       "prompt": "built-in grill, side hob and stone counter",
+       "materialRo": "Grătar inox 304, blat granit, corp inox IP-resistent",
+       "materialEn": "304 stainless grill, granite top, weather-rated cabinets"
+      },
+      {
+       "id": "pav_oven",
+       "labelRo": "Cuptor pe lemne & zonă de preparare",
+       "labelEn": "Wood-fired oven & prep zone",
+       "prompt": "wood-fired pizza oven with prep counter",
+       "materialRo": "Cuptor refractar, coș inox dublu perete",
+       "materialEn": "Refractory oven, double-wall stainless flue"
+      },
+      {
+       "id": "pav_roof",
+       "labelRo": "Structură lemn lamelar & acoperiș verde",
+       "labelEn": "Glulam structure & green roof",
+       "prompt": "glulam timber frame with green roof",
+       "materialRo": "Lemn lamelat GL24h, hidroizolație, sedum",
+       "materialEn": "GL24h glulam, waterproofing, sedum cover"
+      },
+      {
+       "id": "pav_dining",
+       "labelRo": "Masă lungă pentru 10 persoane & iluminat",
+       "labelEn": "Long table for ten & pendant lights",
+       "prompt": "long communal table for ten, string lights",
+       "materialRo": "Masă tec 280 cm, bănci, ghirlande LED",
+       "materialEn": "280 cm teak table, benches, LED festoons"
+      }
+     ],
+     "defaults": {
+      "width": 4,
+      "length": 6,
+      "height": 2.8,
+      "doorsCount": 0,
+      "windowsCount": 0
+     },
+     "sizePresets": {
+      "compact": {
+       "width": 3,
+       "length": 4.5
+      },
+      "spacious": {
+       "width": 6,
+       "length": 9
+      }
+     },
+     "targetLux": 100,
+     "fitout": {
+      "economy": 220,
+      "standard": 450,
+      "luxury": 950,
+      "labelRo": "Bucătărie de vară, grătar & mobilier",
+      "labelEn": "Summer kitchen, grill & furniture"
+     },
+     "finishFactor": 1,
+     "costBasis": "surface",
+     "hardscapeShare": 0.8
+    },
+    {
+     "id": "courtyard walkway",
+     "labelRo": "Curte & Alee Arhitecturală",
+     "labelEn": "Courtyard & Walkways",
+     "scenePrompt": "architectural courtyard with a paved stone walkway, planting beds, low walls, feature tree, low landscape lights",
+     "layouts": [
+      {
+       "id": "court_paved",
+       "labelRo": "Alee pavată + graminee ornamentale + iluminat jos",
+       "labelEn": "Paved path + ornamental grasses + low lighting",
+       "prompt": "stone paved pathway, ornamental grasses, low landscape lighting"
+      },
+      {
+       "id": "court_geometric",
+       "labelRo": "Pavaj geometric cu insule de plantare",
+       "labelEn": "Geometric paving with planting islands",
+       "prompt": "geometric paving pattern with planting islands, feature tree"
+      }
+     ],
+     "scenarios": [
+      {
+       "id": "crt_paving",
+       "labelRo": "Pavaj din piatră naturală & rosturi înierbate",
+       "labelEn": "Natural stone paving with grass joints",
+       "prompt": "natural stone slabs with grass joints",
+       "materialRo": "Plăci granit/calcar 60×40 pe strat drenant",
+       "materialEn": "60×40 granite/limestone slabs on drainage bed"
+      },
+      {
+       "id": "crt_wall",
+       "labelRo": "Ziduri joase & bănci integrate",
+       "labelEn": "Low walls & integrated benches",
+       "prompt": "low stone walls doubling as bench seating",
+       "materialRo": "Gabioane sau beton aparent, capac lemn",
+       "materialEn": "Gabion or exposed concrete with timber cap"
+      },
+      {
+       "id": "crt_tree",
+       "labelRo": "Arbore solitar & lumină de accent",
+       "labelEn": "Feature tree & accent lighting",
+       "prompt": "single feature tree with accent uplight",
+       "materialRo": "Arbore multi-trunchi, proiector IP67 în sol",
+       "materialEn": "Multi-stem tree, in-ground IP67 uplight"
+      },
+      {
+       "id": "crt_drain",
+       "labelRo": "Drenaj ascuns & pante corecte",
+       "labelEn": "Concealed drainage & correct slopes",
+       "prompt": "clean flush drainage channels, crisp edges",
+       "materialRo": "Rigole liniare inox, pantă 1.5%, geotextil",
+       "materialEn": "Stainless linear drains, 1.5% fall, geotextile"
+      }
+     ],
+     "defaults": {
+      "width": 6,
+      "length": 10,
+      "height": 3,
+      "doorsCount": 0,
+      "windowsCount": 0
+     },
+     "sizePresets": {
+      "compact": {
+       "width": 4,
+       "length": 7
+      },
+      "spacious": {
+       "width": 9,
+       "length": 16
+      }
+     },
+     "targetLux": 50,
+     "fitout": {
+      "economy": 35,
+      "standard": 80,
+      "luxury": 180,
+      "labelRo": "Alei, borduri & iluminat decorativ",
+      "labelEn": "Pathways, edging & decorative lighting"
+     },
+     "finishFactor": 1,
+     "costBasis": "surface",
+     "hardscapeShare": 0.7
+    }
+   ]
+  }
+ },
+ "styles": [
+  {
+   "id": "scandinavian",
+   "nameRo": "Modern Scandinavian",
+   "nameEn": "Modern Scandinavian",
+   "descRo": "Stejar deschis, țesături naturale, lumină caldă și funcționalitate nordică.",
+   "descEn": "Light oak timber, natural textiles, warm daylight and Nordic functionality.",
+   "prompt": "scandinavian architectural style, light natural oak wood, warm white walls, soft linen and wool textures, clean functional lines, bright natural daylight, 8k photorealistic",
+   "palette": [
+    {
+     "hex": "#F4F1EA",
+     "nameRo": "Alb cald",
+     "nameEn": "Warm white"
+    },
+    {
+     "hex": "#D8C7B2",
+     "nameRo": "Stejar deschis",
+     "nameEn": "Light oak"
+    },
+    {
+     "hex": "#8A9A86",
+     "nameRo": "Verde salvie",
+     "nameEn": "Sage green"
+    },
+    {
+     "hex": "#2C3531",
+     "nameRo": "Antracit verzui",
+     "nameEn": "Green charcoal"
+    }
+   ],
+   "materialsRo": [
+    "Stejar natur",
+    "Lână și in",
+    "Vopsea mată caldă",
+    "Ceramică mată"
+   ],
+   "materialsEn": [
+    "Natural oak",
+    "Wool and linen",
+    "Warm matte paint",
+    "Matte ceramics"
+   ],
+   "costFactor": 1,
+   "architecturalBrief": {
+    "ro": "Volume deschise, proporții joase și lumină de nord distribuită uniform. Spațiul se organizează pe funcțiune, cu mobilier modular și fără ornament structural.",
+    "en": "Open volumes, low proportions and evenly distributed north light. Space is organised by function, with modular furniture and no structural ornament."
+   },
+   "materials": {
+    "flooring": {
+     "ro": "Parchet stejar uleiat, 14 mm",
+     "en": "Oiled oak parquet, 14 mm"
+    },
+    "walls": {
+     "ro": "Vopsea mată caldă, finisaj alb-cald",
+     "en": "Warm-white matte paint finish"
+    },
+    "accents": {
+     "ro": "Lână, in, ceramică mată, oțel vopsit",
+     "en": "Wool, linen, matte ceramics, painted steel"
+    }
+   },
+   "lightingSpec": {
+    "ro": "4000K lumină de zi difuză",
+    "en": "4000K diffused daylight",
+    "kelvin": 4000
+   },
+   "costRationale": {
+    "ro": "nivel de referință — materiale standardizate, mobilier de serie",
+    "en": "baseline — standardised materials, series-produced furniture"
+   },
+   "promptSpec": "scandinavian, oiled oak floor, warm white matte walls, linen and wool, 4000K diffused daylight",
+   "colors": [
+    "#F4F1EA",
+    "#D8C7B2",
+    "#8A9A86",
+    "#2C3531"
+   ]
+  },
+  {
+   "id": "modern",
+   "nameRo": "Modern",
+   "nameEn": "Modern",
+   "descRo": "Linii drepte, volume clare, suprafețe mate și iluminat arhitectural.",
+   "descEn": "Crisp lines, clean volumes, matte surfaces and architectural lighting.",
+   "prompt": "modern architectural interior design, sleek walnut and matte stone surfaces, recessed linear LED lighting, balanced proportions, 8k photorealistic",
+   "palette": [
+    {
+     "hex": "#F2F0EC",
+     "nameRo": "Alb de var",
+     "nameEn": "Chalk white"
+    },
+    {
+     "hex": "#5C4033",
+     "nameRo": "Nuc",
+     "nameEn": "Walnut"
+    },
+    {
+     "hex": "#A39B8B",
+     "nameRo": "Gri piatră",
+     "nameEn": "Stone grey"
+    },
+    {
+     "hex": "#1C1C1A",
+     "nameRo": "Negru mat",
+     "nameEn": "Matte black"
+    }
+   ],
+   "materialsRo": [
+    "Furnir de nuc",
+    "Piatră sinterizată",
+    "Oțel negru mat",
+    "Sticlă extra-clară"
+   ],
+   "materialsEn": [
+    "Walnut veneer",
+    "Sintered stone",
+    "Matte black steel",
+    "Extra-clear glass"
+   ],
+   "costFactor": 1.1,
+   "architecturalBrief": {
+    "ro": "Volume rectangulare, linii continue și raport plin–gol controlat. Suprafețele mate și iluminatul liniar încastrat definesc un spațiu precis, fără decor suprapus.",
+    "en": "Rectangular volumes, continuous lines and a controlled solid-to-void ratio. Matte surfaces and recessed linear lighting define a precise space with no applied decor."
+   },
+   "materials": {
+    "flooring": {
+     "ro": "Gresie mată format mare 120×60",
+     "en": "Large-format matte porcelain 120×60"
+    },
+    "walls": {
+     "ro": "Furnir de nuc + tencuială fină gri-piatră",
+     "en": "Walnut veneer + fine stone-grey plaster"
+    },
+    "accents": {
+     "ro": "Oțel negru mat, piatră sinterizată, sticlă extra-clară",
+     "en": "Matte black steel, sintered stone, extra-clear glass"
+    }
+   },
+   "lightingSpec": {
+    "ro": "3000K LED liniar încastrat",
+    "en": "3000K recessed linear LED",
+    "kelvin": 3000
+   },
+   "costRationale": {
+    "ro": "furnir de nuc și feronerie de precizie peste nivelul de referință",
+    "en": "walnut veneer and precision hardware above baseline"
+   },
+   "promptSpec": "modern, large-format matte tile floor, walnut veneer walls, black steel, 3000K recessed linear LED",
+   "colors": [
+    "#F2F0EC",
+    "#5C4033",
+    "#A39B8B",
+    "#1C1C1A"
+   ]
+  },
+  {
+   "id": "contemporary",
+   "nameRo": "Contemporary",
+   "nameEn": "Contemporary",
+   "descRo": "Texturi actuale, contraste subtile, piatră naturală și mobilier curbat.",
+   "descEn": "Current textures, subtle contrast, natural stone and sculpted furniture.",
+   "prompt": "contemporary architectural design, travertine stone, bouclé upholstery, brushed bronze details, warm ambient lighting, 8k photorealistic",
+   "palette": [
+    {
+     "hex": "#EAE6DF",
+     "nameRo": "Ecru",
+     "nameEn": "Ecru"
+    },
+    {
+     "hex": "#B89F82",
+     "nameRo": "Travertin",
+     "nameEn": "Travertine"
+    },
+    {
+     "hex": "#6E786E",
+     "nameRo": "Verde măsliniu",
+     "nameEn": "Olive green"
+    },
+    {
+     "hex": "#1F2421",
+     "nameRo": "Grafit",
+     "nameEn": "Graphite"
+    }
+   ],
+   "materialsRo": [
+    "Travertin",
+    "Bouclé",
+    "Bronz periat",
+    "Lemn afumat"
+   ],
+   "materialsEn": [
+    "Travertine",
+    "Bouclé",
+    "Brushed bronze",
+    "Smoked timber"
+   ],
+   "costFactor": 1.25,
+   "architecturalBrief": {
+    "ro": "Geometrii curbate și contraste subtile între piatră caldă și lemn afumat. Mobilierul sculptural are rol de punct focal într-un volum altfel liniștit.",
+    "en": "Curved geometry and subtle contrast between warm stone and smoked timber. Sculptural furniture acts as the focal point in an otherwise calm volume."
+   },
+   "materials": {
+    "flooring": {
+     "ro": "Travertin șlefuit, rost minim",
+     "en": "Honed travertine, minimal joints"
+    },
+    "walls": {
+     "ro": "Tencuială venețiană mată + panouri lemn afumat",
+     "en": "Matte Venetian plaster + smoked timber panels"
+    },
+    "accents": {
+     "ro": "Bronz periat, bouclé, piatră naturală",
+     "en": "Brushed bronze, bouclé, natural stone"
+    }
+   },
+   "lightingSpec": {
+    "ro": "2700K ambient indirect, cove",
+    "en": "2700K indirect ambient cove",
+    "kelvin": 2700
+   },
+   "costRationale": {
+    "ro": "piatră naturală și tapițerii la comandă",
+    "en": "natural stone and made-to-order upholstery"
+   },
+   "promptSpec": "contemporary, honed travertine floor, venetian plaster walls, brushed bronze, 2700K indirect cove light",
+   "colors": [
+    "#EAE6DF",
+    "#B89F82",
+    "#6E786E",
+    "#1F2421"
+   ]
+  },
+  {
+   "id": "minimalist",
+   "nameRo": "Minimalist",
+   "nameEn": "Minimalist",
+   "descRo": "Spațiu aerisit, depozitare ascunsă, paletă monocromă caldă fără încărcare.",
+   "descEn": "Uncluttered space, concealed storage, warm monochrome palette.",
+   "prompt": "warm minimalist architectural design, flush handleless cabinetry, microcement and pale timber, serene uncluttered space, soft diffused light, 8k photorealistic",
+   "palette": [
+    {
+     "hex": "#F7F6F2",
+     "nameRo": "Alb pur cald",
+     "nameEn": "Soft white"
+    },
+    {
+     "hex": "#E2DDD4",
+     "nameRo": "Bej nisip",
+     "nameEn": "Sand beige"
+    },
+    {
+     "hex": "#9E988E",
+     "nameRo": "Gri cald",
+     "nameEn": "Warm grey"
+    },
+    {
+     "hex": "#141413",
+     "nameRo": "Negru",
+     "nameEn": "Black"
+    }
+   ],
+   "materialsRo": [
+    "Microciment",
+    "Mobilier fără mânere",
+    "Lemn palid",
+    "Vopsea mată"
+   ],
+   "materialsEn": [
+    "Microcement",
+    "Handleless cabinetry",
+    "Pale timber",
+    "Matte paint"
+   ],
+   "costFactor": 1.05,
+   "architecturalBrief": {
+    "ro": "Reducție la elementele structurale: depozitare încastrată, uși și mobilier fără mânere, o singură paletă caldă. Calitatea vine din rosturi și planeitate, nu din obiecte.",
+    "en": "Reduction to structural elements: flush storage, handleless doors and furniture, one warm palette. Quality comes from joints and flatness, not objects."
+   },
+   "materials": {
+    "flooring": {
+     "ro": "Microciment continuu, fără rosturi",
+     "en": "Seamless continuous microcement"
+    },
+    "walls": {
+     "ro": "Vopsea mată + panouri încastrate la nivel",
+     "en": "Matte paint + flush-fitted panels"
+    },
+    "accents": {
+     "ro": "Lemn palid, oțel vopsit alb, sticlă satinată",
+     "en": "Pale timber, white-painted steel, satin glass"
+    }
+   },
+   "lightingSpec": {
+    "ro": "3500K difuz, fără corpuri vizibile",
+    "en": "3500K diffused, no visible fixtures",
+    "kelvin": 3500
+   },
+   "costRationale": {
+    "ro": "toleranțe strânse la mobilier încastrat și microciment turnat",
+    "en": "tight tolerances on flush joinery and poured microcement"
+   },
+   "promptSpec": "minimalist, seamless microcement floor, flush matte walls, pale timber, 3500K hidden diffused light",
+   "colors": [
+    "#F7F6F2",
+    "#E2DDD4",
+    "#9E988E",
+    "#141413"
+   ]
+  },
+  {
+   "id": "minimalist_obsidian",
+   "nameRo": "Minimalist Obsidian",
+   "nameEn": "Minimalist Obsidian",
+   "descRo": "Minimalism întunecat: negru obsidian, piatră neagră mată și lumină liniară discretă.",
+   "descEn": "Dark minimalism: obsidian black, matte black stone and discreet linear light.",
+   "prompt": "dark minimalist obsidian architectural design, matte black stone surfaces, charcoal microcement, smoked oak, hidden linear LED lighting, moody serene atmosphere, 8k photorealistic",
+   "palette": [
+    {
+     "hex": "#0E0F10",
+     "nameRo": "Negru obsidian",
+     "nameEn": "Obsidian black"
+    },
+    {
+     "hex": "#2A2D30",
+     "nameRo": "Cărbune",
+     "nameEn": "Charcoal"
+    },
+    {
+     "hex": "#6B6E70",
+     "nameRo": "Gri bazalt",
+     "nameEn": "Basalt grey"
+    },
+    {
+     "hex": "#B08D57",
+     "nameRo": "Alamă satinată",
+     "nameEn": "Satin brass"
+    }
+   ],
+   "materialsRo": [
+    "Piatră neagră mată",
+    "Microciment antracit",
+    "Stejar afumat",
+    "Alamă satinată"
+   ],
+   "materialsEn": [
+    "Matte black stone",
+    "Charcoal microcement",
+    "Smoked oak",
+    "Satin brass"
+   ],
+   "costFactor": 1.4,
+   "architecturalBrief": {
+    "ro": "Minimalism cu valori tonale joase: piatră neagră și microciment antracit absorb lumina, iar sursele ascunse modelează volumele. Atmosferă concentrată, cu contrast controlat.",
+    "en": "Minimalism in a low tonal range: black stone and charcoal microcement absorb light while concealed sources sculpt the volumes. A focused atmosphere with controlled contrast."
+   },
+   "materials": {
+    "flooring": {
+     "ro": "Piatră neagră mată, format mare",
+     "en": "Large-format matte black stone"
+    },
+    "walls": {
+     "ro": "Microciment antracit + stejar afumat",
+     "en": "Charcoal microcement + smoked oak"
+    },
+    "accents": {
+     "ro": "Alamă satinată, piatră neagră, sticlă fumurie",
+     "en": "Satin brass, black stone, smoked glass"
+    }
+   },
+   "lightingSpec": {
+    "ro": "2400K liniar ascuns, accent punctual",
+    "en": "2400K hidden linear, spot accent",
+    "kelvin": 2400
+   },
+   "costRationale": {
+    "ro": "piatră neagră masivă, microciment pigmentat și alamă la comandă",
+    "en": "solid black stone, pigmented microcement and bespoke brass"
+   },
+   "promptSpec": "dark minimalist, matte black stone floor, charcoal microcement walls, satin brass, 2400K hidden linear light",
+   "colors": [
+    "#0E0F10",
+    "#2A2D30",
+    "#6B6E70",
+    "#B08D57"
+   ]
+  },
+  {
+   "id": "japandi",
+   "nameRo": "Japandi",
+   "nameEn": "Japandi",
+   "descRo": "Fuziune japoneză–nordică: lemn cald, linii joase, ceramică artizanală și calm.",
+   "descEn": "Japanese–Nordic fusion: warm timber, low lines, handmade ceramics and calm.",
+   "prompt": "japandi architectural design, warm ash and walnut wood, low profile furniture, paper shoji lighting, handmade ceramics, neutral earthy tones, calm zen atmosphere, 8k photorealistic",
+   "palette": [
+    {
+     "hex": "#EFE9DE",
+     "nameRo": "Hârtie de orez",
+     "nameEn": "Rice paper"
+    },
+    {
+     "hex": "#C9B79C",
+     "nameRo": "Frasin",
+     "nameEn": "Ash wood"
+    },
+    {
+     "hex": "#7C6A55",
+     "nameRo": "Cafeniu pământiu",
+     "nameEn": "Earth brown"
+    },
+    {
+     "hex": "#3A3F3A",
+     "nameRo": "Verde mușchi închis",
+     "nameEn": "Deep moss"
+    }
+   ],
+   "materialsRo": [
+    "Frasin și nuc",
+    "Ceramică artizanală",
+    "Hârtie shoji",
+    "Fibre naturale"
+   ],
+   "materialsEn": [
+    "Ash and walnut",
+    "Handmade ceramics",
+    "Shoji paper",
+    "Natural fibres"
+   ],
+   "costFactor": 1.2,
+   "architecturalBrief": {
+    "ro": "Proporții joase, linii orizontale și goluri lăsate intenționat libere. Lemnul cald și lumina filtrată creează o ierarhie liniștită între mobilier, ceramică și perete.",
+    "en": "Low proportions, horizontal lines and deliberately empty zones. Warm timber and filtered light set a quiet hierarchy between furniture, ceramics and wall."
+   },
+   "materials": {
+    "flooring": {
+     "ro": "Parchet frasin, finisaj mat",
+     "en": "Ash parquet, matte finish"
+    },
+    "walls": {
+     "ro": "Tencuială argiloasă + panouri shoji",
+     "en": "Clay plaster + shoji panels"
+    },
+    "accents": {
+     "ro": "Nuc, ceramică artizanală, fibre naturale",
+     "en": "Walnut, handmade ceramics, natural fibres"
+    }
+   },
+   "lightingSpec": {
+    "ro": "2700K filtrat prin hârtie, joasă",
+    "en": "2700K paper-filtered, low level",
+    "kelvin": 2700
+   },
+   "costRationale": {
+    "ro": "esențe fine de lemn și tâmplărie cu îmbinări vizibile",
+    "en": "fine hardwoods and joinery with exposed joints"
+   },
+   "promptSpec": "japandi, ash wood floor, clay plaster walls, shoji paper light, handmade ceramics, 2700K low warm glow",
+   "colors": [
+    "#EFE9DE",
+    "#C9B79C",
+    "#7C6A55",
+    "#3A3F3A"
+   ]
+  },
+  {
+   "id": "traditional",
+   "nameRo": "Neo-Classic Paris",
+   "nameEn": "Neo-Classic Paris",
+   "descRo": "Eleganță haussmanniană: parchet chevron, lambriuri, cornișe și alamă patinată.",
+   "descEn": "Haussmann elegance: chevron parquet, wall moldings, cornices and aged brass.",
+   "prompt": "refined neo-classic Parisian architectural design, classic wall wainscoting, chevron oak parquet, ornate ceiling cornices, tailored upholstery, warm brass sconces, 8k photorealistic",
+   "palette": [
+    {
+     "hex": "#F5F2EB",
+     "nameRo": "Alb de cornișă",
+     "nameEn": "Cornice white"
+    },
+    {
+     "hex": "#B5946B",
+     "nameRo": "Parchet miere",
+     "nameEn": "Honey parquet"
+    },
+    {
+     "hex": "#4A5550",
+     "nameRo": "Verde Paris",
+     "nameEn": "Paris green"
+    },
+    {
+     "hex": "#2B2623",
+     "nameRo": "Bronz închis",
+     "nameEn": "Dark bronze"
+    }
+   ],
+   "materialsRo": [
+    "Parchet chevron stejar",
+    "Lambriuri și cornișe",
+    "Alamă patinată",
+    "Marmură Carrara"
+   ],
+   "materialsEn": [
+    "Chevron oak parquet",
+    "Wainscoting and cornices",
+    "Aged brass",
+    "Carrara marble"
+   ],
+   "costFactor": 1.45,
+   "architecturalBrief": {
+    "ro": "Compoziție simetrică pe axe, cu ierarhie clară între soclu, lambriu și cornișă. Ornamentul este structural și respectă modulul clasic al încăperii.",
+    "en": "Axially symmetric composition with a clear hierarchy of plinth, wainscot and cornice. Ornament is structural and follows the classical module of the room."
+   },
+   "materials": {
+    "flooring": {
+     "ro": "Parchet chevron stejar, 15 mm",
+     "en": "Chevron oak parquet, 15 mm"
+    },
+    "walls": {
+     "ro": "Lambriuri decorative + cornișe în gips",
+     "en": "Decorative wainscoting + plaster cornices"
+    },
+    "accents": {
+     "ro": "Alamă patinată, marmură Carrara, catifea",
+     "en": "Aged brass, Carrara marble, velvet"
+    }
+   },
+   "lightingSpec": {
+    "ro": "2700K aplice și candelabru",
+    "en": "2700K sconces and chandelier",
+    "kelvin": 2700
+   },
+   "costRationale": {
+    "ro": "piatră naturală, profile de gips executate și tâmplărie la comandă",
+    "en": "natural stone, cast plaster profiles and made-to-order joinery"
+   },
+   "promptSpec": "neo-classic Parisian, chevron oak parquet, wainscoting walls, aged brass, 2700K warm sconces",
+   "colors": [
+    "#F5F2EB",
+    "#B5946B",
+    "#4A5550",
+    "#2B2623"
+   ]
+  },
+  {
+   "id": "mid_century_modern",
+   "nameRo": "Mid-century Modern",
+   "nameEn": "Mid-century Modern",
+   "descRo": "Lemn de tec și nuc, piese iconice pe picioare suple și accente calde.",
+   "descEn": "Teak and walnut wood, iconic tapered-leg furniture and warm accents.",
+   "prompt": "mid-century modern architectural design, warm teak and walnut wood paneling, iconic organic furniture, cognac leather, statement pendant lamp, 8k photorealistic",
+   "palette": [
+    {
+     "hex": "#F3EFE6",
+     "nameRo": "Crem",
+     "nameEn": "Cream"
+    },
+    {
+     "hex": "#9A5B34",
+     "nameRo": "Tec",
+     "nameEn": "Teak"
+    },
+    {
+     "hex": "#4F6354",
+     "nameRo": "Verde pin",
+     "nameEn": "Pine green"
+    },
+    {
+     "hex": "#1E1E1C",
+     "nameRo": "Negru cald",
+     "nameEn": "Warm black"
+    }
+   ],
+   "materialsRo": [
+    "Tec și nuc",
+    "Piele coniac",
+    "Lână bouclé",
+    "Metal alămit"
+   ],
+   "materialsEn": [
+    "Teak and walnut",
+    "Cognac leather",
+    "Wool bouclé",
+    "Brass-finish metal"
+   ],
+   "costFactor": 1.3,
+   "architecturalBrief": {
+    "ro": "Plan deschis cu mobilier pe picioare suple, care păstrează vizibilă podeaua. Placajul de lemn cald și accentele cromatice unesc zonele fără pereți separatori.",
+    "en": "Open plan with tapered-leg furniture that keeps the floor visible. Warm timber cladding and colour accents link zones without partition walls."
+   },
+   "materials": {
+    "flooring": {
+     "ro": "Parchet nuc, finisaj satinat",
+     "en": "Satin-finish walnut parquet"
+    },
+    "walls": {
+     "ro": "Placaj tec + vopsea verde pin",
+     "en": "Teak cladding + pine-green paint"
+    },
+    "accents": {
+     "ro": "Piele coniac, metal alămit, lână bouclé",
+     "en": "Cognac leather, brass-finish metal, wool bouclé"
+    }
+   },
+   "lightingSpec": {
+    "ro": "2700K pendul central + lampă de masă",
+    "en": "2700K central pendant + table lamp",
+    "kelvin": 2700
+   },
+   "costRationale": {
+    "ro": "esențe de tec și nuc, mobilier de design tapițat în piele",
+    "en": "teak and walnut species, leather-upholstered design furniture"
+   },
+   "promptSpec": "mid-century modern, walnut parquet, teak wood walls, cognac leather, brass pendant, 2700K warm light",
+   "colors": [
+    "#F3EFE6",
+    "#9A5B34",
+    "#4F6354",
+    "#1E1E1C"
+   ]
+  },
+  {
+   "id": "coastal",
+   "nameRo": "Coastal",
+   "nameEn": "Coastal",
+   "descRo": "Tonuri de nisip, in natural, lemn albit și atmosferă luminoasă, relaxată.",
+   "descEn": "Sand tones, natural linen, bleached timber and airy coastal light.",
+   "prompt": "refined coastal architectural design, bleached oak flooring, crisp linen drapery, limestone textures, soft mineral blue-grey accents, abundant sunlight, 8k photorealistic",
+   "palette": [
+    {
+     "hex": "#F8F7F4",
+     "nameRo": "Alb spumă",
+     "nameEn": "Sea-foam white"
+    },
+    {
+     "hex": "#D9CEBE",
+     "nameRo": "Nisip",
+     "nameEn": "Sand"
+    },
+    {
+     "hex": "#7A9199",
+     "nameRo": "Albastru mineral",
+     "nameEn": "Mineral blue"
+    },
+    {
+     "hex": "#2F3E46",
+     "nameRo": "Bleumarin adânc",
+     "nameEn": "Deep navy"
+    }
+   ],
+   "materialsRo": [
+    "Stejar albit",
+    "In natural",
+    "Calcar",
+    "Ratan"
+   ],
+   "materialsEn": [
+    "Bleached oak",
+    "Natural linen",
+    "Limestone",
+    "Rattan"
+   ],
+   "costFactor": 1,
+   "architecturalBrief": {
+    "ro": "Spațiu înalt și luminos, orientat spre deschideri mari. Culorile minerale deschise și texturile naturale reduc contrastul și măresc percepția volumului.",
+    "en": "Tall, bright space oriented towards large openings. Light mineral colours and natural textures reduce contrast and enlarge the perceived volume."
+   },
+   "materials": {
+    "flooring": {
+     "ro": "Stejar albit, finisaj mat",
+     "en": "Bleached oak, matte finish"
+    },
+    "walls": {
+     "ro": "Var mineral + lambriu vertical alb",
+     "en": "Mineral limewash + white vertical boarding"
+    },
+    "accents": {
+     "ro": "In natural, ratan, calcar",
+     "en": "Natural linen, rattan, limestone"
+    }
+   },
+   "lightingSpec": {
+    "ro": "5000K lumină naturală abundentă",
+    "en": "5000K abundant natural daylight",
+    "kelvin": 5000
+   },
+   "costRationale": {
+    "ro": "nivel de referință — finisaje deschise, fibre naturale de serie",
+    "en": "baseline — light finishes, series natural fibres"
+   },
+   "promptSpec": "coastal, bleached oak floor, limewash walls, natural linen and rattan, 5000K bright daylight",
+   "colors": [
+    "#F8F7F4",
+    "#D9CEBE",
+    "#7A9199",
+    "#2F3E46"
+   ]
+  },
+  {
+   "id": "industrial",
+   "nameRo": "Industrial Loft",
+   "nameEn": "Industrial Loft",
+   "descRo": "Beton aparent, oțel negru mat, cărămidă sau microciment și piele coniac.",
+   "descEn": "Exposed concrete, matte black steel, microcement and cognac leather.",
+   "prompt": "architectural industrial loft design, microcement surfaces, matte black steel framing, warm cognac leather, exposed timber beams, warm track lighting, 8k photorealistic",
+   "palette": [
+    {
+     "hex": "#D6D3CD",
+     "nameRo": "Beton deschis",
+     "nameEn": "Light concrete"
+    },
+    {
+     "hex": "#8C5332",
+     "nameRo": "Cărămidă aparentă",
+     "nameEn": "Exposed brick"
+    },
+    {
+     "hex": "#474B4F",
+     "nameRo": "Oțel vechi",
+     "nameEn": "Aged steel"
+    },
+    {
+     "hex": "#141413",
+     "nameRo": "Negru mat",
+     "nameEn": "Matte black"
+    }
+   ],
+   "materialsRo": [
+    "Microciment",
+    "Cărămidă aparentă",
+    "Oțel negru mat",
+    "Grinzi din lemn"
+   ],
+   "materialsEn": [
+    "Microcement",
+    "Exposed brick",
+    "Matte black steel",
+    "Timber beams"
+   ],
+   "costFactor": 1.1,
+   "architecturalBrief": {
+    "ro": "Structura rămâne vizibilă: grinzi, conducte și planșee sunt parte din compoziție. Materialele brute creează contrast cu piesele calde din piele și lemn.",
+    "en": "Structure stays visible: beams, services and slabs are part of the composition. Raw materials contrast with warm leather and timber pieces."
+   },
+   "materials": {
+    "flooring": {
+     "ro": "Microciment șlefuit sau beton elicopterizat",
+     "en": "Polished microcement or power-floated concrete"
+    },
+    "walls": {
+     "ro": "Cărămidă aparentă + beton aparent",
+     "en": "Exposed brick + exposed concrete"
+    },
+    "accents": {
+     "ro": "Oțel negru mat, piele coniac, grinzi lemn",
+     "en": "Matte black steel, cognac leather, timber beams"
+    }
+   },
+   "lightingSpec": {
+    "ro": "3000K spoturi pe șină",
+    "en": "3000K track spotlights",
+    "kelvin": 3000
+   },
+   "costRationale": {
+    "ro": "structură metalică la comandă și tratamente de suprafață pentru beton",
+    "en": "custom steel framing and concrete surface treatments"
+   },
+   "promptSpec": "industrial loft, polished microcement floor, exposed brick walls, black steel, 3000K track lighting",
+   "colors": [
+    "#D6D3CD",
+    "#8C5332",
+    "#474B4F",
+    "#141413"
+   ]
+  },
+  {
+   "id": "brutalist_concrete",
+   "nameRo": "Brutalist Concrete",
+   "nameEn": "Brutalist Concrete",
+   "descRo": "Beton turnat aparent, volume masive, lemn brut și lumină dramatică, laterală.",
+   "descEn": "Board-formed exposed concrete, massive volumes, raw timber and dramatic side light.",
+   "prompt": "brutalist architectural design, raw board-formed exposed concrete walls, massive monolithic volumes, raw timber accents, blackened steel, dramatic raking light, 8k photorealistic",
+   "palette": [
+    {
+     "hex": "#BDBAB3",
+     "nameRo": "Beton turnat",
+     "nameEn": "Cast concrete"
+    },
+    {
+     "hex": "#8D8A84",
+     "nameRo": "Gri brut",
+     "nameEn": "Raw grey"
+    },
+    {
+     "hex": "#5A4B3E",
+     "nameRo": "Lemn brut",
+     "nameEn": "Raw timber"
+    },
+    {
+     "hex": "#191919",
+     "nameRo": "Oțel înnegrit",
+     "nameEn": "Blackened steel"
+    }
+   ],
+   "materialsRo": [
+    "Beton aparent cofrat",
+    "Oțel înnegrit",
+    "Lemn brut",
+    "Sticlă fixă"
+   ],
+   "materialsEn": [
+    "Board-formed concrete",
+    "Blackened steel",
+    "Raw timber",
+    "Fixed glazing"
+   ],
+   "costFactor": 1.15,
+   "architecturalBrief": {
+    "ro": "Volume monolitice, cu textura cofrajului lăsată aparentă. Golurile mici și adânci modelează lumina laterală și accentuează masa structurii.",
+    "en": "Monolithic volumes with the formwork texture left visible. Small, deep openings shape the raking light and emphasise the mass of the structure."
+   },
+   "materials": {
+    "flooring": {
+     "ro": "Beton șlefuit sigilat mat",
+     "en": "Matte-sealed ground concrete"
+    },
+    "walls": {
+     "ro": "Beton aparent turnat în cofraj de scândură",
+     "en": "Board-formed exposed concrete"
+    },
+    "accents": {
+     "ro": "Oțel înnegrit, lemn brut, sticlă fixă",
+     "en": "Blackened steel, raw timber, fixed glazing"
+    }
+   },
+   "lightingSpec": {
+    "ro": "3200K lumină laterală, contrast ridicat",
+    "en": "3200K raking side light, high contrast",
+    "kelvin": 3200
+   },
+   "costRationale": {
+    "ro": "cofraj special, beton aparent cu toleranțe stricte și sticlă fixă de dimensiuni mari",
+    "en": "special formwork, tight-tolerance exposed concrete and large fixed glazing"
+   },
+   "promptSpec": "brutalist, ground concrete floor, board-formed concrete walls, blackened steel, 3200K dramatic raking light",
+   "colors": [
+    "#BDBAB3",
+    "#8D8A84",
+    "#5A4B3E",
+    "#191919"
+   ]
+  },
+  {
+   "id": "biophilic",
+   "nameRo": "Biophilic Organic",
+   "nameEn": "Biophilic Organic",
+   "descRo": "Plante integrate, piatră naturală, lemn cu textură și lumină naturală abundentă.",
+   "descEn": "Integrated greenery, natural stone, textured timber and abundant daylight.",
+   "prompt": "biophilic organic architectural design, abundant living plants, natural stone, textured raw timber, rattan, earthy green and terracotta tones, soft natural daylight, 8k photorealistic",
+   "palette": [
+    {
+     "hex": "#EDEBE1",
+     "nameRo": "Var natural",
+     "nameEn": "Natural lime"
+    },
+    {
+     "hex": "#6F8F5F",
+     "nameRo": "Verde frunză",
+     "nameEn": "Leaf green"
+    },
+    {
+     "hex": "#B4694A",
+     "nameRo": "Teracotă",
+     "nameEn": "Terracotta"
+    },
+    {
+     "hex": "#33392E",
+     "nameRo": "Verde pădure",
+     "nameEn": "Forest green"
+    }
+   ],
+   "materialsRo": [
+    "Plante integrate",
+    "Piatră naturală",
+    "Lemn texturat",
+    "Teracotă"
+   ],
+   "materialsEn": [
+    "Integrated planting",
+    "Natural stone",
+    "Textured timber",
+    "Terracotta"
+   ],
+   "costFactor": 1.15,
+   "architecturalBrief": {
+    "ro": "Vegetația este element de proiect, nu decor: jardiniere integrate, ventilare naturală și vederi spre exterior pe axele principale. Texturile organice susțin confortul vizual.",
+    "en": "Greenery is a design element, not decor: integrated planters, natural ventilation and outward views on the main axes. Organic textures support visual comfort."
+   },
+   "materials": {
+    "flooring": {
+     "ro": "Piatră naturală + teracotă nesmălțuită",
+     "en": "Natural stone + unglazed terracotta"
+    },
+    "walls": {
+     "ro": "Tencuială de var + perete verde integrat",
+     "en": "Lime plaster + integrated living wall"
+    },
+    "accents": {
+     "ro": "Lemn texturat, ratan, ceramică teracotă",
+     "en": "Textured timber, rattan, terracotta ceramics"
+    }
+   },
+   "lightingSpec": {
+    "ro": "4500K lumină naturală, completare 3000K",
+    "en": "4500K natural daylight, 3000K fill",
+    "kelvin": 4500
+   },
+   "costRationale": {
+    "ro": "sistem de irigare, jardiniere încastrate și piatră naturală",
+    "en": "irrigation system, built-in planters and natural stone"
+   },
+   "promptSpec": "biophilic, natural stone floor, lime plaster walls, living plants, textured timber, 4500K soft daylight",
+   "colors": [
+    "#EDEBE1",
+    "#6F8F5F",
+    "#B4694A",
+    "#33392E"
+   ]
+  }
+ ],
+ "scopes": [
+  {
+   "id": "refresh",
+   "labelRo": "Refresh & Mobilare",
+   "labelEn": "Refresh & Furnish",
+   "descRo": "Zugrăveli, iluminat și mobilier nou; structura și pardoseala rămân.",
+   "descEn": "New paint, lighting and furniture; structure and flooring stay.",
+   "prompt": "existing architecture kept, refreshed finishes, new furniture and decor",
+   "factors": {
+    "floor": 0.15,
+    "walls": 0.6,
+    "ceiling": 0,
+    "baseboard": 0.3,
+    "light": 0.5,
+    "envelope": 0.35,
+    "fitout": 1
+   },
+   "enabling": {
+    "interiors": null,
+    "exteriors": null,
+    "gardens": null
+   }
+  },
+  {
+   "id": "renovation",
+   "labelRo": "Renovare Completă",
+   "labelEn": "Full Renovation",
+   "descRo": "Toate finisajele refăcute: pardoseală, pereți, tavan, iluminat, mobilier.",
+   "descEn": "All finishes redone: flooring, walls, ceiling, lighting, furniture.",
+   "prompt": "fully renovated space, brand new finishes throughout",
+   "factors": {
+    "floor": 1,
+    "walls": 1,
+    "ceiling": 1,
+    "baseboard": 1,
+    "light": 1,
+    "envelope": 1,
+    "fitout": 1
+   },
+   "enabling": {
+    "interiors": null,
+    "exteriors": null,
+    "gardens": null
+   }
+  },
+  {
+   "id": "shell",
+   "labelRo": "La Roșu / Gri",
+   "labelEn": "Shell / Raw Build",
+   "descRo": "De la structură: șape, tencuieli, instalații și finisaje complete.",
+   "descEn": "From raw structure: screed, plaster, services and complete finishes.",
+   "prompt": "raw unfinished shell transformed into a complete finished space",
+   "factors": {
+    "floor": 1.35,
+    "walls": 1.7,
+    "ceiling": 1.25,
+    "baseboard": 1.2,
+    "light": 1.6,
+    "envelope": 1.5,
+    "fitout": 1
+   },
+   "enabling": {
+    "interiors": {
+     "labelRo": "Instalații & șapă",
+     "labelEn": "Services & screed",
+     "rates": {
+      "economy": 45,
+      "standard": 85,
+      "luxury": 150
+     }
+    },
+    "exteriors": {
+     "labelRo": "Pregătire suport & izolații",
+     "labelEn": "Substrate prep & insulation",
+     "rates": {
+      "economy": 20,
+      "standard": 38,
+      "luxury": 70
+     }
+    },
+    "gardens": {
+     "labelRo": "Terasamente & drenaj",
+     "labelEn": "Groundworks & drainage",
+     "rates": {
+      "economy": 15,
+      "standard": 28,
+      "luxury": 55
+     }
+    }
+   }
+  }
+ ]
+}
