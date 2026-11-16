@@ -133,6 +133,23 @@ body { font-feature-settings: "cv11" 1; text-rendering: optimizeLegibility; -web
   pointer-events: none;
 }
 
+/* Studio: bară de progres nedeterminată în timpul randării */
+@keyframes studio-progress {
+  0%   { transform: translateX(-110%); }
+  100% { transform: translateX(330%); }
+}
+.studio-progress { animation: studio-progress 1.6s cubic-bezier(.45,.05,.55,.95) infinite; }
+
+/* Studio: bară de derulare discretă pentru panoul de control */
+.studio-scroll { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--foreground) 22%, transparent) transparent; }
+
+/* Studio: zonă de drag-and-drop activă (fișier deasupra) */
+.dropzone-active {
+  border-color: var(--foreground) !important;
+  border-style: solid !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--foreground) 14%, transparent);
+}
+
 /* Cifre tabulare: prețuri, dimensiuni, metrici și tabele se aliniază vertical pe coloane */
 table, output, time, dd,
 [class*="font-mono"], [class*="tabular"] { font-variant-numeric: tabular-nums; }
@@ -158,6 +175,7 @@ a, button, [role="button"], summary { touch-action: manipulation; }
 
 @media (prefers-reduced-motion: reduce) {
   .scan-line { animation: none; opacity: .6; top: 50%; }
+  .studio-progress { animation: none; width: 100%; opacity: .6; }
   * { scroll-behavior: auto !important; }
 }
 

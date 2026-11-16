@@ -3,6 +3,7 @@
 // paleta / lumina, structura, suprafața, materialele recunoscute și costul estimat.
 "use client";
 
+import { formatLei } from '@/app/lib/format';
 import React from 'react';
 import { getStyle } from '@/app/data/catalog';
 import { EYEBROW, getSkin } from '@/app/lib/theme/skin';
@@ -32,7 +33,7 @@ export default function VisionSummary({ lang, isDark, vision, costTotal }: Visio
       <div className={`px-4 h-9 flex items-center justify-between border-b ${sk.line} ${eyebrow}`}>
         <span>{t('Brief-ul tău', 'Your brief')}</span>
         <span className={`tabular-nums ${sk.strong}`}>
-          ≈ {costTotal.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} €
+          ≈ {formatLei(costTotal, { maximumFractionDigits: 0 })}
         </span>
       </div>
       <div className="p-4 space-y-3">

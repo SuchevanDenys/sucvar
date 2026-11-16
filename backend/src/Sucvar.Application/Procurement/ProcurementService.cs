@@ -32,7 +32,7 @@ public sealed class ProcurementService(IProcurementRepository repository)
 
     public async Task<ProjectProcurement> GetAsync(AuthUser user, string projectId, CancellationToken ct = default)
     {
-        var row = await repository.GetAsync(Guid.Parse(user.UserId), projectId, ct) ?? throw NotFound;
+        var row = await repository.GetAsync(user.Id, projectId, ct) ?? throw NotFound;
         var (items, persisted) = ProcurementStore.Resolve(row.ProcurementItemsJson, row.Mode, row.SpaceType, row.StyleId, row.DimensionsJson);
         return new ProjectProcurement(row.Id, items, ProcurementStore.Total(items), "EUR", persisted);
     }
@@ -40,7 +40,7 @@ public sealed class ProcurementService(IProcurementRepository repository)
     /// <summary>Recomputes the list from the saved project parameters and stores it (idempotent).</summary>
     public async Task<ProjectProcurement> BackfillAsync(AuthUser user, string projectId, CancellationToken ct = default)
     {
-        var userId = Guid.Parse(user.UserId);
+        var userId = user.Id;
         var row = await repository.GetAsync(userId, projectId, ct) ?? throw NotFound;
         var bom = ProcurementStore.Compute(row.Mode, row.SpaceType, row.StyleId, row.DimensionsJson);
         var persisted = await repository.SaveAsync(userId, projectId, ProcurementStore.Serialize(bom.Items), ct);

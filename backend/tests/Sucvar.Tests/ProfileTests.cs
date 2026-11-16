@@ -150,7 +150,7 @@ public class ProfileEndpointTests : IClassFixture<SucvarApiFactory>
         Assert.False(body.GetProperty("isBanned").GetBoolean());
         Assert.Equal("ana@test.ro", body.GetProperty("account").GetProperty("email").GetString());
         Assert.Equal(3, body.GetProperty("usage").GetProperty("generationsLimit").GetInt32());
-        Assert.Equal("EUR", body.GetProperty("defaults").GetProperty("currency").GetString());
+        Assert.Equal("RON", body.GetProperty("defaults").GetProperty("currency").GetString());
     }
 
     [Fact]

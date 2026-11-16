@@ -11,6 +11,7 @@ import {
   MailCheck,
 } from 'lucide-react';
 import Navbar from '@/app/components/layout/Navbar';
+import NewPasswordForm from '@/app/components/login/NewPasswordForm';
 import SucvarLogo from '@/app/components/layout/SucvarLogo';
 import { notifyAccountChange } from '@/app/components/layout/AccountWidget';
 import {
@@ -486,57 +487,18 @@ export default function LoginAndAccountPage() {
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-12">
         {isRecovery ? (
-          /* ================= PAROLĂ NOUĂ ================= */
-          <div className={`max-w-md mx-auto p-8 rounded-md border space-y-6 ${ui.card}`}>
-            <div className="space-y-2">
-              <p className={eyebrowClass}>{t('Resetare parolă', 'Password reset')}</p>
-              <h1 className="text-2xl font-semibold tracking-tight">
-                {t('Alege o parolă nouă', 'Choose a new password')}
-              </h1>
-            </div>
-            <form onSubmit={handleSetNewPassword} className="space-y-4">
-              <div>
-                <label htmlFor="newPassword" className="block text-xs font-medium mb-1">
-                  {t('Parolă nouă (minim 6 caractere)', 'New password (min 6 characters)')}
-                </label>
-                <input
-                  id="newPassword"
-                  type={showPassword ? 'text' : 'password'}
-                  required
-                  minLength={6}
-                  autoComplete="new-password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className={fieldClass}
-                />
-              </div>
-              <div>
-                <label htmlFor="newPasswordConfirm" className="block text-xs font-medium mb-1">
-                  {t('Confirmă parola', 'Confirm password')}
-                </label>
-                <input
-                  id="newPasswordConfirm"
-                  type={showPassword ? 'text' : 'password'}
-                  required
-                  minLength={6}
-                  autoComplete="new-password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className={fieldClass}
-                />
-              </div>
-              {messages}
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className={`w-full h-12 rounded-sm text-xs font-semibold uppercase tracking-widest transition-colors disabled:opacity-50 cursor-pointer touch-manipulation ${ui.btn}`}
-              >
-                {isSubmitting
-                  ? t('Se procesează...', 'Processing...')
-                  : t('Salvează parola', 'Save password')}
-              </button>
-            </form>
-          </div>
+          <NewPasswordForm
+            lang={lang}
+            isDark={isDark}
+            password={password}
+            confirmPassword={confirmPassword}
+            showPassword={showPassword}
+            isSubmitting={isSubmitting}
+            messages={messages}
+            onPasswordChange={setPassword}
+            onConfirmPasswordChange={setConfirmPassword}
+            onSubmit={handleSetNewPassword}
+          />
         ) : !loggedUser ? (
           /* ================= ECRAN DE AUTENTIFICARE ================= */
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">

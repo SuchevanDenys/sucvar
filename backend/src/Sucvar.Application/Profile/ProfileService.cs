@@ -1,6 +1,7 @@
 using Sucvar.Application.Admin;
 using Sucvar.Application.Quota;
 using Sucvar.Application.Subscriptions;
+using Sucvar.Domain;
 using Sucvar.Domain.B2b;
 using Sucvar.Domain.Plans;
 using Sucvar.Domain.Profile;
@@ -49,7 +50,7 @@ public sealed class ProfileService(
 
     public async Task<ProfileView> GetAsync(AuthUser user, TokenIdentity token, CancellationToken ct = default)
     {
-        var userId = Guid.Parse(user.UserId);
+        var userId = user.Id;
         var row = await profiles.GetAsync(userId, ct);
         var sub = await subscriptions.GetEffectiveSubscriptionAsync(user.UserId, ct);
         var company = await companies.GetAsync(userId, ct);
@@ -59,19 +60,19 @@ public sealed class ProfileService(
         var account = await accounts.GetAsync(userId, ct);
         var platform = await settings.GetAsync(ct);
         var since = QuotaPolicy.Since(QuotaService.MonthStartUtc(clock.GetUtcNow()), account.QuotaResetAt);
-        var used = Math.Max(await usage.CountProjectsSinceAsync(userId, since, ct), await usage.CountGenerationsSinceAsync(userId, since, ct));
+        var used = await usage.CountUsedSinceAsync(userId, since, ct);
 
         var fullName = Clean(row?.FullName) ?? Clean(token.FullName);
         var avatar = Clean(row?.AvatarUrl) ?? Clean(token.AvatarUrl);
         var email = Clean(user.Email) ?? Clean(row?.Email) ?? "";
 
         return new ProfileView(
-            new ProfileAccount(user.UserId, email, fullName, avatar, Initials.From(fullName, email), Iso(row?.CreatedAt)),
+            new ProfileAccount(user.UserId, email, fullName, avatar, Initials.From(fullName, email), IsoTime.Format(row?.CreatedAt)),
             company,
             PlanTiers.HasB2bAccess(sub.Tier),
             row?.Defaults ?? ProfileDefaults.Initial,
-            new ProfileSubscription(sub.Tier, sub.Interval, Iso(sub.CurrentPeriodEnd), sub.CancelAtPeriodEnd, !string.IsNullOrEmpty(sub.StripeCustomerId)),
-            new ProfileUsage(used, QuotaPolicy.Limit(sub.Tier, platform, account), Iso(since)!,
+            new ProfileSubscription(sub.Tier, sub.Interval, IsoTime.Format(sub.CurrentPeriodEnd), sub.CancelAtPeriodEnd, !string.IsNullOrEmpty(sub.StripeCustomerId)),
+            new ProfileUsage(used, QuotaPolicy.Limit(sub.Tier, platform, account), IsoTime.Format(since),
                 stats.ProjectsTotal, stats.ProjectsPublic, stats.EstimatesTotal, account.BonusGenerations),
             projects,
             row?.Migrated ?? true,
@@ -86,7 +87,7 @@ public sealed class ProfileService(
     /// </summary>
     public async Task UpdateAsync(AuthUser user, ProfileUpdate update, CancellationToken ct = default)
     {
-        var userId = Guid.Parse(user.UserId);
+        var userId = user.Id;
         CompanyProfile? company = null;
         if (update.Company is { } companyJson)
         {
@@ -103,7 +104,4 @@ public sealed class ProfileService(
     }
 
     private static string? Clean(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
-
-    private static string? Iso(DateTimeOffset? d) =>
-        d?.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss.ffffffzzz", System.Globalization.CultureInfo.InvariantCulture);
 }

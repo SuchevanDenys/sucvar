@@ -109,13 +109,13 @@ public sealed record PublicEstimateSource(
     double Total,
     double ContingencyPct = 0,
     double MarginPct = 0,
-    double VatPct = 20,
+    double VatPct = 21,
     double NetSubtotal = 0);
 
-/// <summary>French standard VAT — TVA taux normal (same value as EstimateParser.DefaultVatPct, kept here to avoid a B2B dependency).</summary>
+/// <summary>Romanian standard VAT — cota standard (same value as EstimateParser.DefaultVatPct, kept here to avoid a B2B dependency).</summary>
 public static class EstimateDefaults
 {
-    public const double VatPct = 20;
+    public const double VatPct = 21;
 }
 
 /// <summary>Port of getPublicProject's projection (app/lib/server/db.ts).</summary>

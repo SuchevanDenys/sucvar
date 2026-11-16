@@ -12,7 +12,7 @@ const eslintConfig = defineConfig([
       "app/components/login/ProjectModal.tsx",
       "app/components/login/AccountDashboard.tsx",
       "app/components/studio/PrintBlueprint.tsx",
-      "app/generate/page.tsx",
+      "app/components/studio/PhotoSection.tsx",
       "app/login/page.tsx",
     ],
     rules: { "@next/next/no-img-element": "off" },

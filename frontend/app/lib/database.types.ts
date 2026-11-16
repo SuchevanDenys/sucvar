@@ -58,7 +58,6 @@ export interface AiGenerationRow {
 }
 
 export type EstimateStatus = 'draft' | 'sent' | 'accepted' | 'rejected';
-export const ESTIMATE_STATUSES: readonly EstimateStatus[] = ['draft', 'sent', 'accepted', 'rejected'];
 
 /** O poziție din deviz (oglinda `LineItem` din app/lib/b2b/estimate.ts), stocată în `line_items` (jsonb). */
 export interface EstimateLineItem {
@@ -141,7 +140,6 @@ export interface EstimateRecord extends EstimatePayload {
 // ═════════════════════════════════════════════════════════════════════════════
 
 export type ClientStatus = 'pending' | 'approved' | 'changes_requested';
-export const CLIENT_STATUSES: readonly ClientStatus[] = ['pending', 'approved', 'changes_requested'];
 /** Ce poate trimite clientul din portal (nu poate „reveni" la pending). */
 export type ClientDecision = Exclude<ClientStatus, 'pending'>;
 export const CLIENT_FEEDBACK_MAX = 500;
@@ -195,7 +193,7 @@ export interface PublicProject {
   designBrief?: string | null;
 }
 
-/** Link de căutare la magazin, reconstruit pe server (enseignes françaises — vezi app/lib/retailers.ts). */
+/** Link de căutare la magazin, reconstruit pe server (magazine din România — vezi app/lib/retailers.ts). */
 export interface PublicRetailerLink {
   retailer: string;
   label: string;

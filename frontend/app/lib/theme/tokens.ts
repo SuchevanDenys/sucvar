@@ -1,5 +1,12 @@
 // app/lib/theme/tokens.ts
 // Color classes used by every page (language/theme state lives in usePrefs.ts).
+//
+// Design invariant — "Pure Monochrome Scandinavian Gallery":
+//   light  #FFFFFF page · #F5F5F5 passe-partout surfaces · #111111 ink
+//   dark   #0B0B0C page · #141416 surfaces              · #F5F5F5 ink
+// Only neutral greys are allowed for lines/muted text. No blue (or any hue) as an accent: emphasis comes from
+// weight, contrast and the ink colour itself. Status colours (red errors, amber limits) are the only exceptions.
+// Classes are spelled out in full because Tailwind cannot detect class names assembled by interpolation.
 
 // Monochrome gallery palette: pure white / stone grey (light) · matte charcoal (dark). Zero blue.
 const lightUi = {

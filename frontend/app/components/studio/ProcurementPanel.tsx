@@ -9,12 +9,14 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ExternalLink, Loader2, PackageSearch, RefreshCw, Send } from 'lucide-react';
 import { sendBomToB2b, type SyncProject } from '@/app/lib/b2b/procurementSync';
 import { buildBom, type BomResult } from '@/app/lib/procurement';
+import { normalizeProcurementItems } from '@/app/lib/procurementNormalize';
 import { getAccessToken } from '@/app/lib/supabase/auth';
 import { EYEBROW, getSkin } from '@/app/lib/theme/skin';
 import type { BomInput } from '@/app/lib/procurement';
 import type { Language } from '@/app/types';
 import { apiFetch, readJson } from '@/app/lib/api-client';
 import { tr, unitLabel } from '@/app/lib/i18n';
+import { formatLei, formatQuantity } from '@/app/lib/format';
 
 interface ProcurementPanelProps {
   lang: Language;
@@ -30,8 +32,8 @@ interface ProcurementPanelProps {
   onBom?: (inputKey: string, bom: BomResult) => void;
 }
 
-const eur = (n: number) => `${n.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} €`;
-const qtyFmt = (n: number) => n.toLocaleString('fr-FR', { maximumFractionDigits: 1 });
+const eur = (n: number) => formatLei(n, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+const qtyFmt = (n: number) => formatQuantity(n, 1);
 
 export default function ProcurementPanel({ lang, isDark, input, renderKey, projectName, getProjectId, onBom }: ProcurementPanelProps) {
   const sk = getSkin(isDark);
@@ -82,6 +84,8 @@ export default function ProcurementPanel({ lang, isDark, input, renderKey, proje
         }
         // Fără sesiune (demo) sau sesiune expirată: calcul local, aceeași funcție ca pe server
         bomResult ??= buildBom(current);
+        // Garanție: doar linkuri spre magazine din România, reconstruite din `query` (și la răspunsuri vechi/cache).
+        bomResult = { ...bomResult, items: normalizeProcurementItems(bomResult.items) ?? [] };
         if (alive) {
           setResult({ key: requestKey, bom: bomResult, error: null, ranFor });
           onBomRef.current?.(ranFor, bomResult);

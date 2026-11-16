@@ -20,17 +20,25 @@ public sealed class ReviewRequestValidator : AbstractValidator<ReviewRequest>
     }
 }
 
-/// <summary>Port of the portal half of db.ts (sharing + public projection + client review).</summary>
+/// <summary>
+/// Client-portal use cases: the owner toggles a project's public link, an anonymous client views a sanitised
+/// projection and records a decision.
+/// </summary>
 public sealed class PortalService(IPortalRepository repository, TimeProvider clock, ILogger<PortalService> logger)
 {
+    /// <summary>Sharing state of the caller's projects; <c>Migrated=false</c> when migration 002 is missing.</summary>
     public Task<(bool Migrated, IReadOnlyList<ProjectSharing> Items)> ListSharingAsync(AuthUser user, string? projectId, CancellationToken ct = default) =>
-        repository.ListSharingAsync(Guid.Parse(user.UserId), projectId, ct);
+        repository.ListSharingAsync(user.Id, projectId, ct);
 
+    /// <summary>Publishes or revokes the caller's project link. 404 when the project is not in the cloud or not theirs.</summary>
     public async Task<ProjectSharing> SetPublicAsync(AuthUser user, string projectId, bool isPublic, CancellationToken ct = default) =>
-        await repository.SetPublicAsync(Guid.Parse(user.UserId), projectId, isPublic, ct)
+        await repository.SetPublicAsync(user.Id, projectId, isPublic, ct)
         ?? throw new AppException(404, "NOT_FOUND", "Proiectul nu există în cloud. Salvează-l în Supabase înainte de a-l partaja.");
 
-    /// <summary>Public project or null (missing OR private — never reveal which).</summary>
+    /// <summary>
+    /// Public project or null (missing OR private — never reveal which). The estimate is best-effort: if it cannot be
+    /// read the portal still renders the design, just without a total.
+    /// </summary>
     public async Task<PublicProject?> GetPublicProjectAsync(string projectId, CancellationToken ct = default)
     {
         var row = await repository.GetPublicProjectAsync(projectId, ct);
@@ -50,6 +58,7 @@ public sealed class PortalService(IPortalRepository repository, TimeProvider clo
         return PublicProjection.Project(row.Source, estimate);
     }
 
+    /// <summary>Records the client decision; null when the project is not (or no longer) public.</summary>
     public Task<ReviewResult?> SubmitReviewAsync(string projectId, string decision, string feedback, CancellationToken ct = default) =>
         repository.SubmitReviewAsync(projectId, decision, feedback.Length > 0 ? feedback : null, clock.GetUtcNow(), ct);
 }

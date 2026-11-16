@@ -212,3 +212,16 @@ New SQL: `backend/db/migrations/006_project_procurement_items.sql` (`projects.pr
 | `GET /api/public/projects/{id}` | adds `items[{id,category,name,nameEn,quantity,unit,clientUnitPrice,clientLineTotal,retailerName,retailerUrl,links[]}]` and `pricingBreakdown{materialsSubtotal,laborSubtotal,vatRate,vatAmount,grandTotal,currency,pricingSource:'b2b_quote'\|'studio_estimate'}` |
 
 Pricing (server only, `PublicProjection.Pricing`): B2B line price = purchase price × (1+contingency) × (1+margin) (capped so materials ≤ net); labour = net − materials; VAT = total − net. Without a quote: Studio market prices, labour = Studio estimate − materials, VAT 21 %. Purchase prices, margin/contingency %, rates and `user_id` never appear in the payload. Stored retailer URLs are never echoed: links are rebuilt from `query` (Dedeman / IKEA / Leroy Merlin / Hornbach only).
+
+## 9. Romanian market (migration 008)
+
+New SQL: `backend/db/migrations/008_romanian_market_defaults.sql` (also appended to `setup_all.sql`). It changes **column
+defaults only** (no `UPDATE`): `b2b_estimates.vat_pct` 21, `b2b_estimates.region` `'bucharest'`,
+`profiles.default_vat_rate` 21, `profiles.default_currency` `'RON'`; RO comments on `company_profiles.vat_id/reg_no`.
+
+| Change | Where |
+|---|---|
+| Retailer links: Dedeman · Leroy Merlin · Hornbach · Brico Dépôt · IKEA România · Mobexpert, Romanian `query` used verbatim (supersedes the French routing of §8 and of 007) | `RomanianRetail.cs` ↔ `frontend/app/lib/retailers.ts` |
+| Default VAT 21 %, one-click 11 %; default region `bucharest` | `EstimateParser.DefaultVatPct` / `RomanianVatRates` / `DefaultRegion`, `EstimateDefaults.VatPct`, `lib/b2b/estimate.ts` |
+| Profile defaults `("RON", 21, 15)`; missing `defaults.currency` in `PUT /api/profile` → `RON` | `ProfileDefaults.Initial`, `ProfileUpdateParser` |
+| API amounts and `currency` fields stay **EUR** (contract unchanged); the UI shows lei with a fixed `EUR_TO_RON` rate | `frontend/app/lib/format.ts` |

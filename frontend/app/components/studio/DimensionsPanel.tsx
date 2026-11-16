@@ -2,6 +2,7 @@
 // Step 02: room dimensions + budget tier.
 "use client";
 
+import { formatLei } from '@/app/lib/format';
 import React from 'react';
 import { EYEBROW, getSkin } from '@/app/lib/theme/skin';
 import type { NumberField } from '@/app/lib/studio/constants';
@@ -160,9 +161,9 @@ export default function DimensionsPanel({
     <div className={`px-4 py-3 border-t flex items-baseline justify-between gap-3 ${sk.line}`}>
       <span className={eyebrow}>{t('Cost estimat', 'Estimated cost')}</span>
       <span className="text-right">
-        <span className={`text-lg font-mono font-medium tabular-nums ${sk.strong}`}>{costTotal.toLocaleString('fr-FR')} €</span>
+        <span className={`text-lg font-mono font-medium tabular-nums ${sk.strong}`}>{formatLei(costTotal, { maximumFractionDigits: 0 })}</span>
         <span className={`block text-[10px] font-mono tabular-nums ${sk.dim}`}>
-          {costMin.toLocaleString('fr-FR')} – {costMax.toLocaleString('fr-FR')} €
+          {formatLei(costMin, { maximumFractionDigits: 0 })} – {formatLei(costMax, { maximumFractionDigits: 0 })}
         </span>
       </span>
     </div>

@@ -1,22 +1,23 @@
-# Sucvar
+# SUCVAR — frontend
 
-Romanian-language AI interior / exterior / garden design studio (bachelor's thesis project).
-Next.js 16 · React 19 · Supabase · Stripe · Replicate / Stable Diffusion.
-
-## Development
+Next.js 16 · React 19 · Tailwind 4. UI only: all business rules, billing and AI calls live in the .NET API
+(`../backend`). Default language Romanian, with English and French.
 
 ```bash
 pnpm install
 pnpm dev      # http://localhost:3000
-pnpm build && pnpm start
 pnpm lint
+pnpm build && pnpm start
 ```
 
-Configure `.env.local` (see `CLAUDE.md` for the variable list) and verify it at `/env-check` (dev only).
+Configure `.env.local` from `.env.example` and check it at `/env-check` (development only).
 
 ## Layout
 
-- `app/` pages and API routes (`generate`, `checkout`, `webhooks/stripe`)
-- `app/components/{layout,ui,studio,login,b2b}` UI components
-- `app/lib/{ai,billing,plan,supabase,theme}` domain modules
-- `app/types/` domain types (barrel: `@/app/types`)
+- `app/` — routes (`/`, `/generate`, `/b2b`, `/account`, `/login`, `/admin`, `/checkout`, `/p/[id]`, legal pages)
+- `app/components/<feature>/` — `studio`, `b2b`, `home`, `portal`, `account`, `admin`, `login`, `layout`, `ui`
+- `app/lib/` — `api-client.ts` (single HTTP gateway to the API), `i18n`, `plan`, `studio`, `b2b`, `portal`, `profile`, `admin`, `supabase`, `theme`
+- `app/data/` — catalog, spaces, style specs, landing copy
+- `app/types/` — shared domain types (barrel: `@/app/types`)
+
+See [`../ARCHITECTURE.md`](../ARCHITECTURE.md) for the full system design and `CLAUDE.md` for conventions.

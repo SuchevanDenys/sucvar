@@ -1,23 +1,25 @@
 // app/components/archive/ProcurementList.tsx — „Lista Materiale & Link-uri Achiziție" direct în Arhivă.
 // Secțiune expandabilă pe cardul proiectului: materiale, cantități, preț orientativ și linkuri directe
-// la magazine (Leroy Merlin, Castorama, IKEA France, ManoMano, Brico Dépôt, La Plateforme du Bâtiment, Point.P), fără redeschiderea Studio-ului.
+// la magazine (Dedeman, Leroy Merlin, Hornbach, Brico Dépôt, IKEA România, Mobexpert), fără redeschiderea Studio-ului.
 // Toate clickurile se opresc aici (stopPropagation): cardurile din Arhivă sunt ele însele clickabile.
 "use client";
 
-import React, { useId, useState } from 'react';
+import React, { useId, useMemo, useState } from 'react';
 import { Check, ChevronDown, Copy, ExternalLink, PackageSearch, RefreshCw } from 'lucide-react';
 import type { BomItem } from '@/app/lib/procurement';
+import { normalizeProcurementItems } from '@/app/lib/procurementNormalize';
 import { copyText } from '@/app/lib/portal/client';
 import { getUi } from '@/app/lib/theme/tokens';
 import { tr, unitLabel } from '@/app/lib/i18n';
 import type { Language } from '@/app/types';
+import { formatLei, formatQuantity } from '@/app/lib/format';
 
-const money = (n: number) => `${n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
-const qtyFmt = (n: number) => n.toLocaleString('fr-FR', { maximumFractionDigits: 2 });
+const money = (n: number) => formatLei(n, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const qtyFmt = (n: number) => formatQuantity(n, 2);
 
 /** Text simplu pentru clipboard: un material pe linie, urmat de linkurile lui. */
 export function procurementLinksText(items: BomItem[], lang: Language): string {
-  return items
+  return (normalizeProcurementItems(items) ?? [])
     .map((i) => {
       const head = `${tr(lang, i.titleRo, i.titleEn)} — ${qtyFmt(i.qty)} ${unitLabel(i.unit, lang)} — ≈ ${money(i.total)}`;
       return [head, ...i.links.map((l) => `  ${l.label}: ${l.url}`)].join('\n');
@@ -36,7 +38,7 @@ interface ProcurementListProps {
   className?: string;
 }
 
-export default function ProcurementList({ items, isDark, lang, persisted = true, onBackfill, defaultOpen = false, className = '' }: ProcurementListProps) {
+export default function ProcurementList({ items: rawItems, isDark, lang, persisted = true, onBackfill, defaultOpen = false, className = '' }: ProcurementListProps) {
   const ui = getUi(isDark);
   const t = (ro: string, en: string, fr?: string) => tr(lang, ro, en, fr);
   const [open, setOpen] = useState(defaultOpen);
@@ -44,6 +46,8 @@ export default function ProcurementList({ items, isDark, lang, persisted = true,
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(persisted);
   const panelId = useId();
+  // Linkurile se reconstruiesc mereu din `query` (magazine din România) — nu se afișează URL-uri salvate.
+  const items = useMemo(() => normalizeProcurementItems(rawItems) ?? [], [rawItems]);
 
   if (items.length === 0) return null;
   const total = items.reduce((s, i) => s + i.total, 0);

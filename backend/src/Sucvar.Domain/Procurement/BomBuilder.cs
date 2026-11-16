@@ -30,11 +30,11 @@ public sealed record BomResult(IReadOnlyList<BomItem> Items, double Total, strin
 public static class BomBuilder
 {
     /// <summary>
-    /// French retailer search links (Leroy Merlin, Castorama, IKEA France, ManoMano, Brico Dépôt,
-    /// La Plateforme du Bâtiment, Point.P) — routing and query translation live in <see cref="FrenchRetail"/>.
+    /// Romanian retailer search links (Dedeman, Leroy Merlin, Hornbach, Brico Dépôt, IKEA România, Mobexpert) —
+    /// routing lives in <see cref="RomanianRetail"/>.
     /// </summary>
     public static IReadOnlyList<RetailerLink> BuildRetailerLinks(string query, string category) =>
-        FrenchRetail.BuildLinks(query, category);
+        RomanianRetail.BuildLinks(query, category);
 
     private static readonly Dictionary<string, double> BudgetK = new() { ["economy"] = 0.8, ["standard"] = 1, ["luxury"] = 1.6 };
 

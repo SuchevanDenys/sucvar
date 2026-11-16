@@ -1,20 +1,23 @@
 // app/lib/b2b/estimate.ts
 // B2B estimator: domain data, types and pure helpers (no React).
+// Every amount here (rates, line prices, totals) is stored in EUR; the UI shows lei via `lei()` / `toRon()`.
+import { fromRon, toRon } from '@/app/lib/format';
 
 
 export type TradeId = 'finishes' | 'electrical' | 'drywall' | 'plumbing';
 export type RegionId = 'paris' | 'petite-couronne' | 'grande-couronne' | 'bucharest' | 'west' | 'center' | 'southeast';
 
-/** Marché par défaut : Paris intra-muros. */
-export const DEFAULT_REGION: RegionId = 'paris';
+/** Piața implicită: București – Ilfov. */
+export const DEFAULT_REGION: RegionId = 'bucharest';
 
-// ── TVA (France) ─────────────────────────────────────────────────────────────
-// 20 % = taux normal ; 10 % = taux intermédiaire pour les travaux de rénovation dans un logement
-// achevé depuis plus de 2 ans (art. 279-0 bis du CGI, attestation du client requise).
-export const DEFAULT_VAT = 20;
+// ── TVA (România) ────────────────────────────────────────────────────────────
+// 21 % = cota standard (din 1 aug. 2025); 11 % = cota redusă (ex. livrarea de locuințe, anumite servicii).
+// Orice altă cotă a firmei (0–100 %) rămâne introductibilă manual.
+export const DEFAULT_VAT = 21;
+export const REDUCED_VAT = 11;
 export const VAT_PRESETS: { pct: number; ro: string; en: string; fr: string; hintRo: string; hintEn: string; hintFr: string }[] = [
-  { pct: 20, ro: 'TVA 20%', en: 'VAT 20%', fr: 'TVA 20 %', hintRo: 'Cota standard', hintEn: 'Standard rate', hintFr: 'Taux normal' },
-  { pct: 10, ro: 'TVA 10%', en: 'VAT 10%', fr: 'TVA 10 %', hintRo: 'Renovare locuință > 2 ani', hintEn: 'Renovation, home > 2 years', hintFr: 'Rénovation > 2 ans' },
+  { pct: 21, ro: 'TVA 21%', en: 'VAT 21%', fr: 'TVA 21 %', hintRo: 'Cota standard', hintEn: 'Standard rate', hintFr: 'Taux normal' },
+  { pct: 11, ro: 'TVA 11%', en: 'VAT 11%', fr: 'TVA 11 %', hintRo: 'Cota redusă', hintEn: 'Reduced rate', hintFr: 'Taux réduit' },
 ];
 
 export const TRADES: { id: TradeId; ro: string; en: string; hoursPerM2: number }[] = [
@@ -24,18 +27,17 @@ export const TRADES: { id: TradeId; ro: string; en: string; hoursPerM2: number }
   { id: 'plumbing', ro: 'Sanitare', en: 'Plumbing', hoursPerM2: 0.5 },
 ];
 
-// Illustrative starting rates (€/h, excl. VAT). Every rate is editable in the UI,
+// Illustrative starting rates (stored in €/h excl. VAT, shown in lei/h). Every rate is editable in the UI,
 // so treat these as defaults to be replaced by your own price book.
-// Île-de-France (taux horaires HT indicatifs, artisans du bâtiment, 2026) en tête ; les zones roumaines
-// restent pour les devis déjà enregistrés.
+// Regiunile românești sunt primele; zonele pariziene rămân la final pentru devizele deja salvate.
 export const REGIONS: { id: RegionId; ro: string; en: string; fr?: string; rates: Record<TradeId, number> }[] = [
-  { id: 'paris', ro: 'Paris intra-muros', en: 'Paris (inner city)', fr: 'Paris intra-muros', rates: { finishes: 48, electrical: 58, drywall: 45, plumbing: 60 } },
-  { id: 'petite-couronne', ro: 'Petite couronne (92 · 93 · 94)', en: 'Inner suburbs (92 · 93 · 94)', fr: 'Petite couronne (92 · 93 · 94)', rates: { finishes: 44, electrical: 54, drywall: 42, plumbing: 55 } },
-  { id: 'grande-couronne', ro: 'Grande couronne (77 · 78 · 91 · 95)', en: 'Outer suburbs (77 · 78 · 91 · 95)', fr: 'Grande couronne (77 · 78 · 91 · 95)', rates: { finishes: 40, electrical: 50, drywall: 38, plumbing: 50 } },
   { id: 'bucharest', ro: 'București – Ilfov', en: 'Bucharest – Ilfov', rates: { finishes: 9, electrical: 12, drywall: 8.5, plumbing: 11 } },
   { id: 'west', ro: 'Vest (Cluj, Timișoara)', en: 'West (Cluj, Timișoara)', rates: { finishes: 8.5, electrical: 11, drywall: 8, plumbing: 10.5 } },
   { id: 'center', ro: 'Centru / Nord (Brașov, Iași, Suceava)', en: 'Center / North (Brașov, Iași, Suceava)', rates: { finishes: 6.5, electrical: 8.5, drywall: 6, plumbing: 8 } },
   { id: 'southeast', ro: 'Sud / Est', en: 'South / East', rates: { finishes: 6, electrical: 8, drywall: 5.5, plumbing: 7.5 } },
+  { id: 'paris', ro: 'Paris intra-muros', en: 'Paris (inner city)', fr: 'Paris intra-muros', rates: { finishes: 48, electrical: 58, drywall: 45, plumbing: 60 } },
+  { id: 'petite-couronne', ro: 'Petite couronne (92 · 93 · 94)', en: 'Inner suburbs (92 · 93 · 94)', fr: 'Petite couronne (92 · 93 · 94)', rates: { finishes: 44, electrical: 54, drywall: 42, plumbing: 55 } },
+  { id: 'grande-couronne', ro: 'Grande couronne (77 · 78 · 91 · 95)', en: 'Outer suburbs (77 · 78 · 91 · 95)', fr: 'Grande couronne (77 · 78 · 91 · 95)', rates: { finishes: 40, electrical: 50, drywall: 38, plumbing: 50 } },
 ];
 
 export const FINISH_LEVELS = [
@@ -86,11 +88,15 @@ export interface LineItem {
 // ═════════════════════════════════════════════════════════════════════════════
 
 export const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
-/** Deterministic money format (no Intl → identical on server and client). */
-export const eur = (n: number) => {
-  const [i, d] = round2(n).toFixed(2).split('.');
-  return `${i.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')},${d} €`;
+/** Deterministic money format (no Intl → identical on server and client): EUR amount shown in lei, ro-RO style. */
+export const lei = (n: number) => {
+  const [i, d] = toRon(n).toFixed(2).split('.');
+  return `${i.replace(/\B(?=(\d{3})+(?!\d))/g, '.')},${d} lei`;
 };
+/** Value of a money input shown in lei (stored amount is EUR). */
+export const ronInput = (eurValue: number) => toRon(eurValue);
+/** Parses a lei input back to the stored EUR amount (clamped ≥ 0). */
+export const eurFromRonInput = (v: string) => fromRon(clampNum(v));
 export const clampNum = (v: string, min = 0, max = Number.MAX_SAFE_INTEGER) => {
   const n = Number(v);
   return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : min;

@@ -1,5 +1,5 @@
 // app/lib/i18n/index.ts
-// Trilingual UI: FR (default, Paris & Île-de-France market) · EN · RO.
+// Trilingual UI: RO (default, Romanian market) · EN · FR.
 //
 // Every UI string is written once per language at its call site: `tr(lang, ro, en, fr?)`.
 // When the French text is not passed explicitly, it comes from the FR dictionary keyed by the English
@@ -9,10 +9,10 @@ import type { Language } from '@/app/types';
 import { FR } from './fr';
 import { frenchByPattern } from './patterns';
 
-export const LANGUAGES: readonly Language[] = ['fr', 'en', 'ro'] as const;
-export const DEFAULT_LANGUAGE: Language = 'fr';
+export const LANGUAGES: readonly Language[] = ['ro', 'en', 'fr'] as const;
+export const DEFAULT_LANGUAGE: Language = 'ro';
 
-export const LANGUAGE_LABELS: Record<Language, string> = { fr: 'FR', en: 'EN', ro: 'RO' };
+export const LANGUAGE_LABELS: Record<Language, string> = { ro: 'RO', en: 'EN', fr: 'FR' };
 
 /** BCP-47 locale per language (numbers, dates, money). */
 export const LOCALES: Record<Language, string> = { fr: 'fr-FR', en: 'en-GB', ro: 'ro-RO' };
@@ -49,23 +49,7 @@ export function makeT(lang: Language): Translate {
   return (ro, en, fr) => tr(lang, ro, en, fr);
 }
 
-/** Money in euros, French formatting (1 450,00 €) for FR/RO, English for EN. */
-export function formatMoney(value: number, lang: Language, digits = 2): string {
-  const n = Number.isFinite(value) ? value : 0;
-  return new Intl.NumberFormat(LOCALES[lang], {
-    style: 'currency',
-    currency: 'EUR',
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  }).format(n);
-}
-
-export function formatNumber(value: number, lang: Language, digits = 0): string {
-  return new Intl.NumberFormat(LOCALES[lang], { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(
-    Number.isFinite(value) ? value : 0,
-  );
-}
-
+/** Localised short date (`15 nov. 2026` in FR); `—` when absent, the raw text when unparseable (legacy rows). */
 export function formatDate(iso: string | null | undefined, lang: Language, opts?: Intl.DateTimeFormatOptions): string {
   if (!iso) return '—';
   const d = new Date(iso);

@@ -9,8 +9,6 @@ export type BudgetTier = 'economy' | 'standard' | 'luxury';
 export type ScopeLevel = 'refresh' | 'renovation' | 'shell';
 // Presetări rapide de dimensiune, adaptate fiecărui tip de spațiu
 export type SizePresetId = 'compact' | 'standard' | 'spacious';
-export type StoreName = 'Leroy Merlin' | 'Castorama' | 'IKEA France' | 'ManoMano' | 'Brico Dépôt' | 'La Plateforme du Bâtiment' | 'Point.P';
-
 // O culoare din paleta unui stil (cod hex + denumire comercială orientativă)
 export interface PaletteSwatch {
   hex: string;
@@ -99,7 +97,7 @@ export interface CostLine {
   id: string;
   labelRo: string;
   labelEn: string;
-  formulaRo: string; // formula afișată, ex: "12.10 m² × 55 €/m²"
+  formulaRo: string; // formula afișată, ex: "12.1 m² × 275 lei/m²" (tarif convertit în lei)
   formulaEn: string;
   total: number; // €
 }
@@ -113,33 +111,3 @@ export interface CostEstimate {
   max: number; // limita superioară a intervalului (+15%)
 }
 
-// Un rând din devizul de manoperă
-export interface LaborLine {
-  id: string;
-  nameRo: string;
-  nameEn: string;
-  quantity: number;
-  unit: string; // "m²", "ml", "buc."
-  unitRate: number; // € per unitate, deja ajustat după nivelul de buget
-  total: number; // quantity × unitRate, în €
-}
-
-// Rezultatul estimării de manoperă
-export interface LaborEstimate {
-  lines: LaborLine[];
-  total: number; // €
-  ratePerSqm: number; // € / m² de pardoseală
-}
-
-// One line of the bill of materials
-export interface FurnitureItem {
-  id: string;
-  nameRo: string;
-  nameEn: string;
-  category: string;
-  dimensions: string;
-  estimatedPrice: number;
-  storeName: StoreName;
-  searchQuery: string;
-  included: boolean;
-}

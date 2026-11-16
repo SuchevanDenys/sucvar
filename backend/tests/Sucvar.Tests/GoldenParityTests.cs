@@ -65,8 +65,8 @@ public class GoldenParityTests
             Assert.Equal(expected.GetProperty("ok").GetBoolean(), result.Ok);
             if (result.Ok)
             {
-                // Deliberate deviations (French market): the monolith fell back to 19% VAT and the "bucharest" region;
-                // the .NET API uses TVA 20% (EstimateParser.DefaultVatPct, migration 007) and "paris".
+                // Deliberate deviation: the monolith fell back to 19% VAT; the .NET API uses the current Romanian
+                // standard rate 21% (EstimateParser.DefaultVatPct, migrations 003 / 008). Region stays "bucharest".
                 var value = System.Text.Json.Nodes.JsonNode.Parse(expected.GetProperty("value").GetRawText())!;
                 if (value["vatPct"]!.GetValue<double>() == 19 && !IsNumericVat(c.GetProperty("input"))) value["vatPct"] = EstimateParser.DefaultVatPct;
                 if (value["region"]!.GetValue<string>() == "bucharest" && !HasRegion(c.GetProperty("input"))) value["region"] = EstimateParser.DefaultRegion;

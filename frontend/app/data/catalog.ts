@@ -3,6 +3,7 @@
 // v2.0 — manopera și link-urile de magazine au fost eliminate.
 //         Devizul expune acum specificații tehnice de producător, nu prețuri de retail.
 // v3.0 — stiluri cu paletă + materiale, estimare de cost orientativă (€/m²) în timp real.
+import { toRon } from '@/app/lib/format';
 import {
   BudgetTier,
   CostEstimate,
@@ -618,7 +619,8 @@ export function estimateCost(
     const style = withStyle ? styleFactor : 1;
     const styleTxt = style !== 1 ? ` × ${style.toFixed(2)}` : '';
     const scopeTxt = scopeFactor !== 1 ? ` × ${scopeFactor.toFixed(2)}` : '';
-    const formula = `${fmtNum(quantity)} ${unit} × ${fmtNum(unitRate)} €/${unit}${styleTxt}${scopeTxt}`;
+    // Tariful e stocat în €, afișat în lei (curs fix EUR_TO_RON, app/lib/format.ts); totalul rămâne în €.
+    const formula = `${fmtNum(quantity)} ${unit} × ${fmtNum(toRon(unitRate))} lei/${unit}${styleTxt}${scopeTxt}`;
     const tagRo = [style !== 1 ? 'stil' : '', scopeFactor !== 1 ? 'scop' : ''].filter(Boolean).join(' + ');
     const tagEn = [style !== 1 ? 'style' : '', scopeFactor !== 1 ? 'scope' : ''].filter(Boolean).join(' + ');
     lines.push({

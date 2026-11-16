@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Sucvar.Application;
+using Sucvar.Domain;
 using Sucvar.Domain.B2b;
 using Sucvar.Domain.Plans;
 using Sucvar.Domain.Portal;
@@ -166,8 +167,8 @@ public sealed class EstimateRepository(SucvarDbContext db, ILogger<EstimateRepos
         ReadJson<List<EstimateLineItem>>(e.LineItems, []),
         (double)e.Subtotal,
         (double)e.Total,
-        PgErrors.Iso(e.CreatedAt),
-        PgErrors.Iso(e.UpdatedAt));
+        IsoTime.Format(e.CreatedAt),
+        IsoTime.Format(e.UpdatedAt));
 
     private static void Apply(B2bEstimateEntity e, Guid userId, EstimatePayload p)
     {
@@ -301,7 +302,7 @@ public sealed class CompanyProfileRepository(SucvarDbContext db, ILogger<Company
 public sealed class PortalRepository(SucvarDbContext db, ILogger<PortalRepository> logger) : IPortalRepository
 {
     private static ProjectSharing ToSharing(string id, bool isPublic, string? status, string? feedback, DateTimeOffset? reviewedAt) =>
-        new(id, isPublic, ClientStatuses.ToClientStatus(status), string.IsNullOrEmpty(feedback) ? null : feedback, PgErrors.Iso(reviewedAt));
+        new(id, isPublic, ClientStatuses.ToClientStatus(status), string.IsNullOrEmpty(feedback) ? null : feedback, IsoTime.Format(reviewedAt));
 
     public async Task<(bool Migrated, IReadOnlyList<ProjectSharing> Items)> ListSharingAsync(Guid userId, string? projectId, CancellationToken ct = default)
     {
@@ -371,7 +372,7 @@ public sealed class PortalRepository(SucvarDbContext db, ILogger<PortalRepositor
                 new PublicProjectSource(r.GetString(0), ProjectSql.Str(r, "title"), ProjectSql.Str(r, "mode"), ProjectSql.Str(r, "space_type"),
                     ProjectSql.Str(r, "style_id"), ProjectSql.Str(r, "dimensions"), ProjectSql.Str(r, "original_image"),
                     ProjectSql.Str(r, "generated_image"), budget, r.GetString(10), ProjectSql.Str(r, "client_status"),
-                    PgErrors.Iso(ProjectSql.Date(r, "client_reviewed_at"))),
+                    IsoTime.Format(ProjectSql.Date(r, "client_reviewed_at"))),
                 owner);
             }
             // Separate, tolerant read: works before migration 006 (column missing → recomputed list)
@@ -417,7 +418,7 @@ public sealed class PortalRepository(SucvarDbContext db, ILogger<PortalRepositor
             if (affected == 0) return null;
             var r = await db.Projects.AsNoTracking().Where(x => x.Id == projectId)
                 .Select(x => new { x.ClientStatus, x.ClientReviewedAt }).FirstAsync(ct);
-            return new ReviewResult(ClientStatuses.ToClientStatus(r.ClientStatus), PgErrors.Iso(r.ClientReviewedAt));
+            return new ReviewResult(ClientStatuses.ToClientStatus(r.ClientStatus), IsoTime.Format(r.ClientReviewedAt));
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

@@ -8,6 +8,7 @@ import { Wallet } from 'lucide-react';
 import { EYEBROW, getSkin } from '@/app/lib/theme/skin';
 import type { CostEstimate, Language } from '@/app/types';
 import { tr } from '@/app/lib/i18n';
+import { formatLei } from '@/app/lib/format';
 
 interface CostBreakdownProps {
   lang: Language;
@@ -16,7 +17,7 @@ interface CostBreakdownProps {
   styleName: string;
 }
 
-const eur = (n: number) => `${n.toLocaleString('fr-FR')} €`;
+const eur = (n: number) => formatLei(n, { maximumFractionDigits: 0 });
 
 export default function CostBreakdown({ lang, isDark, cost, styleName }: CostBreakdownProps) {
   const sk = getSkin(isDark);

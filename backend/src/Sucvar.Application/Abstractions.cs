@@ -3,18 +3,38 @@ using Sucvar.Domain.Portal;
 
 namespace Sucvar.Application;
 
-/// <summary>Error with a suggested HTTP status (port of DbError) — endpoints translate it into { error, code }.</summary>
+/// <summary>
+/// Expected business failure carrying the HTTP status and stable machine-readable <see cref="Code"/> the API must
+/// return. Endpoints and the global exception handler translate it into the <c>{ error, code }</c> envelope; any
+/// other exception type is treated as an unexpected 500 and logged.
+/// </summary>
 public sealed class AppException(int status, string code, string message) : Exception(message)
 {
+    /// <summary>Suggested HTTP status code (400, 403, 404, 409, 503, …).</summary>
     public int Status { get; } = status;
+
+    /// <summary>Stable error code the frontend switches on (e.g. <c>AGENCY_REQUIRED</c>).</summary>
     public string Code { get; } = code;
 }
 
-/// <summary>Identity taken from the validated Supabase JWT (`sub` + `email`), never from the body.</summary>
-public sealed record AuthUser(string UserId, string Email);
+/// <summary>
+/// Authenticated caller. Built exclusively from the validated Supabase JWT (<c>sub</c> + <c>email</c>), never from
+/// a request body, so a client cannot act on behalf of another user by editing its payload.
+/// </summary>
+/// <param name="UserId">The JWT <c>sub</c> claim; already verified to be a GUID by <c>RequestAuth</c>.</param>
+/// <param name="Email">Lower-cased <c>email</c> claim (may be empty for phone-only accounts).</param>
+public sealed record AuthUser(string UserId, string Email)
+{
+    /// <summary>
+    /// <see cref="UserId"/> as the <see cref="Guid"/> used by every repository. The API layer only creates an
+    /// <see cref="AuthUser"/> after <c>Guid.TryParse</c> succeeded, so parsing here cannot fail for real requests.
+    /// </summary>
+    public Guid Id => Guid.Parse(UserId);
+}
 
 // ── Profiles / subscription ───────────────────────────────────────────────────
 
+/// <summary>Billing columns of <c>profiles</c> as stored (the tier is NOT yet resolved against the period end).</summary>
 public sealed record ProfileRecord(
     string Id,
     string? Email,
@@ -25,10 +45,13 @@ public sealed record ProfileRecord(
     string? BillingInterval,
     bool CancelAtPeriodEnd);
 
+/// <summary>Billing period read from a Stripe subscription (earliest item period end, interval, scheduled cancel).</summary>
 public sealed record SubscriptionPeriod(DateTimeOffset? CurrentPeriodEnd, string? Interval, bool CancelAtPeriodEnd);
 
+/// <summary>Absolute plan state to write on activation — never a delta, which is what makes replays harmless.</summary>
 public sealed record ActivationPatch(string Tier, string? CustomerId, string? SubscriptionId, SubscriptionPeriod? Period);
 
+/// <summary>Persistence port for the subscription columns of <c>profiles</c>.</summary>
 public interface ISubscriptionRepository
 {
     Task<ProfileRecord?> GetProfileAsync(Guid userId, CancellationToken ct = default);
@@ -41,6 +64,7 @@ public interface ISubscriptionRepository
 
 // ── Usage (quota) ─────────────────────────────────────────────────────────────
 
+/// <summary>Counts and journals AI generations for quota enforcement (see <c>UsageRepositoryExtensions</c>).</summary>
 public interface IUsageRepository
 {
     Task<int> CountProjectsSinceAsync(Guid userId, DateTimeOffset since, CancellationToken ct = default);
@@ -52,6 +76,10 @@ public interface IUsageRepository
 
 // ── B2B estimates ─────────────────────────────────────────────────────────────
 
+/// <summary>
+/// Persistence port for <c>b2b_estimates</c> (devis). Every method is scoped by <c>userId</c>: the database role bypasses
+/// RLS, so this filter is the ownership boundary.
+/// </summary>
 public interface IEstimateRepository
 {
     Task<IReadOnlyList<EstimateRecord>> ListAsync(Guid userId, int limit, CancellationToken ct = default);
@@ -61,6 +89,7 @@ public interface IEstimateRepository
     Task<bool> DeleteAsync(Guid userId, Guid estimateId, CancellationToken ct = default);
 }
 
+/// <summary>Persistence port for <c>company_profiles</c> (the contractor identity printed on a devis, migration 003).</summary>
 public interface ICompanyProfileRepository
 {
     Task<CompanyProfile?> GetAsync(Guid userId, CancellationToken ct = default);
@@ -70,8 +99,10 @@ public interface ICompanyProfileRepository
 
 // ── Public portal / sharing ───────────────────────────────────────────────────
 
+/// <summary>A public project row plus its owner id, which is used server-side only (to find the estimate) and never projected.</summary>
 public sealed record PublicProjectRow(PublicProjectSource Source, Guid? OwnerId);
 
+/// <summary>Persistence port for project sharing (owner side) and the anonymous client portal.</summary>
 public interface IPortalRepository
 {
     /// <summary>(migrated=false, []) when the 002 columns are missing.</summary>
@@ -86,6 +117,7 @@ public interface IPortalRepository
 
 // ── Stripe (gateway hides Stripe.net from the application layer) ──────────────
 
+/// <summary>The subset of a Stripe Checkout Session the application needs, free of Stripe.net types.</summary>
 public sealed record CheckoutSessionInfo(
     string Id,
     string? PaymentStatus,
@@ -94,6 +126,7 @@ public sealed record CheckoutSessionInfo(
     string? CustomerId,
     string? SubscriptionId);
 
+/// <summary>The subset of a Stripe Subscription the application needs, free of Stripe.net types.</summary>
 public sealed record SubscriptionInfo(
     string Id,
     string Status,
@@ -103,6 +136,7 @@ public sealed record SubscriptionInfo(
     string? PriceInterval,
     bool CancelAtPeriodEnd);
 
+/// <summary>Everything needed to open a Checkout Session; <c>PriceId</c> null ⇒ inline <c>price_data</c> from <c>UnitAmount</c>.</summary>
 public sealed record CreateCheckoutRequest(
     string UserId,
     string Email,
@@ -116,6 +150,7 @@ public sealed record CreateCheckoutRequest(
     string CancelUrl,
     DateTimeOffset? TermsAcceptedAt = null);
 
+/// <summary>A verified Stripe event, already narrowed to the object types the processor handles.</summary>
 public sealed record WebhookEvent(
     string Id,
     string Type,
@@ -123,6 +158,10 @@ public sealed record WebhookEvent(
     SubscriptionInfo? Subscription,
     string? InvoiceSubscriptionId);
 
+/// <summary>
+/// Anti-corruption port over Stripe.net. Keeping the SDK in Infrastructure lets the subscription rules be unit-tested
+/// with plain records and fakes, and confines Stripe API-version churn to one adapter.
+/// </summary>
 public interface IStripeGateway
 {
     bool IsConfigured { get; }
@@ -136,6 +175,7 @@ public interface IStripeGateway
     WebhookEvent ParseWebhook(string rawBody, string signature, string secret);
 }
 
+/// <summary>The <c>Stripe-Signature</c> header did not match the raw body (forged, replayed past tolerance, or wrong secret).</summary>
 public sealed class WebhookSignatureException(string message, Exception? inner = null) : Exception(message, inner);
 
 /// <summary>Remembers processed Stripe event ids (Stripe delivers at-least-once).</summary>
@@ -147,6 +187,7 @@ public interface IWebhookIdempotencyStore
 
 // ── AI image generation ──────────────────────────────────────────────────────
 
+/// <summary>A fully-synthesised, validated generation job (prompts already built and clamped by the Domain).</summary>
 public sealed record ImageGenerationRequest(
     string ImageDataUrl,
     string Prompt,
@@ -158,6 +199,7 @@ public sealed record ImageGenerationRequest(
     double TransformationStrength,
     string Mode);
 
+/// <summary>Provider output: a URL or data URL, plus whether it came from the demo provider (no real AI call).</summary>
 public sealed record ImageGenerationResult(string ImageUrl, bool IsDemo);
 
 /// <summary>Provider contract (app/lib/ai/providers/types.ts).</summary>
@@ -169,13 +211,16 @@ public interface IImageProvider
     Task<ImageGenerationResult> GenerateAsync(ImageGenerationRequest request, CancellationToken ct = default);
 }
 
+/// <summary>Chooses the active provider from configuration (explicit <c>Ai:Provider</c>, else SD → Replicate → demo).</summary>
 public interface IImageProviderSelector
 {
     (IImageProvider Provider, string? Warning) Select();
 }
 
+/// <summary>Header-level facts about an uploaded image, read without decoding the pixels.</summary>
 public sealed record ImageInspection(string Format, int Width, int Height);
 
+/// <summary>Image inspection and normalisation (SkiaSharp in Infrastructure).</summary>
 public interface IImageProcessor
 {
     /// <summary>Reads only the header (format + size) — no full decode. Throws on corrupt data.</summary>
@@ -195,6 +240,7 @@ public sealed record ProfileRow(
     Sucvar.Domain.Profile.ProfileDefaults Defaults,
     bool Migrated);
 
+/// <summary>Portfolio counters shown on the account page.</summary>
 public sealed record ProfileStats(int ProjectsTotal, int ProjectsPublic, int EstimatesTotal);
 
 /// <summary>A saved project in the profile portfolio — no images (they are hundreds of KB each).</summary>
@@ -214,6 +260,7 @@ public sealed record ProfileProject(
     double ProcurementTotal = 0,
     bool ProcurementPersisted = false);
 
+/// <summary>Persistence port for the account page aggregate (identity, defaults, stats and portfolio).</summary>
 public interface IProfileRepository
 {
     Task<ProfileRow?> GetAsync(Guid userId, CancellationToken ct = default);

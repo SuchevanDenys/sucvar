@@ -4,7 +4,7 @@
 // materiale pe categorii, manoperă, totaluri, condiții și semnături. Format A4 (vezi @page în globals.css).
 import React from 'react';
 import SucvarLogo from '@/app/components/layout/SucvarLogo';
-import { CATEGORIES, eur, type LineItem } from '@/app/lib/b2b/estimate';
+import { CATEGORIES, lei, type LineItem } from '@/app/lib/b2b/estimate';
 import type { Party } from '@/app/lib/b2b/exports';
 import type { ClientMeta } from '@/app/lib/b2b/portfolio';
 import { tr, unitLabel } from '@/app/lib/i18n';
@@ -107,7 +107,7 @@ export default function PrintDeviz({ lang, docNo, printDate, project, projectNam
               <figcaption className="uppercase tracking-[0.18em] text-[9px] text-stone-500 mb-1">{label}</figcaption>
               {src ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={src} alt={label} className="w-full h-44 object-cover border border-stone-300" />
+                <img src={src} alt={label} className="w-full h-44 object-contain bg-stone-50 border border-stone-300" />
               ) : (
                 <div className="w-full h-44 border border-dashed border-stone-300 flex items-center justify-center text-stone-400">
                   {t('Fără imagine', 'No image')}
@@ -140,20 +140,20 @@ export default function PrintDeviz({ lang, docNo, printDate, project, projectNam
             const sub = rows.reduce((s, i) => s + i.qty * i.price, 0);
             return (
               <React.Fragment key={cat.id}>
-                <tr className="bg-stone-50 font-semibold break-inside-avoid"><td colSpan={4} className="p-2">{t(cat.ro, cat.en)}</td><td className={num}>{eur(sub)}</td></tr>
+                <tr className="bg-stone-50 font-semibold break-inside-avoid"><td colSpan={4} className="p-2">{t(cat.ro, cat.en)}</td><td className={num}>{lei(sub)}</td></tr>
                 {rows.map((i) => (
                   <tr key={i.id} className="border-t border-stone-200 break-inside-avoid">
                     <td className="p-2">{(tr(lang, i.ro, i.en)) || '—'}</td>
                     <td className="p-2">{unitLabel(i.unit, lang)}</td>
                     <td className={num}>{i.qty}</td>
-                    <td className={num}>{eur(i.price)}</td>
-                    <td className={num}>{eur(i.qty * i.price)}</td>
+                    <td className={num}>{lei(i.price)}</td>
+                    <td className={num}>{lei(i.qty * i.price)}</td>
                   </tr>
                 ))}
               </React.Fragment>
             );
           })}
-          <tr className="border-t border-stone-300 font-semibold"><td className="p-2" colSpan={4}>{t('Total materiale', 'Materials total')}</td><td className={num}>{eur(totals.materials)}</td></tr>
+          <tr className="border-t border-stone-300 font-semibold"><td className="p-2" colSpan={4}>{t('Total materiale', 'Materials total')}</td><td className={num}>{lei(totals.materials)}</td></tr>
         </tbody>
       </table>
 
@@ -164,7 +164,7 @@ export default function PrintDeviz({ lang, docNo, printDate, project, projectNam
           <tr className="bg-stone-100 text-left">
             <th className={`${th} w-[46%]`}>{t('Meserie', 'Trade')}</th>
             <th className={`${th} text-right`}>{t('Ore', 'Hours')}</th>
-            <th className={`${th} text-right`}>€/h</th>
+            <th className={`${th} text-right`}>lei/h</th>
             <th className={th} />
             <th className={`${th} text-right`}>Total</th>
           </tr>
@@ -176,10 +176,10 @@ export default function PrintDeviz({ lang, docNo, printDate, project, projectNam
               <td className={num}>{l.hours.toFixed(1)}</td>
               <td className={num}>{l.rate.toFixed(2)}</td>
               <td />
-              <td className={num}>{eur(l.cost)}</td>
+              <td className={num}>{lei(l.cost)}</td>
             </tr>
           ))}
-          <tr className="border-t border-stone-300 font-semibold"><td className="p-2" colSpan={4}>{t('Total manoperă', 'Labour total')}</td><td className={num}>{eur(totals.labor)}</td></tr>
+          <tr className="border-t border-stone-300 font-semibold"><td className="p-2" colSpan={4}>{t('Total manoperă', 'Labour total')}</td><td className={num}>{lei(totals.labor)}</td></tr>
         </tbody>
       </table>
 
@@ -192,13 +192,13 @@ export default function PrintDeviz({ lang, docNo, printDate, project, projectNam
         </div>
         <table className="w-72 border border-stone-300 shrink-0">
           <tbody>
-            <tr><td className="p-2">{t('Materiale', 'Materials')}</td><td className={num}>{eur(totals.materials)}</td></tr>
-            <tr><td className="p-2">{t('Manoperă', 'Labour')}</td><td className={num}>{eur(totals.labor)}</td></tr>
-            <tr><td className="p-2">{t('Contingență', 'Contingency')} {totals.contingencyPct}%</td><td className={num}>{eur(totals.contingency)}</td></tr>
-            <tr><td className="p-2">{t('Marjă', 'Margin')} {totals.marginPct}%</td><td className={num}>{eur(totals.margin)}</td></tr>
-            <tr className="border-t border-stone-300 font-semibold"><td className="p-2">{t('Total fără TVA', 'Net total')}</td><td className={num}>{eur(totals.net)}</td></tr>
-            <tr><td className="p-2">{t('TVA', 'VAT')} {String(totals.vat).replace('.', ',')} %{totals.vat === 10 ? ` — ${t('renovare locuință > 2 ani', 'renovation, home > 2 years', 'rénovation logement > 2 ans')}` : ''}</td><td className={num}>{eur(totals.vatAmt)}</td></tr>
-            <tr className="bg-[#111111] text-white font-semibold text-xs"><td className="p-2">{t('Total cu TVA', 'Gross total')}</td><td className={num}>{eur(totals.gross)}</td></tr>
+            <tr><td className="p-2">{t('Materiale', 'Materials')}</td><td className={num}>{lei(totals.materials)}</td></tr>
+            <tr><td className="p-2">{t('Manoperă', 'Labour')}</td><td className={num}>{lei(totals.labor)}</td></tr>
+            <tr><td className="p-2">{t('Contingență', 'Contingency')} {totals.contingencyPct}%</td><td className={num}>{lei(totals.contingency)}</td></tr>
+            <tr><td className="p-2">{t('Marjă', 'Margin')} {totals.marginPct}%</td><td className={num}>{lei(totals.margin)}</td></tr>
+            <tr className="border-t border-stone-300 font-semibold"><td className="p-2">{t('Total fără TVA', 'Net total')}</td><td className={num}>{lei(totals.net)}</td></tr>
+            <tr><td className="p-2">{t('TVA', 'VAT')} {String(totals.vat).replace('.', ',')} %{totals.vat === 11 ? ` — ${t('cota redusă', 'reduced rate', 'taux réduit')}` : ''}</td><td className={num}>{lei(totals.vatAmt)}</td></tr>
+            <tr className="bg-[#111111] text-white font-semibold text-xs"><td className="p-2">{t('Total cu TVA', 'Gross total')}</td><td className={num}>{lei(totals.gross)}</td></tr>
           </tbody>
         </table>
       </div>
@@ -215,11 +215,11 @@ export default function PrintDeviz({ lang, docNo, printDate, project, projectNam
           'Quote valid for 30 days. To accept: handwritten “Bon pour accord”, date and signature.',
           'Devis valable 30 jours. Pour acceptation : mention manuscrite « Bon pour accord », date et signature.',
         )}
-        {totals.vat === 10 &&
+        {totals.vat === 11 &&
           ` ${t(
-            'TVA 10%: lucrări de renovare într-o locuință finalizată de peste 2 ani (atestare client).',
-            'VAT 10%: renovation works in a home completed more than 2 years ago (client certificate).',
-            'TVA 10 % : travaux de rénovation dans un logement achevé depuis plus de 2 ans (attestation du client, art. 279-0 bis du CGI).',
+            'TVA 11%: cota redusă, aplicabilă conform Codului fiscal (ex. livrarea de locuințe).',
+            'VAT 11%: reduced rate, applicable under the Romanian Fiscal Code (e.g. supply of housing).',
+            'TVA 11 % : taux réduit, applicable selon le Code fiscal roumain (ex. livraison de logements).',
           )}`}
       </p>
 

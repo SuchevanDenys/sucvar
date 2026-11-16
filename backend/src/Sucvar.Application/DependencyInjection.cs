@@ -8,8 +8,10 @@ using Sucvar.Application.Subscriptions;
 
 namespace Sucvar.Application;
 
+/// <summary>Composition of the Application layer (use-case services and validators).</summary>
 public static class DependencyInjection
 {
+    /// <summary>Registers application services. Infrastructure adapters are registered separately by the host.</summary>
     public static IServiceCollection AddSucvarApplication(this IServiceCollection services)
     {
         services.AddSingleton(TimeProvider.System);

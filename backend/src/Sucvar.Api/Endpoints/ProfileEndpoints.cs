@@ -52,7 +52,7 @@ public static class ProfileEndpoints
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return B2bEndpoints.HandleError(ex, logger, "/api/profile");
+            return HandleError(ex, logger, "/api/profile");
         }
     }
 
@@ -66,7 +66,7 @@ public static class ProfileEndpoints
 
             var (text, tooLarge) = await ReadBodyTextAsync(ctx, MaxBodyBytes);
             if (tooLarge is not null) return tooLarge;
-            if (!TryParseJson(text!, out var body)) return JsonError(400, "INVALID_JSON", "Cerere invalidă (JSON incorect).");
+            if (!TryParseJson(text!, out var body)) return InvalidJson();
             var parsed = ProfileUpdateParser.Parse(body);
             if (!parsed.Ok) return JsonError(400, parsed.Code!, parsed.Error!);
 
@@ -76,7 +76,7 @@ public static class ProfileEndpoints
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return B2bEndpoints.HandleError(ex, logger, "/api/profile");
+            return HandleError(ex, logger, "/api/profile");
         }
     }
 }

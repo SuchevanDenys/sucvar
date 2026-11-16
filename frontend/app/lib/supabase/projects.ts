@@ -1,6 +1,7 @@
 // app/lib/supabase/projects.ts
 // Proiecte salvate: Cloud (tabelul `projects`) cu rezervă locală (localStorage).
 import type { BomItem } from '@/app/lib/procurement';
+import { normalizeProcurementItems } from '@/app/lib/procurementNormalize';
 import { sanitizeDimensions } from '@/app/lib/studio/validation';
 import { parseBrief } from '@/app/lib/studio/vision';
 import type {
@@ -34,6 +35,7 @@ function readLocalProjects(): SavedProject[] {
         title: String(p.title ?? '').trim() || 'Proiect SUCVAR',
         createdAt: String(p.createdAt ?? new Date().toISOString()),
         dimensions: sanitizeDimensions(p.dimensions, p.mode, p.spaceType),
+        procurementItems: parseProcurement(p.procurementItems),
       }));
   } catch {
     return [];
@@ -96,13 +98,11 @@ function isMissingProcurementColumn(error: { message?: string; code?: string } |
   return /procurement_items/i.test(error.message ?? '') || error.code === 'PGRST204' || error.code === '42703';
 }
 
-// Lista salvată (JSON din baza de date) → BomItem[]; orice formă invalidă este ignorată.
+// Lista salvată (JSON din baza de date sau localStorage) → BomItem[]; orice formă invalidă este ignorată.
+// Linkurile salvate NU se refolosesc: proiectele vechi au URL-uri spre magazine franceze, așa că
+// linkurile sunt reconstruite din `query` pentru magazinele din România (vezi procurementNormalize.ts).
 function parseProcurement(raw: unknown): BomItem[] | undefined {
-  if (!Array.isArray(raw)) return undefined;
-  return raw.filter(
-    (i): i is BomItem =>
-      !!i && typeof i === 'object' && typeof (i as BomItem).titleRo === 'string' && Array.isArray((i as BomItem).links),
-  );
+  return normalizeProcurementItems(raw);
 }
 
 // Transformă un rând din Supabase într-un proiect valid (valorile lipsă primesc implicite)

@@ -16,6 +16,7 @@ public sealed record EffectiveSubscription(
     public static EffectiveSubscription Starter(bool loaded) => new(PlanTiers.Starter, null, null, false, null, null, loaded);
 }
 
+/// <summary>The (user, plan) pair extracted from a paid Checkout Session.</summary>
 public sealed record PaidSession(string UserId, string Plan);
 
 /// <summary>
@@ -28,6 +29,10 @@ public sealed class SubscriptionService(
     TimeProvider clock,
     ILogger<SubscriptionService> logger)
 {
+    /// <summary>
+    /// Current plan with expiry applied. Fails safe: any read error yields 'starter', so an outage can never grant paid
+    /// features. Callers that must distinguish "free user" from "unknown" check <see cref="EffectiveSubscription.ProfileLoaded"/>.
+    /// </summary>
     public async Task<EffectiveSubscription> GetEffectiveSubscriptionAsync(string userId, CancellationToken ct = default)
     {
         try
@@ -114,6 +119,7 @@ public sealed class SubscriptionService(
         return true;
     }
 
+    /// <summary>Returns the owner of <paramref name="subscriptionId"/> to starter — only if it is still their current subscription.</summary>
     public async Task DowngradeBySubscriptionAsync(string subscriptionId, CancellationToken ct = default)
     {
         var userId = await repository.DowngradeBySubscriptionIdAsync(subscriptionId, ct);

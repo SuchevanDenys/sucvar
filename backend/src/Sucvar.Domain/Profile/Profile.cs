@@ -5,7 +5,7 @@ namespace Sucvar.Domain.Profile;
 /// <summary>Default B2B settings of a user (profiles.default_*, migration 004).</summary>
 public sealed record ProfileDefaults(string Currency, double VatRate, double MarginPercent)
 {
-    public static readonly ProfileDefaults Initial = new("EUR", 20, 15);
+    public static readonly ProfileDefaults Initial = new("RON", 21, 15);
 }
 
 /// <summary>Editable identity fields stored in `profiles`.</summary>
@@ -64,7 +64,7 @@ public static class ProfileUpdateParser
         if (Js.IsRecord(P("defaults")))
         {
             var d = P("defaults");
-            var currency = (Js.AsString(Js.Prop(d, "currency")) ?? "EUR").Trim().ToUpperInvariant();
+            var currency = (Js.AsString(Js.Prop(d, "currency")) ?? "RON").Trim().ToUpperInvariant();
             if (!Currencies.Contains(currency)) return ParsedProfileUpdate.Fail("INVALID_CURRENCY", "Moneda trebuie să fie EUR sau RON.");
             var vat = Js.ToNumber(Js.Prop(d, "vatRate"));
             var margin = Js.ToNumber(Js.Prop(d, "marginPercent"));

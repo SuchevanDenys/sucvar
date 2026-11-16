@@ -18,16 +18,16 @@ export const metadata: Metadata = {
   metadataBase: new URL(siteUrl()),
   title: "SUCVAR | Spatial & Engineering Studio",
   description:
-    "Atelier d’architecture intérieure assisté par IA : rendu photoréaliste, métré précis et devis estimatif transparent avec les enseignes françaises — Paris & Île-de-France.",
+    "Studio de design interior asistat de AI: randare fotorealistă, calcul precis al materialelor și deviz estimativ transparent cu magazinele din România — Dedeman, Leroy Merlin, Hornbach, IKEA.",
   applicationName: "SUCVAR",
   openGraph: {
     type: "website",
-    locale: "fr_FR",
-    alternateLocale: ["en_GB", "ro_RO"],
+    locale: "ro_RO",
+    alternateLocale: ["en_GB", "fr_FR"],
     siteName: "SUCVAR",
     title: "SUCVAR | Spatial & Engineering Studio",
-    description: "Rendu photoréaliste pour intérieurs, façades et jardins, avec métré des matériaux et devis estimatif.",
-    images: [{ url: "/hero.jpg", alt: "SUCVAR — rendu photoréaliste d’architecture intérieure" }],
+    description: "Randări fotorealiste pentru interioare, fațade și grădini, cu listă de materiale și deviz estimativ.",
+    images: [{ url: "/hero.jpg", alt: "SUCVAR — randare fotorealistă de design interior" }],
   },
   twitter: { card: "summary_large_image" },
   authors: [{ name: "Suchevan Denys" }],
@@ -70,7 +70,7 @@ export default function RootLayout({
   return (
     <html
       data-scroll-behavior="smooth"
-      lang="fr"
+      lang="ro"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col touch-manipulation [-webkit-tap-highlight-color:transparent] selection:bg-[#111111] selection:text-white">

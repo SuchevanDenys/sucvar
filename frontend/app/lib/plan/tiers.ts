@@ -25,10 +25,6 @@ export const hasB2bAccess = (tier: PlanTier): boolean => tier === 'agency';
 // Folosită de server (blochează dubla facturare) și de UI (butoane dezactivate).
 export const TIER_RANK: Record<PlanTier, number> = { starter: 0, pro: 1, agency: 2 };
 
-/** true dacă planul curent acoperă deja planul cerut (rang egal sau mai mare). */
-export const coversTier = (current: PlanTier, requested: PlanTier): boolean =>
-  TIER_RANK[current] >= TIER_RANK[requested];
-
 // ── Ciclu de facturare (lunar / anual) ───────────────────────────────────────
 // Logica de preț/expirare e aici (pură, fără dependențe de browser sau server),
 // ca UI-ul, /api/checkout și quota.ts să folosească exact aceleași reguli.

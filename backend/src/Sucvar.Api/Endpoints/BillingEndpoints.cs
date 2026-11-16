@@ -13,7 +13,17 @@ using static Sucvar.Api.Http.HttpHelpers;
 
 namespace Sucvar.Api.Endpoints;
 
-/// <summary>POST /api/checkout, POST /api/checkout/verify, POST /api/webhooks/stripe.</summary>
+/// <summary>
+/// Stripe billing: <c>POST /api/checkout</c>, <c>/api/checkout/verify</c>, <c>/api/billing/portal</c> and the
+/// <c>/api/webhooks/stripe</c> receiver.
+/// </summary>
+/// <remarks>
+/// A plan is activated through two independent paths that converge on the same idempotent write
+/// (<see cref="SubscriptionService"/>): the signed webhook (authoritative, retried by Stripe) and <c>/verify</c>, called
+/// by the success page so the user sees the new plan immediately even when the webhook is delayed or not configured
+/// locally. Verify and the portal deliberately skip <c>RequireActiveAccount</c>: a payment already taken must always be
+/// honoured, and a suspended user must still be able to cancel their subscription.
+/// </remarks>
 public static class BillingEndpoints
 {
     private const int SmallBodyBytes = 2_000;
@@ -27,8 +37,6 @@ public static class BillingEndpoints
         app.MapPost("/api/webhooks/stripe", Webhook).WithTags("Billing").WithName("StripeWebhook").AllowAnonymous();
         return app;
     }
-
-    private static IResult Fail(int status, string code, string error) => JsonError(status, code, error);
 
     private static async Task<IResult> Checkout(
         HttpContext ctx, FixedWindowRateLimitStore limiter, ServerConfig config, IStripeGateway stripe,
@@ -44,16 +52,16 @@ public static class BillingEndpoints
             if (lacks.Count > 0)
             {
                 logger.LogError("[SUCVAR] Config lipsă pentru checkout: {Lacks}", string.Join(", ", lacks));
-                return Fail(500, "NOT_CONFIGURED", config.IsProduction
+                return JsonError(500, "NOT_CONFIGURED", config.IsProduction
                     ? "Plata nu este configurată pe server."
                     : $"Plata nu este configurată. Lipsește din configurare: {string.Join(", ", lacks)}");
             }
 
             // 1. User from the Supabase token (never from the body)
             var (state, user) = RequestAuth.Resolve(ctx);
-            if (state == TokenState.Missing) return Fail(401, "AUTH_REQUIRED", "Autentifică-te pentru a plăti.");
+            if (state == TokenState.Missing) return JsonError(401, "AUTH_REQUIRED", "Autentifică-te pentru a plăti.");
             if (state == TokenState.Invalid || user is null || user.Email.Length == 0)
-                return Fail(401, "AUTH_INVALID", "Sesiune invalidă. Autentifică-te din nou.");
+                return JsonError(401, "AUTH_INVALID", "Sesiune invalidă. Autentifică-te din nou.");
 
             if (limiter.Check(Rules.CheckoutUser, user.UserId) is { } userWait) return TooManyRequests(ctx, userWait);
 
@@ -62,14 +70,14 @@ public static class BillingEndpoints
             if (tooLarge is not null) return tooLarge;
             JsonElement? body = TryParseJson(text!, out var parsed) && parsed.ValueKind == JsonValueKind.Object ? parsed : null;
             var plan = Js.AsString(Js.Prop(body, "plan"));
-            if (!PaidPlans.IsPaidPlan(plan)) return Fail(400, "INVALID_PLAN", "Plan invalid.");
+            if (!PaidPlans.IsPaidPlan(plan)) return JsonError(400, "INVALID_PLAN", "Plan invalid.");
             var intervalEl = Js.Prop(body, "interval");
             var interval = intervalEl is null ? "month" : PlanTiers.NormalizeInterval(Js.AsString(intervalEl));
-            if (interval is null) return Fail(400, "INVALID_INTERVAL", "Ciclu de facturare invalid (month | year).");
+            if (interval is null) return JsonError(400, "INVALID_INTERVAL", "Ciclu de facturare invalid (month | year).");
             // EU consumer law: express consent to start the digital service immediately (and to lose the
             // 14-day withdrawal right) + acceptance of the Terms — checked here, not only in the UI.
             if (Js.Prop(body, "acceptTerms") is not { ValueKind: JsonValueKind.True })
-                return Fail(400, "TERMS_REQUIRED", "Bifează acceptarea Termenilor și a începerii imediate a serviciului. / Please accept the Terms.");
+                return JsonError(400, "TERMS_REQUIRED", "Bifează acceptarea Termenilor și a începerii imediate a serviciului. / Please accept the Terms.");
 
             // 3–4. Double-billing guard + Stripe Checkout session
             var siteUrl = (config.SiteUrl is { Length: > 0 } s ? s
@@ -87,13 +95,13 @@ public static class BillingEndpoints
                     ["redirect"] = conflict.Redirect,
                 }, statusCode: 409);
             }
-            if (string.IsNullOrEmpty(url)) return Fail(502, "NO_CHECKOUT_URL", "Stripe nu a returnat adresa de plată.");
+            if (string.IsNullOrEmpty(url)) return JsonError(502, "NO_CHECKOUT_URL", "Stripe nu a returnat adresa de plată.");
             return Results.Json(new { url });
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             logger.LogError(ex, "[SUCVAR] Eroare checkout");
-            return Fail(500, "CHECKOUT_FAILED", "Nu s-a putut porni plata. Încearcă din nou.");
+            return JsonError(500, "CHECKOUT_FAILED", "Nu s-a putut porni plata. Încearcă din nou.");
         }
     }
 
@@ -105,11 +113,11 @@ public static class BillingEndpoints
         {
             if (limiter.Check(Rules.VerifyIp, ClientIp(ctx)) is { } ipWait) return TooManyRequests(ctx, ipWait);
             if (!stripe.IsConfigured || !config.DatabaseConfigured || !config.JwtConfigured)
-                return Fail(500, "NOT_CONFIGURED", "Plata nu este configurată pe server.");
+                return JsonError(500, "NOT_CONFIGURED", "Plata nu este configurată pe server.");
 
             var (state, user) = RequestAuth.Resolve(ctx);
-            if (state == TokenState.Missing) return Fail(401, "AUTH_REQUIRED", "Autentifică-te pentru a verifica plata.");
-            if (state == TokenState.Invalid || user is null) return Fail(401, "AUTH_INVALID", "Sesiune invalidă. Autentifică-te din nou.");
+            if (state == TokenState.Missing) return JsonError(401, "AUTH_REQUIRED", "Autentifică-te pentru a verifica plata.");
+            if (state == TokenState.Invalid || user is null) return JsonError(401, "AUTH_INVALID", "Sesiune invalidă. Autentifică-te din nou.");
 
             if (limiter.Check(Rules.VerifyUser, user.UserId) is { } userWait) return TooManyRequests(ctx, userWait);
 
@@ -117,12 +125,12 @@ public static class BillingEndpoints
             if (tooLarge is not null) return tooLarge;
             JsonElement? body = TryParseJson(text!, out var parsed) && parsed.ValueKind == JsonValueKind.Object ? parsed : null;
             var sessionId = Js.AsString(Js.Prop(body, "session_id"));
-            if (sessionId is null || !sessionId.StartsWith("cs_", StringComparison.Ordinal)) return Fail(400, "INVALID_SESSION", "session_id invalid.");
+            if (sessionId is null || !sessionId.StartsWith("cs_", StringComparison.Ordinal)) return JsonError(400, "INVALID_SESSION", "session_id invalid.");
 
             var session = await stripe.GetCheckoutSessionAsync(sessionId, ctx.RequestAborted);
             // OWNERSHIP first (before revealing even "not paid")
             var ownerId = session.ClientReferenceId ?? session.Metadata.GetValueOrDefault("user_id");
-            if (ownerId != user.UserId) return Fail(403, "SESSION_MISMATCH", "Această sesiune de plată aparține altui cont.");
+            if (ownerId != user.UserId) return JsonError(403, "SESSION_MISMATCH", "Această sesiune de plată aparține altui cont.");
 
             var paid = SubscriptionService.ReadPaidSession(session);
             if (paid is null) return Results.Json(new Dictionary<string, object?> { ["paid"] = false, ["status"] = session.PaymentStatus });
@@ -133,7 +141,7 @@ public static class BillingEndpoints
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             logger.LogError(ex, "[SUCVAR] Eroare verificare checkout");
-            return Fail(500, "VERIFY_FAILED", "Nu s-a putut verifica plata.");
+            return JsonError(500, "VERIFY_FAILED", "Nu s-a putut verifica plata.");
         }
     }
 
@@ -148,14 +156,14 @@ public static class BillingEndpoints
     {
         try
         {
-            if (!stripe.IsConfigured) return Fail(500, "NOT_CONFIGURED", "Plata nu este configurată pe server.");
+            if (!stripe.IsConfigured) return JsonError(500, "NOT_CONFIGURED", "Plata nu este configurată pe server.");
             var (user, error) = RequestAuth.Require(ctx, config, "Autentifică-te pentru a-ți gestiona abonamentul.");
             if (error is not null) return error;
             if (limiter.Check(Rules.BillingPortalUser, user!.UserId) is { } wait) return TooManyRequests(ctx, wait);
 
             var sub = await subscriptions.GetEffectiveSubscriptionAsync(user.UserId, ctx.RequestAborted);
             if (string.IsNullOrEmpty(sub.StripeCustomerId))
-                return Fail(404, "NO_CUSTOMER", "Nu există încă un abonament plătit pentru acest cont.");
+                return JsonError(404, "NO_CUSTOMER", "Nu există încă un abonament plătit pentru acest cont.");
 
             var siteUrl = (config.SiteUrl is { Length: > 0 } s ? s
                 : ctx.Request.Headers.Origin.ToString() is { Length: > 0 } origin ? origin
@@ -166,14 +174,19 @@ public static class BillingEndpoints
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             logger.LogError(ex, "[SUCVAR] Eroare Customer Portal");
-            return Fail(500, "PORTAL_FAILED", "Portalul de facturare nu a putut fi deschis. Încearcă din nou.");
+            return JsonError(500, "PORTAL_FAILED", "Portalul de facturare nu a putut fi deschis. Încearcă din nou.");
         }
     }
 
     /// <summary>
-    /// Signature is verified on the RAW body (buffered, read before any parsing) with EventUtility.ConstructEvent.
-    /// 500 on processing failure ⇒ Stripe retries automatically.
+    /// Stripe event receiver. The signature is verified on the RAW body (buffered and read before any parsing): the
+    /// HMAC covers the exact bytes Stripe sent, so re-serialised JSON would never validate.
     /// </summary>
+    /// <remarks>
+    /// Delivery is at-least-once. <see cref="StripeWebhookProcessor"/> remembers processed event ids and the handlers
+    /// themselves are idempotent (they write absolute state, never increments), so a replay is acknowledged with 200
+    /// and changes nothing. Any processing failure returns 500 on purpose so that Stripe retries the event.
+    /// </remarks>
     private static async Task<IResult> Webhook(
         HttpContext ctx, IStripeGateway stripe, IOptions<StripeOptions> options, StripeWebhookProcessor processor,
         ILogger<StripeWebhookProcessor> logger)

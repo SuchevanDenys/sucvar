@@ -85,8 +85,8 @@ public class CompanyProfileValidationTests
     }
 
     [Fact]
-    public void Default_vat_is_the_french_standard_rate() =>
-        Assert.Equal(20, EstimateParser.Parse(JsonSerializer.SerializeToElement(new { })).Value!.VatPct);
+    public void Default_vat_is_the_romanian_standard_rate() =>
+        Assert.Equal(21, EstimateParser.Parse(JsonSerializer.SerializeToElement(new { })).Value!.VatPct);
 }
 
 /// <summary>Company profile and Stripe Customer Portal over HTTP.</summary>

@@ -5,6 +5,7 @@ using Sucvar.Domain.Plans;
 
 namespace Sucvar.Application.Quota;
 
+/// <summary>Outcome of a quota check: either the resolved caller (Ok) or the error the endpoint must return.</summary>
 public sealed record QuotaResult(
     bool Ok,
     string? UserId = null,
@@ -39,8 +40,20 @@ public sealed class QuotaService(
     TimeProvider clock,
     ILogger<QuotaService> logger)
 {
+    /// <summary>First instant of the UTC calendar month containing <paramref name="now"/> (quota window start).</summary>
     public static DateTimeOffset MonthStartUtc(DateTimeOffset now) => new(now.UtcDateTime.Year, now.UtcDateTime.Month, 1, 0, 0, 0, TimeSpan.Zero);
 
+    /// <summary>
+    /// Decides whether the caller may start a generation. Fails closed: if usage cannot be counted the request is refused
+    /// (500 <c>QUOTA_CHECK_FAILED</c>) rather than allowed for free.
+    /// </summary>
+    /// <param name="token">What the API layer saw in the Authorization header.</param>
+    /// <param name="user">The caller when <paramref name="token"/> is <see cref="TokenState.Valid"/>.</param>
+    /// <param name="allowAnonymous">Development-only switch (<c>App:AllowAnonGeneration</c>); refused in Production at startup.</param>
+    /// <param name="serverConfigured">Whether database + JWT validation are configured on this instance.</param>
+    /// <param name="missingConfig">Names of the missing settings, logged and (outside Production) returned to help setup.</param>
+    /// <param name="isProduction">Hides configuration details from the error message in Production.</param>
+    /// <param name="ct">Request cancellation.</param>
     public async Task<QuotaResult> CheckAsync(
         TokenState token, AuthUser? user, bool allowAnonymous, bool serverConfigured, string? missingConfig, bool isProduction,
         CancellationToken ct = default)
@@ -74,13 +87,11 @@ public sealed class QuotaService(
         int limit;
         try
         {
-            var userId = Guid.Parse(user.UserId);
+            var userId = user.Id;
             var account = await accounts.GetAsync(userId, ct);
             limit = QuotaPolicy.Limit(sub.Tier, platform, account)!.Value;
             var since = QuotaPolicy.Since(MonthStartUtc(clock.GetUtcNow()), account.QuotaResetAt);
-            var projects = await usage.CountProjectsSinceAsync(userId, since, ct);
-            var logged = await usage.CountGenerationsSinceAsync(userId, since, ct);
-            used = Math.Max(projects, logged);
+            used = await usage.CountUsedSinceAsync(userId, since, ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

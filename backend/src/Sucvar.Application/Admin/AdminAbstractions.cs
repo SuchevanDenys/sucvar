@@ -14,6 +14,10 @@ public sealed record AccountStatus(string Role, bool IsBanned, string? BannedRea
     public bool IsActiveAdmin => Role == Roles.Admin && !IsBanned;
 }
 
+/// <summary>
+/// Reads the moderation state that authorisation depends on. Queried on every admin request and by the account guard,
+/// never cached in the JWT, so a ban or demotion takes effect on the very next request.
+/// </summary>
 public interface IAccountStatusRepository
 {
     /// <summary>Missing row → <see cref="AccountStatus.Default"/>; missing 005 columns → <see cref="AccountStatus.NotMigrated"/>.</summary>
@@ -23,11 +27,14 @@ public interface IAccountStatusRepository
 /// <summary>One row of admin_audit_logs to write. <c>DetailsJson</c> is a JSON object.</summary>
 public sealed record AuditEntry(Guid AdminUserId, string? AdminEmail, string Action, string TargetType, string TargetId, string DetailsJson);
 
+/// <summary>A stored audit row as returned to the admin UI (<c>Details</c> parsed back to JSON).</summary>
 public sealed record AuditLogEntry(
     string Id, string AdminUserId, string? AdminEmail, string Action, string TargetType, string TargetId, JsonElement Details, string CreatedAt);
 
+/// <summary>One page of a server-side paginated listing; <c>Total</c> is the unpaged count.</summary>
 public sealed record PagedResult<T>(IReadOnlyList<T> Items, int Total, int Page, int PageSize);
 
+/// <summary>Persistence port for <c>app_settings</c> (key → jsonb), the runtime-editable platform configuration.</summary>
 public interface IAppSettingsRepository
 {
     /// <summary>key → jsonb text; null when the table does not exist yet (migration 005 missing).</summary>
@@ -38,6 +45,7 @@ public interface IAppSettingsRepository
 
 // ── Users ────────────────────────────────────────────────────────────────────────
 
+/// <summary>Filters for the admin user list; null members mean "no filter".</summary>
 public sealed record AdminUserQuery(string? Search, string? Plan, string? Role, bool? Banned, int Page, int PageSize);
 
 /// <summary>Raw row; the service derives the effective plan and the generation limit.</summary>
@@ -72,6 +80,7 @@ public sealed record AdminUserChanges(
 
 // ── Overview ─────────────────────────────────────────────────────────────────────
 
+/// <summary>Raw KPI counters computed in SQL; monetary figures are derived from them in <see cref="AdminService"/>.</summary>
 public sealed record AdminOverviewCounts(
     int TotalUsers,
     int NewUsersLast30Days,
@@ -96,6 +105,7 @@ public sealed record AdminOverviewCounts(
 
 // ── Public portals ───────────────────────────────────────────────────────────────
 
+/// <summary>A public portal as seen by moderators (owner identity included — admin-only projection).</summary>
 public sealed record AdminPublicProject(
     string Id,
     string Title,
@@ -108,6 +118,7 @@ public sealed record AdminPublicProject(
     string CreatedAt,
     string? Thumbnail);
 
+/// <summary>Persistence port for the back-office. Mutations always receive their audit rows and commit them atomically.</summary>
 public interface IAdminRepository
 {
     Task<bool> PingAsync(CancellationToken ct = default);

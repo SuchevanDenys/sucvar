@@ -29,6 +29,7 @@ public sealed class SettingsCache
     }
 }
 
+/// <summary>Settings plus whether migration 005 is applied (the admin UI disables editing when it is not).</summary>
 public sealed record SettingsView(PlatformSettings Settings, bool Migrated);
 
 /// <summary>
@@ -37,6 +38,7 @@ public sealed record SettingsView(PlatformSettings Settings, bool Migrated);
 /// </summary>
 public sealed class PlatformSettingsService(IAppSettingsRepository repository, SettingsCache cache, TimeProvider clock, ILogger<PlatformSettingsService> logger)
 {
+    /// <summary>Cached read (30 s TTL) for hot paths; never throws — falls back to the compiled-in defaults.</summary>
     public async Task<PlatformSettings> GetAsync(CancellationToken ct = default)
     {
         var now = clock.GetUtcNow();
@@ -67,6 +69,10 @@ public sealed class PlatformSettingsService(IAppSettingsRepository repository, S
         }
     }
 
+    /// <summary>
+    /// Validates a partial settings update, persists only the changed keys together with a before/after audit row, and
+    /// invalidates the cache so the new limits apply on this instance immediately (other instances within one TTL).
+    /// </summary>
     public async Task<SettingsView> UpdateAsync(AuthUser admin, JsonElement? body, CancellationToken ct = default)
     {
         var (current, migrated) = await LoadAsync(ct);
@@ -91,7 +97,7 @@ public sealed class PlatformSettingsService(IAppSettingsRepository repository, S
             ["before"] = before,
             ["after"] = after,
         };
-        var adminId = Guid.Parse(admin.UserId);
+        var adminId = admin.Id;
         await repository.SaveAsync(values, adminId,
             new AuditEntry(adminId, admin.Email, AuditActions.UpdateSettings, AuditTargets.Settings, string.Join(",", parsed.ChangedKeys), details.ToJsonString()), ct);
 

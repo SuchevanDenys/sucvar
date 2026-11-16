@@ -60,16 +60,16 @@ public static partial class EstimateParser
 {
     public const int MaxItems = 500;
     /// <summary>
-    /// French market: TVA taux normal 20% by default; 10% (taux intermédiaire, rénovation d'un logement de plus
-    /// de 2 ans) is the other one-click rate. Deliberate deviation from the monolith's 19% fallback. See migration 007.
+    /// Romanian market: standard VAT (cota standard) 21% since 1 Aug 2025; 11% (cota redusă, e.g. housing) is the
+    /// other one-click rate. Any 0–100 value is still accepted. See migrations 003 and 008.
     /// </summary>
-    public const double DefaultVatPct = 20;
-    /// <summary>TVA taux intermédiaire — travaux de rénovation dans un logement achevé depuis plus de 2 ans.</summary>
-    public const double RenovationVatPct = 10;
+    public const double DefaultVatPct = 21;
+    /// <summary>Cota redusă de TVA (11%), offered as a one-click choice.</summary>
+    public const double ReducedVatPct = 11;
     /// <summary>Rates offered as one-click choices in the /b2b editor and the /account defaults.</summary>
-    public static readonly double[] FrenchVatRates = [DefaultVatPct, RenovationVatPct];
-    /// <summary>Default pricing region (Paris intra-muros); the monolith used "bucharest".</summary>
-    public const string DefaultRegion = "paris";
+    public static readonly double[] RomanianVatRates = [DefaultVatPct, ReducedVatPct];
+    /// <summary>Default pricing region (București – Ilfov), same as the monolith. See migration 008.</summary>
+    public const string DefaultRegion = "bucharest";
     public static readonly string[] Statuses = ["draft", "sent", "accepted", "rejected"];
 
     [GeneratedRegex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", RegexOptions.IgnoreCase)]

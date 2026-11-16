@@ -105,10 +105,10 @@ public class PublicPortalTests : IClassFixture<SucvarApiFactory>
         var expectedLine = Math.Round(33.33 * expectedUnit, 2, MidpointRounding.AwayFromZero);
         Assert.Equal(expectedLine, item.GetProperty("clientLineTotal").GetDouble());
 
-        // Real market sourcing: rebuilt retailer search links (pro trade flooring → Point.P first, French query)
-        Assert.Equal("Point.P", item.GetProperty("retailerName").GetString());
-        Assert.Equal("https://www.pointp.fr/search?text=parquet%20ch%C3%AAne", item.GetProperty("retailerUrl").GetString());
-        Assert.All(item.GetProperty("links").EnumerateArray(), l => Assert.StartsWith("https://www.", l.GetProperty("url").GetString()));
+        // Real market sourcing: rebuilt retailer search links (trade flooring → Dedeman first, Romanian query)
+        Assert.Equal("Dedeman", item.GetProperty("retailerName").GetString());
+        Assert.Equal("https://www.dedeman.ro/ro/catalogsearch/result/?q=Parchet%20stejar", item.GetProperty("retailerUrl").GetString());
+        Assert.All(item.GetProperty("links").EnumerateArray(), l => Assert.StartsWith("https://", l.GetProperty("url").GetString()));
 
         // Cost summary: materials + labour (rest of the net) + VAT = official quote total
         var b = project.GetProperty("pricingBreakdown");
@@ -133,7 +133,7 @@ public class PublicPortalTests : IClassFixture<SucvarApiFactory>
         Assert.All(items.EnumerateArray(), i =>
         {
             Assert.True(i.GetProperty("clientUnitPrice").GetDouble() > 0);
-            Assert.Matches("^https://www\\.(leroymerlin|castorama|ikea|manomano|bricodepot|laplateforme|pointp)\\.", i.GetProperty("retailerUrl").GetString());
+            Assert.Matches("^https://(www\\.)?(dedeman|leroymerlin|hornbach|bricodepot|ikea|mobexpert)\\.", i.GetProperty("retailerUrl").GetString());
         });
         var b = project.GetProperty("pricingBreakdown");
         Assert.Equal("studio_estimate", b.GetProperty("pricingSource").GetString());
@@ -141,7 +141,7 @@ public class PublicPortalTests : IClassFixture<SucvarApiFactory>
         var labor = b.GetProperty("laborSubtotal").GetDouble();
         Assert.Equal(Math.Round(items.EnumerateArray().Sum(i => i.GetProperty("clientLineTotal").GetDouble()), 2), materials, 2);
         Assert.Equal(12345.68, materials + labor, 2); // net = Studio estimate (excl. VAT)
-        Assert.Equal(Math.Round(12345.68 * 0.20, 2), b.GetProperty("vatAmount").GetDouble(), 2);
+        Assert.Equal(Math.Round(12345.68 * 0.21, 2), b.GetProperty("vatAmount").GetDouble(), 2);
         Assert.Equal(materials + labor + b.GetProperty("vatAmount").GetDouble(), b.GetProperty("grandTotal").GetDouble(), 2);
     }
 
@@ -156,7 +156,7 @@ public class PublicPortalTests : IClassFixture<SucvarApiFactory>
         var item = JsonDocument.Parse(raw).RootElement.GetProperty("project").GetProperty("items")[0];
         Assert.Equal("Vopsea", item.GetProperty("name").GetString());
         Assert.Equal(45, item.GetProperty("clientLineTotal").GetDouble());
-        Assert.Equal("https://www.leroymerlin.fr/search?keyword=peinture%20murale", item.GetProperty("retailerUrl").GetString());
+        Assert.Equal("https://www.dedeman.ro/ro/catalogsearch/result/?q=vopsea%20lavabila", item.GetProperty("retailerUrl").GetString());
     }
 
     [Fact]
@@ -369,7 +369,7 @@ public class StudioEndpointTests : IClassFixture<SucvarApiFactory>
         var bom = (await ok.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("bom");
         Assert.Equal("EUR", bom.GetProperty("currency").GetString());
         Assert.True(bom.GetProperty("items").GetArrayLength() > 0);
-        Assert.Equal("https://www.pointp.fr/search?text=carrelage%20gr%C3%A8s%20c%C3%A9rame%2060x60%20antid%C3%A9rapant",
+        Assert.Equal("https://www.dedeman.ro/ro/catalogsearch/result/?q=gresie%20portelanata%2060x60%20antiderapanta",
             bom.GetProperty("items")[0].GetProperty("links")[0].GetProperty("url").GetString());
     }
 }

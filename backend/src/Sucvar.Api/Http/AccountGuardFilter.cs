@@ -28,7 +28,7 @@ public sealed class AccountGuardFilter : IEndpointFilter
         AccountStatus status;
         try
         {
-            status = await http.RequestServices.GetRequiredService<IAccountStatusRepository>().GetAsync(Guid.Parse(user.UserId), http.RequestAborted);
+            status = await http.RequestServices.GetRequiredService<IAccountStatusRepository>().GetAsync(user.Id, http.RequestAborted);
         }
         catch (AppException ex)
         {

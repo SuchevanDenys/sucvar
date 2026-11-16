@@ -1,4 +1,3 @@
-using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Npgsql;
@@ -38,10 +37,4 @@ public static class PgErrors
                 return new AppException(500, "DB_ERROR", "Eroare de bază de date.");
         }
     }
-
-    /// <summary>timestamptz as PostgREST serializes it (e.g. 2026-11-15T10:00:00.123456+00:00).</summary>
-    public static string Iso(DateTimeOffset value) =>
-        value.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss.ffffffzzz", CultureInfo.InvariantCulture);
-
-    public static string? Iso(DateTimeOffset? value) => value is { } v ? Iso(v) : null;
 }

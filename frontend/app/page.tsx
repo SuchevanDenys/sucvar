@@ -1,67 +1,41 @@
-// app/page.tsx — v5.0 monochrome Scandinavian gallery landing (split hero, 4-col style gallery).
-//   • Layout/typography/sections ported from the Lovable prototype (hero → process → cases → pricing → footer),
-//     with the existing Rigor / Supplier-ecosystem / Styles sections kept between Cases and Pricing.
-//   • All business logic unchanged: plan selection (localStorage), preferred style, supplier deep-links,
-//     /checkout?plan=…, BeforeAfterSlider, catalog data.
-// SSR safety: no Date / Math.random / window access during render; all storage reads sit in effects.
+// app/page.tsx — landing page (monochrome Scandinavian gallery).
+// Ordinea secțiunilor: hero → intro (telemetrie + slider) → §01 proces → §02 studii de caz → §03 formule →
+// §04 furnizori → §05 stiluri → §06 planuri → footer. Secțiunile §04–§06 au stare/logică proprie și trăiesc
+// în `components/home/*`; aici rămân secțiunile pur prezentaționale.
+// SSR: nicio citire Date / Math.random / window în timpul randării; accesul la storage se face doar în efecte.
 "use client";
 
 import React, { useEffect } from 'react';
-import Link from 'next/link';
-import { ArrowRight, ArrowUpRight, Check, ExternalLink, FileSpreadsheet, Minus } from 'lucide-react';
-import Navbar from '@/app/components/layout/Navbar';
 import Image from 'next/image';
-import BeforeAfterSlider from '@/app/components/ui/BeforeAfterSlider';
-import Reveal from '@/app/components/ui/Reveal';
-import { PRICING_PLANS, VISUAL_STYLES, calculateEngineering, estimateCost } from '@/app/data/catalog';
-import { DEFAULT_DIMENSIONS } from '@/app/lib/studio/validation';
-import { HERO_STATS, CASES, SAMPLE_QUERY, SAMPLE_PARAMS, SUPPLIERS, LOOP_STEPS, STEPS, FORMULAS, CAPABILITY_MATRIX, TIER_WORKFLOWS } from '@/app/data/home';
-import { costDeltaLabel } from '@/app/data/styleSpecs';
+import Link from 'next/link';
+import { ArrowRight, ArrowUpRight } from 'lucide-react';
 import CaseCard from '@/app/components/home/CaseCard';
+import { ANCHOR_OFFSET, sectionSpacing } from '@/app/components/home/sectionStyles';
+import PricingSection from '@/app/components/home/PricingSection';
+import StyleGallerySection from '@/app/components/home/StyleGallerySection';
+import SupplierSection from '@/app/components/home/SupplierSection';
 import Footer from '@/app/components/layout/Footer';
-import { getSkin, EYEBROW, CONTAINER } from '@/app/lib/theme/skin';
-import { LiveDot, Frame, SectionHeading } from '@/app/components/ui/Editorial';
-import { STORAGE_KEYS, writeStorage } from '@/app/lib/storage';
+import Navbar from '@/app/components/layout/Navbar';
+import BeforeAfterSlider from '@/app/components/ui/BeforeAfterSlider';
+import { Frame, LiveDot, SectionHeading } from '@/app/components/ui/Editorial';
+import Reveal from '@/app/components/ui/Reveal';
+import { VISUAL_STYLES } from '@/app/data/catalog';
+import { CASES, FORMULAS, HERO_STATS, STEPS } from '@/app/data/home';
+import { tr } from '@/app/lib/i18n';
+import { scrollToAnchor } from '@/app/lib/scroll';
+import { CONTAINER, EYEBROW, getSkin } from '@/app/lib/theme/skin';
 import { usePrefs } from '@/app/lib/theme/usePrefs';
-import { usePlan } from '@/app/lib/plan/usePlan';
-import { canPurchase, normalizeInterval } from '@/app/lib/plan/tiers';
-import { displayPrice } from '@/app/lib/plan/pricing';
-import BillingToggle from '@/app/components/ui/BillingToggle';
-import { useStoredValue } from '@/app/lib/useStoredValue';
-import { PRICING_ANCHOR, scrollToAnchor } from '@/app/lib/scroll';
-import { tr, trList } from '@/app/lib/i18n';
-
-// €/m² estimat per stil: aceeași formulă ca în Studio (estimateCost) pe camera implicită, buget standard.
-// Calculat o singură dată la încărcarea modulului — determinist, sigur pentru SSR.
-const REF_ROOM_LABEL = `${DEFAULT_DIMENSIONS.width} × ${DEFAULT_DIMENSIONS.length} m`;
-const REF_ENGINEERING = calculateEngineering(DEFAULT_DIMENSIONS, 'interiors', 'living room');
-const STYLE_PER_SQM: Record<string, string> = Object.fromEntries(
-  VISUAL_STYLES.map((style) => [
-    style.id,
-    Math.round(estimateCost(DEFAULT_DIMENSIONS, 'interiors', 'living room', style.id, REF_ENGINEERING).perSqm).toLocaleString('fr-FR'),
-  ]),
-);
-
-// Cible des ancres : le conteneur de contenu (pas la section et son grand padding), décalé de la barre
-// collante (h-16) + 32 px de respiration = scroll-mt-24. Le JS (lib/scroll.ts) mesure la vraie hauteur de
-// l'en-tête et réaligne après le défilement ; cette classe sert de repli natif.
-const ANCHOR_OFFSET = 'scroll-mt-24';
 
 export default function HomePage() {
   // ---------- State ----------
   const { lang, isDark } = usePrefs();
-  const { tier: currentTier, interval: currentInterval, isSignedIn } = usePlan();
-  const selectedPlan = useStoredValue(STORAGE_KEYS.selectedPlan) || 'pro';
-  // Ciclul de facturare ales (lunar / anual −20%), păstrat și pentru pagina de checkout
-  const interval = normalizeInterval(useStoredValue(STORAGE_KEYS.billingInterval)) ?? 'month';
 
   // ---------- Helpers ----------
   const sk = getSkin(isDark);
   const t = (textRo: string, textEn: string, fr?: string) => tr(lang, textRo, textEn, fr);
   // Full class strings (Tailwind can't see classes built by interpolation)
-  const groupHoverAccent = isDark ? 'group-hover:text-white' : 'group-hover:text-[#111111]';
   const groupHoverStrong = isDark ? 'hover:text-white group-hover:text-white' : 'hover:text-[#111111] group-hover:text-[#111111]';
-  const sectionY = `border-t py-24 lg:py-32 ${sk.line}`;
+  const sectionY = sectionSpacing(sk.line);
   const btnBase = 'inline-flex items-center justify-center gap-2 h-12 sm:h-11 px-6 rounded-sm text-[13px] font-medium touch-manipulation select-none';
 
   // Sosire din altă rută (ex. /generate → /#planuri): după montare, realiniem ancora
@@ -78,28 +52,6 @@ export default function HomePage() {
       cancelAnimationFrame(inner);
     };
   }, []);
-
-  const handleSelectPlan = (planId: string) => {
-    writeStorage(STORAGE_KEYS.selectedPlan, planId);
-  };
-
-  const handleSelectInterval = (next: string) => {
-    writeStorage(STORAGE_KEYS.billingInterval, next);
-  };
-
-  const handleStyleClick = (styleId: string) => {
-    writeStorage(STORAGE_KEYS.preferredStyle, styleId);
-  };
-
-  const radioClass = (isSelected: boolean): string => {
-    const base = 'w-3.5 h-3.5 rounded-full border flex items-center justify-center';
-    if (!isSelected) return `${base} ${sk.line}`;
-    return `${base} ${isDark ? 'border-white' : 'border-[#111111]'}`;
-  };
-  const radioDot = `w-1.5 h-1.5 rounded-full ${isDark ? 'bg-white' : 'bg-[#111111]'}`;
-  const selectedCell = isDark ? 'bg-[#1C1C1F]' : 'bg-[#F5F5F5]';
-
-  const supplierHref = (tpl: string) => tpl.replace('{q}', encodeURIComponent(SAMPLE_QUERY));
 
   return (
     <div id="top" className={`min-h-screen font-sans pb-24 md:pb-0 transition-colors duration-500 ${sk.page}`}>
@@ -323,355 +275,14 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* ================= §04 SUPPLIER ECOSYSTEM ================= */}
-        <section className={sectionY}>
-          <div id="suppliers" className={`${CONTAINER} ${ANCHOR_OFFSET} grid grid-cols-1 lg:grid-cols-12 gap-12`}>
-            <Reveal className="lg:col-span-5 space-y-6">
-              <SectionHeading
-                isDark={isDark}
-                index="04"
-                eyebrow={t('Furnizori', 'Suppliers')}
-                title={t('De la specificație la coș,', 'From specification to cart,')}
-                titleMuted={t('fără să rescrii nimic.', 'without retyping anything.')}
-              />
-              <p className={`text-sm leading-relaxed max-w-md ${sk.muted}`}>
-                {t(
-                  'SUCVAR nu vinde materiale și nu ia comision. Calculează exact ce trebuie cumpărat și te trimite direct la produsul potrivit.',
-                  'SUCVAR doesn’t sell materials or take a commission. It calculates exactly what to buy and sends you straight to the right product.',
-                )}
-              </p>
-              <ol className={`border rounded-sm divide-y ${sk.line} ${sk.divide}`}>
-                {LOOP_STEPS.map((s, i) => (
-                  <li key={s.en} className="flex gap-4 p-4">
-                    <span className={`font-mono text-xs tabular-nums pt-0.5 ${sk.accent}`}>{String(i + 1).padStart(2, '0')}</span>
-                    <span className={`text-sm leading-relaxed ${sk.muted}`}>{t(s.ro, s.en)}</span>
-                  </li>
-                ))}
-              </ol>
-            </Reveal>
+        {/* §04 */}
+        <SupplierSection lang={lang} isDark={isDark} />
 
-            <Reveal delay={100} className="lg:col-span-7 space-y-4">
-              <div className={`relative border rounded-md p-5 ${sk.card}`}>
-                <p className={`${EYEBROW} ${sk.dim}`}>{t('Căutare generată automat', 'Auto-generated search')}</p>
-                <p className={`mt-3 font-mono text-sm ${sk.strong}`}>“{SAMPLE_QUERY}”</p>
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {SAMPLE_PARAMS.map((p) => (
-                    <span key={p} className={`rounded-full border px-2 py-0.5 ${EYEBROW} ${sk.line} ${sk.muted}`}>
-                      {p}
-                    </span>
-                  ))}
-                </div>
-              </div>
+        {/* §05 — aceleași fișe (catalog.ts + styleSpecs.ts) ca în Studio */}
+        <StyleGallerySection lang={lang} isDark={isDark} />
 
-              <div className={`grid grid-cols-1 sm:grid-cols-2 gap-px border rounded-md overflow-hidden ${sk.line} ${sk.gap}`}>
-                {SUPPLIERS.map((s, i) => (
-                  <a
-                    key={s.name}
-                    href={supplierHref(s.url)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={`group p-5 flex items-start justify-between gap-4 transition-colors duration-500 touch-manipulation ${sk.cell} ${sk.rowHover}`}
-                  >
-                    <div>
-                      <p className={`font-mono text-[10px] uppercase tracking-[0.2em] tabular-nums ${sk.dim}`}>N° {String(i + 1).padStart(2, '0')}</p>
-                      <p className={`mt-3 text-base font-medium tracking-tight ${sk.strong}`}>{s.name}</p>
-                      <p className={`mt-1 text-xs ${sk.dim}`}>{t(s.roleRo, s.roleEn, s.roleFr)}</p>
-                      <p className={`mt-2 font-mono text-[10px] tracking-[0.12em] ${sk.dim}`}>{s.domain}</p>
-                    </div>
-                    <ExternalLink className={`w-3.5 h-3.5 mt-0.5 shrink-0 transition-colors ${sk.dim} ${groupHoverAccent}`} />
-                  </a>
-                ))}
-                <div className={`p-5 flex items-start gap-4 ${sk.cell}`}>
-                  <FileSpreadsheet className={`w-4 h-4 mt-0.5 shrink-0 ${sk.accent}`} />
-                  <div>
-                    <p className={`text-sm font-medium tracking-tight ${sk.strong}`}>
-                      {t('Ateliere de tâmplărie și mobilier la comandă', 'Bespoke joinery and furniture workshops')}
-                    </p>
-                    <p className={`mt-1 text-xs leading-relaxed ${sk.dim}`}>
-                      {t(
-                        'Piesele la comandă, care nu se găsesc pe raft, pleacă spre atelier ca fișier CSV cu dimensiuni și toleranțe, gata pentru cererea de ofertă.',
-                        'Made-to-order pieces that aren’t on the shelf go to the workshop as a CSV with dimensions and tolerances, ready for a quote request.',
-                      )}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </Reveal>
-          </div>
-        </section>
-
-        {/* ================= §05 CURATED STYLES (galerie 4 coloane) ================= */}
-        {/* Aceleași fișe (catalog.ts + styleSpecs.ts) ca în Studio; €/m² vine din estimateCost pe o cameră de referință. */}
-        <section className={sectionY}>
-          <div id="systems" className={`${CONTAINER} ${ANCHOR_OFFSET}`}>
-            <Reveal>
-              <div className="flex flex-wrap items-end justify-between gap-6">
-                <SectionHeading
-                  isDark={isDark}
-                  index="05"
-                  eyebrow={t('Stiluri arhitecturale', 'Architectural styles')}
-                  title={t('Fiecare stil este o poveste,', 'Every style is a story,')}
-                  titleMuted={t('spusă prin materiale.', 'told through materials.')}
-                />
-                <p className={`max-w-xs text-xs leading-relaxed ${sk.dim}`}>
-                  {t(
-                    `Cost estimat pe m² pentru o cameră de referință de ${REF_ROOM_LABEL}, la buget standard. Alege un stil pentru a-l deschide în Studio.`,
-                    `Estimated cost per m² for a ${REF_ROOM_LABEL} reference room on a standard budget. Choose a style to open it in Studio.`,
-            `Coût estimé au m² pour une pièce de référence de ${REF_ROOM_LABEL}, budget standard. Choisissez un style pour l’ouvrir dans le Studio.`,
-                  )}
-                </p>
-              </div>
-            </Reveal>
-            <Reveal delay={100}>
-              <ul className="mt-14 grid grid-cols-1 gap-x-6 gap-y-12 sm:grid-cols-2 lg:grid-cols-4">
-                {VISUAL_STYLES.map((style, i) => (
-                  <li key={style.id}>
-                    <Link
-                      href="/generate"
-                      onClick={() => handleStyleClick(style.id)}
-                      className="group block touch-manipulation"
-                      aria-label={`${t(style.nameRo, style.nameEn)} — ${t('deschide în Studio', 'open in Studio')}`}
-                    >
-                      {/* Passe-partout #F5F5F5 cu „tabloul” paletei de materiale centrat */}
-                      <div className={`relative aspect-[4/5] p-8 transition-colors duration-500 ${isDark ? 'bg-[#141416] group-hover:bg-[#1C1C1F]' : 'bg-[#F5F5F5] group-hover:bg-[#EDEDED]'}`}>
-                        <span className={`absolute left-4 top-4 font-mono text-[10px] tabular-nums ${sk.dim}`}>
-                          {String(i + 1).padStart(2, '0')}
-                        </span>
-                        <div className={`flex h-full w-full overflow-hidden shadow-[0_1px_2px_rgba(0,0,0,0.06),0_18px_30px_-18px_rgba(0,0,0,0.35)] transition-transform duration-500 group-hover:scale-[1.02] border-[6px] ${isDark ? 'border-[#0B0B0C]' : 'border-white'}`}>
-                          {style.palette.map((c, ci) => (
-                            <span
-                              key={c.hex}
-                              title={`${t(c.nameRo, c.nameEn)} ${c.hex}`}
-                              className={ci === 0 ? 'flex-[3]' : 'flex-1'}
-                              style={{ backgroundColor: c.hex }}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                      <div className="mt-4 flex items-baseline justify-between gap-3">
-                        <h3 className={`text-[15px] font-semibold tracking-tight ${sk.strong}`}>{t(style.nameRo, style.nameEn)}</h3>
-                        <span className={`shrink-0 font-mono text-[13px] tabular-nums ${sk.strong}`}>
-                          {STYLE_PER_SQM[style.id]} €/m²
-                        </span>
-                      </div>
-                      <p className={`mt-1 flex items-center justify-between gap-3 text-[11px] uppercase tracking-[0.16em] ${sk.dim}`}>
-                        <span className="truncate">{t(style.materialsRo[0], style.materialsEn[0])}</span>
-                        <span className="shrink-0 tabular-nums">{costDeltaLabel(style.costFactor)}</span>
-                      </p>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </Reveal>
-          </div>
-        </section>
-
-        {/* ================= §06 PRICING ================= */}
-        <section className={sectionY}>
-          <div id={PRICING_ANCHOR} className={`${CONTAINER} ${ANCHOR_OFFSET}`}>
-            <Reveal>
-              <SectionHeading
-                isDark={isDark}
-                index="06"
-                eyebrow={t('Planuri', 'Plans')}
-                title={t('Un plan pentru', 'A plan for')}
-                titleMuted={t('fiecare etapă a proiectului.', 'every stage of the work.')}
-              />
-              <p className={`mt-6 max-w-xl text-sm leading-relaxed ${sk.muted}`}>
-                {t(
-                  'Începi gratuit cu o cameră. Treci pe Professional când prezinți proiecte clienților, iar pe Business când lucrezi în echipă, cu devize și marje în portalul B2B.',
-                  'Start free with a single room. Move to Professional when you present work to clients, and to Business when you work as a team, with estimates and margins in the B2B portal.',
-                )}
-              </p>
-            </Reveal>
-
-            <Reveal delay={100}>
-              <div className="mt-10 flex justify-start">
-                <BillingToggle
-                  value={interval}
-                  onChange={handleSelectInterval}
-                  lang={lang}
-                  wrapClass={sk.line}
-                  segOn={sk.segOn}
-                  segOff={sk.segOff}
-                />
-              </div>
-              <div className={`mt-6 grid grid-cols-1 lg:grid-cols-3 gap-px border rounded-md overflow-hidden ${sk.line} ${sk.gap}`}>
-                {PRICING_PLANS.map((plan, idx) => {
-                  const isSelected = selectedPlan === plan.id;
-                  const features = trList(lang, plan.featuresRo, plan.featuresEn);
-                  const buttonClass = isSelected ? sk.btn : sk.btnGhost;
-                  // Rang plan: cardul activ / inclus în planul curent nu se mai poate cumpăra
-                  // Gardă (oglindește serverul): se poate cumpăra doar o îmbunătățire —
-                  // pro lunar -> pro anual / agency, agency lunar -> agency anual.
-                  const purchasable =
-                    plan.id !== 'starter' &&
-                    canPurchase({ tier: currentTier, interval: currentInterval }, { tier: plan.id, interval });
-                  const isActive = isSignedIn && plan.id === currentTier && !purchasable;
-                  const isIncluded = isSignedIn && !isActive && plan.id !== currentTier && !purchasable;
-                  const isLocked = isActive || isIncluded;
-                  const price = displayPrice(plan.priceCents, interval);
-                  const currentPlanName = currentTier === 'agency' ? 'Business' : 'Professional';
-                  const lockedText = isActive
-                    ? t('Planul tău actual', 'Your current plan')
-                    : t(`Inclus în ${currentPlanName}`, `Included in ${currentPlanName}`,
-            `Inclus dans ${currentPlanName}`);
-                  const planName = t(plan.nameRo, plan.nameEn);
-                  const buttonText = isSelected
-                    ? plan.id === 'starter'
-                      ? t('Începe gratuit', 'Start for free')
-                      : t(`Continuă cu ${planName}`, `Continue with ${planName}`,
-            `Continuer avec ${planName}`)
-                    : t(`Alege ${plan.id === 'starter' ? 'Studio' : planName}`, `Choose ${plan.id === 'starter' ? 'Studio' : planName}`,
-            `Choisir ${plan.id === 'starter' ? 'Studio' : planName}`);
-
-                  return (
-                    <div
-                      key={plan.id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => handleSelectPlan(plan.id)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') handleSelectPlan(plan.id);
-                      }}
-                      className={`relative flex flex-col justify-between p-8 lg:p-10 cursor-pointer transition-colors duration-500 touch-manipulation ${
-                        isSelected ? selectedCell : `${sk.cell} ${sk.rowHover}`
-                      }`}
-                    >
-                      {isSelected && (
-                        <span aria-hidden className={`absolute inset-x-0 top-0 h-[2px] ${isDark ? 'bg-white' : 'bg-[#111111]'}`} />
-                      )}
-
-                      <div>
-                        <div className="flex items-center justify-between">
-                          <span className={`font-mono text-sm tabular-nums ${sk.strong}`}>{String(idx + 1).padStart(2, '0')}</span>
-                          <span className="flex items-center gap-3">
-                            {plan.popular && <LiveDot label={t('Recomandat', 'Recommended')} className={sk.muted} />}
-                            <span className={radioClass(isSelected)}>{isSelected && <span className={radioDot} />}</span>
-                          </span>
-                        </div>
-
-                        <h3 className={`mt-12 text-lg font-medium tracking-tight ${sk.strong}`}>{t(plan.nameRo, plan.nameEn)}</h3>
-                        <p className={`mt-2 min-h-10 text-sm ${sk.muted}`}>{t(plan.descRo, plan.descEn)}</p>
-
-                        <div className="mt-8 flex items-baseline gap-2">
-                          {price.struck && (
-                            <span className={`font-mono text-xl tabular-nums line-through ${sk.dim}`}>{price.struck}</span>
-                          )}
-                          <span className={`font-mono text-5xl tabular-nums tracking-[-0.04em] ${sk.strong}`}>{price.main}</span>
-                          <span className={`${EYEBROW} ${sk.dim}`}>{t(plan.periodRo, plan.periodEn)}</span>
-                        </div>
-                        {/* Totalul anual: se vede clar cât se facturează o dată pe an */}
-                        {price.yearlyTotal && (
-                          <p className={`mt-2 text-xs tabular-nums ${sk.muted}`}>
-                            {t(`Facturat anual: ${price.yearlyTotal}`, `Billed annually: ${price.yearlyTotal}`,
-            `Facturé annuellement : ${price.yearlyTotal}`)}
-                          </p>
-                        )}
-                      </div>
-
-                      <div>
-                        {isLocked ? (
-                          <button
-                            type="button"
-                            disabled
-                            aria-disabled
-                            onClick={(event) => event.stopPropagation()}
-                            className={`mt-8 h-12 sm:h-11 w-full flex items-center justify-center rounded-sm text-[13px] font-medium opacity-60 cursor-not-allowed ${sk.btnGhost}`}
-                          >
-                            {lockedText}
-                          </button>
-                        ) : isSelected ? (
-                          <Link
-                            href={`/checkout?plan=${plan.id}&interval=${interval}`}
-                            onClick={(event) => event.stopPropagation()}
-                            className={`mt-8 h-12 sm:h-11 w-full flex items-center justify-center rounded-sm text-[13px] font-medium touch-manipulation ${buttonClass}`}
-                          >
-                            {buttonText}
-                          </Link>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              handleSelectPlan(plan.id);
-                            }}
-                            className={`mt-8 h-12 sm:h-11 w-full flex items-center justify-center rounded-sm text-[13px] font-medium cursor-pointer touch-manipulation ${buttonClass}`}
-                          >
-                            {buttonText}
-                          </button>
-                        )}
-
-                        <ul className={`mt-10 space-y-3.5 border-t pt-8 ${sk.line}`}>
-                          {features.map((feature) => (
-                            <li key={feature} className={`flex items-start gap-3 text-sm ${sk.muted}`}>
-                              <Check className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${sk.strong}`} strokeWidth={1.75} />
-                              <span>{feature}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </Reveal>
-
-            {/* Matrice de capabilități: fapte, fără superlative. Oglindește regulile din lib/plan/tiers.ts */}
-            <Reveal delay={120}>
-              <div className="mt-16">
-                <p className={`${EYEBROW} ${sk.dim}`}>{t('Ce include fiecare plan', 'What each plan includes')}</p>
-                <div className={`mt-5 grid grid-cols-1 md:grid-cols-3 gap-px border rounded-md overflow-hidden ${sk.line} ${sk.gap}`}>
-                  {(['starter', 'pro', 'agency'] as const).map((id) => {
-                    const plan = PRICING_PLANS.find((p) => p.id === id);
-                    return (
-                      <div key={id} className={`p-6 ${sk.cell}`}>
-                        <p className={`text-sm font-medium ${sk.strong}`}>{plan ? t(plan.nameRo, plan.nameEn) : id}</p>
-                        <p className={`mt-2 text-xs leading-relaxed ${sk.muted}`}>{t(TIER_WORKFLOWS[id].ro, TIER_WORKFLOWS[id].en)}</p>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className={`mt-px border border-t-0 overflow-x-auto ${sk.line}`}>
-                  <table className="w-full min-w-[40rem] text-left text-sm">
-                    <thead>
-                      <tr className={`border-b ${sk.line} ${EYEBROW} ${sk.dim}`}>
-                        <th scope="col" className="px-5 h-10 font-normal">{t('Funcționalitate', 'Feature')}</th>
-                        <th scope="col" className="px-5 h-10 font-normal">Studio</th>
-                        <th scope="col" className="px-5 h-10 font-normal">Professional</th>
-                        <th scope="col" className="px-5 h-10 font-normal">Business</th>
-                      </tr>
-                    </thead>
-                    <tbody className={`divide-y ${sk.divide}`}>
-                      {CAPABILITY_MATRIX.map((row) => (
-                        <tr key={row.en} className={sk.rowHover}>
-                          <th scope="row" className={`px-5 py-3 font-normal ${sk.strong}`}>{t(row.ro, row.en)}</th>
-                          {([row.starter, row.pro, row.agency] as const).map((value, i) => (
-                            <td key={i} className="px-5 py-3">
-                              {typeof value === 'boolean' ? (
-                                value ? (
-                                  <Check className={`w-3.5 h-3.5 ${sk.accent}`} strokeWidth={1.75} aria-label={t('Inclus', 'Included')} />
-                                ) : (
-                                  <Minus className={`w-3.5 h-3.5 ${sk.dim}`} strokeWidth={1.5} aria-label={t('Neinclus', 'Not included')} />
-                                )
-                              ) : (
-                                <span className={`font-mono text-xs tabular-nums ${sk.muted}`}>{t(value.ro, value.en)}</span>
-                              )}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <p className={`mt-4 text-xs ${sk.dim}`}>
-                  {t('Portalul B2B este inclus doar în planul Business. ', 'The B2B portal is included in the Business plan only. ')}
-                  <Link href="/b2b" className={`underline underline-offset-2 ${sk.muted}`}>{t('Descoperă portalul', 'Explore the portal')}</Link>
-                </p>
-              </div>
-            </Reveal>
-          </div>
-        </section>
+        {/* §06 */}
+        <PricingSection lang={lang} isDark={isDark} />
       </main>
 
       <Footer lang={lang} isDark={isDark} />

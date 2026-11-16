@@ -3,7 +3,7 @@
 // și, ca rezervă, în browser pentru profilurile demo fără sesiune Supabase.
 //
 // DE CE LINK-URI DE CĂUTARE + CANTITĂȚI DETERMINISTE, ȘI NU SCRAPING:
-//   • Enseignele (Leroy Merlin, Castorama, IKEA France, ManoMano, Brico Dépôt, La Plateforme du Bâtiment, Point.P) nu oferă un API public de prețuri/stoc;
+//   • Magazinele (Dedeman, Leroy Merlin, Hornbach, Brico Dépôt, IKEA România, Mobexpert) nu oferă un API public de prețuri/stoc;
 //     scraping-ul le încalcă termenii, se strică la fiecare redesign al paginii, e blocat de
 //     anti-bot și ar pune pe serverul nostru o dependență fragilă de site-uri terțe.
 //   • Un link de căutare cu interogarea corect codificată (encodeURIComponent) nu se strică niciodată:
@@ -14,10 +14,10 @@
 //   • Prețurile sunt ORIENTATIVE (tarife medii de raft, scalate după buget și stil); nu sunt prețuri live.
 //   • Stilul ales (fișa tehnică din `styleSpecs.ts`) și scenariile bifate (chips) aleg *ce* se caută;
 //     geometria alege *cât*.
-import { SPACE_MODES, calculateEngineering, getScope, getSpace, getStyle } from '@/app/data/catalog';
+import { calculateEngineering, getScope, getSpace, getStyle } from '@/app/data/catalog';
 import type { DesignMode, RoomDimensions } from '@/app/types';
 
-import { buildRetailerLinks as buildFrenchRetailerLinks } from '@/app/lib/retailers';
+import { buildRetailerLinks as buildRomanianRetailerLinks } from '@/app/lib/retailers';
 import type { ProcCategory, RetailerLink } from '@/app/lib/retailers';
 
 export type { ProcCategory, RetailerId, RetailerLink } from '@/app/lib/retailers';
@@ -58,13 +58,13 @@ export interface BomResult {
   currency: 'EUR';
 }
 
-// ── Liens enseignes (marché français) ─────────────────────────────────────────
-// Leroy Merlin, Castorama, IKEA France, ManoMano, Brico Dépôt, La Plateforme du Bâtiment, Point.P :
-// routage et traduction FR des requêtes dans app/lib/retailers.ts (miroir de FrenchRetail.cs).
+// ── Linkuri magazine (piața românească) ──────────────────────────────────────
+// Dedeman, Leroy Merlin, Hornbach, Brico Dépôt, IKEA România, Mobexpert: rutarea este în
+// app/lib/retailers.ts (oglinda lui RomanianRetail.cs).
 
-/** Liens de recherche (requête traduite en français et encodée) ; 3 enseignes, les plus pertinentes d'abord. */
+/** Linkuri de căutare (interogarea română, codificată); 3 magazine, cele mai potrivite primele. */
 export function buildRetailerLinks(query: string, category: ProcCategory): RetailerLink[] {
-  return buildFrenchRetailerLinks(query, category);
+  return buildRomanianRetailerLinks(query, category);
 }
 
 // ── Prețuri orientative de raft (€ fără TVA, buget „standard") ────────────────
@@ -293,14 +293,4 @@ export function buildBom(input: BomInput): BomResult {
     });
 
   return { items, total: round2(items.reduce((s, i) => s + i.total, 0)), currency: 'EUR' };
-}
-
-/** Verifică, pentru input nesigur (corp de cerere), că modul și spațiul există. */
-export function isKnownSpace(mode: unknown, spaceType: unknown): mode is DesignMode {
-  return (
-    typeof mode === 'string' &&
-    Object.prototype.hasOwnProperty.call(SPACE_MODES, mode) &&
-    typeof spaceType === 'string' &&
-    SPACE_MODES[mode as DesignMode].spaces.some((s) => s.id === spaceType)
-  );
 }

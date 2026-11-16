@@ -64,7 +64,7 @@ public sealed class B2bEstimateEntity
     public string DocNo { get; set; } = "";
     public string Status { get; set; } = "draft";
     public string Client { get; set; } = "{}";
-    public string Region { get; set; } = "paris";
+    public string Region { get; set; } = "bucharest";
     public string FinishLevel { get; set; } = "standard";
     public decimal AreaM2 { get; set; }
     public int Crew { get; set; } = 1;
@@ -117,6 +117,17 @@ public sealed class AppSettingEntity
     public Guid? UpdatedBy { get; set; }
 }
 
+/// <summary>
+/// EF Core view of the Supabase-owned schema (<c>backend/db/migrations</c>). Used for typed CRUD; queries whose columns
+/// changed type across migrations go through raw SQL in <see cref="ProjectSql"/>.
+/// </summary>
+/// <remarks>
+/// <c>UseSnakeCaseNamingConvention()</c> (registered in <c>DependencyInjection</c>) maps PascalCase members to
+/// PostgreSQL's <c>snake_case</c> (<c>CurrentPeriodEnd</c> ⇒ <c>current_period_end</c>). Columns are nevertheless
+/// declared explicitly below with <c>HasColumnName</c>/<c>HasColumnType</c>: the schema is owned by hand-written SQL, so
+/// pinning names and Postgres types (<c>jsonb</c>, <c>numeric(12,2)</c>, <c>timestamptz</c>) makes any drift fail loudly
+/// instead of being silently re-guessed by a convention. EF migrations are never generated or applied.
+/// </remarks>
 public sealed class SucvarDbContext(DbContextOptions<SucvarDbContext> options) : DbContext(options)
 {
     public DbSet<ProfileEntity> Profiles => Set<ProfileEntity>();

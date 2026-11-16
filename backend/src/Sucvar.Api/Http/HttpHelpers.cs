@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http.Features;
+using Sucvar.Application;
 
 namespace Sucvar.Api.Http;
 
@@ -13,6 +14,21 @@ public static class HttpHelpers
         var body = new Dictionary<string, object?> { ["error"] = error, ["code"] = code };
         if (extra is not null) foreach (var (k, v) in extra) body[k] = v;
         return Results.Json(body, statusCode: status);
+    }
+
+    /// <summary>400 <c>INVALID_JSON</c>: the body could not be parsed as JSON (shared by every write endpoint).</summary>
+    public static IResult InvalidJson() => JsonError(400, "INVALID_JSON", "Cerere invalidă (JSON incorect).");
+
+    /// <summary>
+    /// Last-chance mapping for an endpoint's <c>catch</c> block: an <see cref="AppException"/> is an expected business
+    /// outcome and keeps its status/code; anything else is logged with the route and hidden behind a generic 500, so
+    /// stack traces and SQL details never reach the client.
+    /// </summary>
+    public static IResult HandleError(Exception ex, ILogger logger, string route)
+    {
+        if (ex is AppException app) return JsonError(app.Status, app.Code, app.Message);
+        logger.LogError(ex, "[SUCVAR] {Route}", route);
+        return JsonError(500, "INTERNAL_ERROR", "Operația a eșuat. Încearcă din nou.");
     }
 
     /// <summary>Bilingual 429 with the standard Retry-After header.</summary>

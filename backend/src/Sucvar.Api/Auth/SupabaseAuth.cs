@@ -11,6 +11,7 @@ using Sucvar.Application.Quota;
 
 namespace Sucvar.Api.Auth;
 
+/// <summary>Configuration section <c>Supabase</c>: how incoming access tokens are validated.</summary>
 public sealed class SupabaseOptions
 {
     /// <summary>Project URL, e.g. https://abcd.supabase.co (JWKS + issuer are derived from it).</summary>
@@ -53,6 +54,12 @@ internal sealed class JwksRetriever(string issuer, ILogger logger) : IConfigurat
     }
 }
 
+/// <summary>Registers JWT bearer authentication for Supabase access tokens.</summary>
+/// <remarks>
+/// Supports both Supabase signing modes at once: asymmetric keys (ES256/RS256) discovered from the project's JWKS
+/// endpoint, and the legacy shared HS256 secret. Issuer (<c>{url}/auth/v1</c>), audience (<c>authenticated</c>) and
+/// lifetime are always validated; the API never trusts an unsigned or foreign token.
+/// </remarks>
 public static class SupabaseAuthExtensions
 {
     public static IServiceCollection AddSupabaseJwt(this IServiceCollection services, IConfiguration configuration)
@@ -62,7 +69,9 @@ public static class SupabaseAuthExtensions
 
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
         {
-            options.MapInboundClaims = false; // keep `sub` (user id) and `email` as-is
+            // The default handler rewrites `sub` to the long ClaimTypes.NameIdentifier URI. Every lookup in this API
+            // (RequestAuth, AdminAuthorizationHandler) reads the raw Supabase claim names, so the mapping is disabled.
+            options.MapInboundClaims = false;
             options.RequireHttpsMetadata = supabase.NormalizedUrl?.StartsWith("https://") ?? true;
             var keys = new List<SecurityKey>();
             if (!string.IsNullOrWhiteSpace(supabase.JwtSecret))
@@ -101,7 +110,16 @@ public static class SupabaseAuthExtensions
     }
 }
 
-/// <summary>Resolves the caller from the already-validated JWT (identity comes ONLY from the token).</summary>
+/// <summary>
+/// Resolves the caller from the JWT already validated by the authentication middleware. Identity comes ONLY from the
+/// token; endpoints never accept a user id from the body or query string.
+/// </summary>
+/// <remarks>
+/// Endpoints call this explicitly instead of using <c>RequireAuthorization()</c> so that the monolith's error contract is
+/// preserved: a missing token (401 <c>AUTH_REQUIRED</c>), a rejected token (401 <c>AUTH_INVALID</c>) and an unconfigured
+/// server (500 <c>NOT_CONFIGURED</c>) are distinguishable by the frontend, and some routes (e.g. anonymous generation in
+/// development) must decide for themselves what a missing token means.
+/// </remarks>
 public static class RequestAuth
 {
     public static (TokenState State, AuthUser? User) Resolve(HttpContext ctx)
@@ -133,7 +151,10 @@ public static class RequestAuth
     }
 }
 
-/// <summary>What is configured on this server (the .NET equivalent of getAdmin()'s `missing` list).</summary>
+/// <summary>
+/// Read-only view of which integrations are configured, used to return actionable 500 <c>NOT_CONFIGURED</c> errors and by
+/// the <c>/health</c> configuration check. Never exposes secret values.
+/// </summary>
 public sealed class ServerConfig(IConfiguration configuration, IHostEnvironment env)
 {
     public bool DatabaseConfigured => !string.IsNullOrWhiteSpace(configuration.GetConnectionString("Supabase"));

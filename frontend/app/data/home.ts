@@ -109,12 +109,11 @@ export const CASES: CaseStudy[] = [
 
 // ── Supplier ecosystem ──────────────────────────────────────────────────────
 // Deep-link URL templates: {q} is replaced with the encoded search term.
-// Marché français (Paris & Île-de-France) — mêmes enseignes et mêmes gabarits que app/lib/retailers.ts.
-// Négoce pro (Point.P, La Plateforme du Bâtiment, Brico Dépôt) pour le gros œuvre et les matériaux techniques ;
-// grandes surfaces de bricolage et décoration (Leroy Merlin, Castorama, IKEA France, ManoMano) pour les finitions.
+// Piața românească — aceleași magazine și aceleași șabloane ca app/lib/retailers.ts.
+// Materiale de construcție (Dedeman, Hornbach, Brico Dépôt), finisaje (Leroy Merlin), mobilier (IKEA, Mobexpert).
 
-export const SAMPLE_QUERY = 'parquet contrecollé chêne 14 mm';
-export const SAMPLE_PARAMS = ['chêne', '14 mm', 'couche d’usure 3,5 mm', '+10 % de chute'];
+export const SAMPLE_QUERY = 'parchet stejar triplustratificat 14 mm';
+export const SAMPLE_PARAMS = ['stejar', '14 mm', 'strat uzură 3,5 mm', '+10 % pierderi'];
 
 const supplier = (id: keyof typeof RETAILERS, roleRo: string, roleEn: string, roleFr: string) => ({
   name: RETAILERS[id].label,
@@ -126,13 +125,12 @@ const supplier = (id: keyof typeof RETAILERS, roleRo: string, roleEn: string, ro
 });
 
 export const SUPPLIERS = [
-  supplier('pointp', 'Negoț profesional: gips-carton BA13, izolații, șape', 'Trade counter: BA13 plasterboard, insulation, screeds', 'Négoce pro : plaque de plâtre BA13, isolants, chapes'),
-  supplier('laplateforme', 'Materiale tehnice, gresie, parchet, tencuieli', 'Technical materials, tiles, flooring, renders', 'Matériaux techniques, carrelage, parquet, enduits'),
-  supplier('bricodepot', 'Gros œuvre la prețuri de depozit', 'Structural work at depot prices', 'Gros œuvre et matériaux à prix dépôt'),
+  supplier('dedeman', 'Materiale de construcție, gips-carton, izolații, șape', 'Building materials, plasterboard, insulation, screeds', 'Matériaux de construction, plaques de plâtre, isolants, chapes'),
+  supplier('hornbach', 'Parchet, gresie, faianță, scule profesionale', 'Flooring, tiles and professional tools', 'Parquet, carrelage, outillage professionnel'),
+  supplier('bricodepot', 'Materiale la prețuri de depozit', 'Materials at depot prices', 'Matériaux à prix dépôt'),
   supplier('leroymerlin', 'Finisaje, obiecte sanitare și electrice', 'Finishes, bathroom and electrical', 'Finitions, sanitaire et électricité'),
-  supplier('castorama', 'Decor, vopsele, iluminat', 'Decor, paint and lighting', 'Décoration, peinture et luminaires'),
   supplier('ikea', 'Mobilier, textile, corpuri de iluminat', 'Furniture, textiles and lighting', 'Mobilier, textiles et luminaires'),
-  supplier('manomano', 'Feronerie, accesorii și piese greu de găsit', 'Hardware, fittings and hard-to-find parts', 'Quincaillerie, accessoires et pièces introuvables'),
+  supplier('mobexpert', 'Mobilier și decor premium', 'Premium furniture and decor', 'Mobilier et décoration haut de gamme'),
 ];
 
 export const LOOP_STEPS = [

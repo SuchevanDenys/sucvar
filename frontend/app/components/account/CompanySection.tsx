@@ -82,14 +82,14 @@ export default function CompanySection({
             onChange={(e) => setCurrency(e.target.value === 'RON' ? 'RON' : 'EUR')}
             className={`${inputClass(ui)} cursor-pointer`}
           >
-            <option value="EUR">EUR (€)</option>
             <option value="RON">RON (lei)</option>
+            <option value="EUR">EUR (€)</option>
           </select>
         </Field>
         <Field label={t('TVA implicit (%)', 'Default VAT (%)')} ui={ui}>
           {/* Champ en premier : c'est le contrôle associé au <label> (un clic sur le libellé ne choisit pas de taux). */}
           <input inputMode="decimal" value={vatText} onChange={(e) => setVatText(e.target.value)} className={inputClass(ui, true)} />
-          {/* TVA en 1 clic : 20 % (taux normal) ou 10 % (rénovation > 2 ans) */}
+          {/* TVA dintr-un click: 21 % (cota standard) sau 11 % (cota redusă) */}
           <div role="group" aria-label={t('Cota TVA', 'VAT rate', 'Taux de TVA')} className="flex gap-1.5 mt-1.5">
             {VAT_PRESETS.map((p) => {
               const on = num(vatText) === p.pct;

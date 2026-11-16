@@ -1,8 +1,9 @@
-using Sucvar.Domain.Procurement;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 using Sucvar.Application;
+using Sucvar.Domain;
 using Sucvar.Domain.Portal;
+using Sucvar.Domain.Procurement;
 using Sucvar.Domain.Profile;
 
 namespace Sucvar.Infrastructure.Persistence;
@@ -29,7 +30,7 @@ public sealed class ProfileRepository(SucvarDbContext db, ILogger<ProfileReposit
             if (!await r.ReadAsync(ct)) return null;
             return new ProfileRow(ProjectSql.Str(r, "full_name"), ProjectSql.Str(r, "email"), ProjectSql.Str(r, "avatar_url"),
                 ProjectSql.Date(r, "created_at"),
-                new ProfileDefaults(ProjectSql.Str(r, "default_currency") ?? "EUR", (double)r.GetDecimal(5), (double)r.GetDecimal(6)),
+                new ProfileDefaults(ProjectSql.Str(r, "default_currency") ?? "RON", (double)r.GetDecimal(5), (double)r.GetDecimal(6)),
                 true);
         }
         catch (Exception ex) when (PgErrors.IsMissingColumn(ex))
@@ -133,7 +134,7 @@ public sealed class ProfileRepository(SucvarDbContext db, ILogger<ProfileReposit
                     !r.IsDBNull(7) && r.GetBoolean(7),
                     ClientStatuses.ToClientStatus(ProjectSql.Str(r, "client_status")),
                     ProjectSql.Str(r, "client_feedback") is { Length: > 0 } f ? f : null,
-                    PgErrors.Iso(ProjectSql.Date(r, "client_reviewed_at"))));
+                    IsoTime.Format(ProjectSql.Date(r, "client_reviewed_at"))));
             }
 
             // Material lists: saved ones (migration 006) or recomputed from the saved Studio parameters

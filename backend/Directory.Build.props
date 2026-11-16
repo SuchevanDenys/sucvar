@@ -1,0 +1,23 @@
+<Project>
+  <!--
+    Shared compiler settings for every project under backend/ (src + tests).
+    Individual .csproj files only declare references and project-specific items.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- Nullable-reference diagnostics are bugs, not suggestions: keep the build at zero of them. -->
+    <WarningsAsErrors>$(WarningsAsErrors);nullable</WarningsAsErrors>
+  </PropertyGroup>
+
+  <!--
+    Production assemblies emit their XML documentation so `/// <summary>` blocks and `cref`s are validated
+    by the compiler. CS1591 (missing comment on a public member) is muted on purpose: documentation is written
+    where it carries information, not on every self-explanatory DTO property.
+  -->
+  <PropertyGroup Condition="!$(MSBuildProjectName.EndsWith('.Tests'))">
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+</Project>

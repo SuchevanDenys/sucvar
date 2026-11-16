@@ -44,15 +44,21 @@ async function load(): Promise<AccountRoleState> {
   };
 }
 
+/** Shared, de-duplicated fetch of the caller's role (60 s in-memory cache; `force` bypasses it). */
 export function loadAccountRole(force = false): Promise<AccountRoleState> {
   if (force || !cached || Date.now() - cached.at > TTL_MS) cached = { at: Date.now(), promise: load() };
   return cached.promise;
 }
 
+/** Drops the cached role; called on sign-in / sign-out / account switch. */
 export function invalidateAccountRole(): void {
   cached = null;
 }
 
+/**
+ * Role (`user` | `admin`) and ban state of the signed-in account, for the Navbar ADMIN link, the `/admin` 403 view
+ * and the `/b2b` gate. UX only: the API's `AdminOnly` policy re-reads `profiles.role` on every admin request.
+ */
 export function useAccountRole(): AccountRoleState {
   const [state, setState] = useState<AccountRoleState>(INITIAL);
 

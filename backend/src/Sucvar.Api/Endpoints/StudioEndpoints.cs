@@ -13,7 +13,14 @@ using static Sucvar.Api.Http.HttpHelpers;
 
 namespace Sucvar.Api.Endpoints;
 
-/// <summary>POST /api/generate and POST /api/analyze-materials.</summary>
+/// <summary>
+/// AI Studio: <c>POST /api/generate</c> (image redesign) and <c>POST /api/analyze-materials</c> (bill of materials).
+/// </summary>
+/// <remarks>
+/// The check order mirrors the original contract and is cost-driven: IP rate limit → quota (auth, plan, monthly
+/// limit) → per-user rate limit → body cap → JSON → image validation. Every request rejected before the provider call
+/// is free; a generation is journaled in <c>ai_generations</c> only after the provider actually returned an image.
+/// </remarks>
 public static class StudioEndpoints
 {
     public const int GenerateMaxBodyBytes = AiLimits.MaxImageLength + 100_000;
@@ -75,7 +82,7 @@ public static class StudioEndpoints
 
             var (text, tooLarge) = await ReadBodyTextAsync(ctx, GenerateMaxBodyBytes);
             if (tooLarge is not null) return tooLarge;
-            if (!TryParseJson(text!, out var parsed)) return JsonError(400, "INVALID_JSON", "Cerere invalidă (JSON incorect).");
+            if (!TryParseJson(text!, out var parsed)) return InvalidJson();
             var payload = parsed.ValueKind == JsonValueKind.Object ? parsed : JsonDocument.Parse("{}").RootElement;
 
             // 1. Photo
@@ -194,7 +201,7 @@ public static class StudioEndpoints
 
             var (text, tooLarge) = await ReadBodyTextAsync(ctx, MaterialsMaxBodyBytes);
             if (tooLarge is not null) return tooLarge;
-            if (!TryParseJson(text!, out var body)) return JsonError(400, "INVALID_JSON", "Cerere invalidă (JSON incorect).");
+            if (!TryParseJson(text!, out var body)) return InvalidJson();
             if (body.ValueKind != JsonValueKind.Object) return JsonError(400, "INVALID_BODY", "Corp invalid: se așteaptă un obiect JSON.");
 
             var mode = Js.AsString(Js.Prop(body, "mode"));

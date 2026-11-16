@@ -4,10 +4,11 @@
 "use client";
 
 import React, { useState } from 'react';
-import { ArrowUpRight, Check, PencilLine } from 'lucide-react';
+import { ArrowUpRight, Check, Maximize2, PencilLine } from 'lucide-react';
 import BeforeAfterSlider from '@/app/components/ui/BeforeAfterSlider';
+import ImageLightbox from '@/app/components/ui/ImageLightbox';
 import { getSpace, getStyle, SPACE_MODES } from '@/app/data/catalog';
-import { CATEGORIES, eur } from '@/app/lib/b2b/estimate';
+import { CATEGORIES, lei } from '@/app/lib/b2b/estimate';
 import {
   CLIENT_FEEDBACK_MAX,
   type ClientDecision,
@@ -15,6 +16,7 @@ import {
   type PublicProject,
 } from '@/app/lib/database.types';
 import { submitReview } from '@/app/lib/portal/client';
+import { romanianLinksOnly } from '@/app/lib/procurementNormalize';
 import { EYEBROW, getSkin, ruleClass, swatchClass } from '@/app/lib/theme/skin';
 import { usePrefs } from '@/app/lib/theme/usePrefs';
 import ClientStatusBadge from './ClientStatusBadge';
@@ -34,6 +36,10 @@ export default function PortalView({ project }: { project: PublicProject }) {
   const space = getSpace(project.mode, project.spaceType);
   const modeCfg = SPACE_MODES[project.mode];
   const d = project.dimensions;
+
+  // Previzualizare pe tot ecranul (imaginea întreagă, în rezoluție completă)
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const heroImage = (project.generatedImage ?? project.originalImage) as string | null;
 
   // ── Aprobare ──────────────────────────────────────────────────────────────
   const [status, setStatus] = useState<ClientStatus>(project.clientStatus);
@@ -66,7 +72,11 @@ export default function PortalView({ project }: { project: PublicProject }) {
     .filter((g) => g.rows.length > 0);
 
   // Fișa de preț: pozițiile și totalurile vin calculate de pe server (marja este deja inclusă în prețul liniei).
-  const items = project.items ?? [];
+  // Doar magazine din România: orice link vechi (.fr) venit din cache / API vechi este eliminat.
+  const items = (project.items ?? []).map((m) => {
+    const links = romanianLinksOnly(m.links);
+    return { ...m, links, retailerUrl: links[0]?.url ?? null, retailerName: links[0]?.label ?? null };
+  });
   const pricing = project.pricingBreakdown ?? null;
   const isQuote = pricing?.pricingSource === 'b2b_quote';
   const headlineTotal = pricing ? pricing.grandTotal : project.clientTotal;
@@ -125,15 +135,37 @@ export default function PortalView({ project }: { project: PublicProject }) {
                 afterImg={project.generatedImage as string}
                 beforeLabel={t('Înainte', 'Before')}
                 afterLabel={t('După', 'After')}
+                onExpand={() => setLightboxOpen(true)}
+                expandLabel={t('Ecran complet', 'Full screen')}
               />
-            ) : project.generatedImage || project.originalImage ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={(project.generatedImage ?? project.originalImage) as string} alt={project.title} className="w-full h-[320px] sm:h-[480px] object-cover rounded-md" />
+            ) : heroImage ? (
+              <div className={`relative flex items-center justify-center rounded-md overflow-hidden ${isDark ? 'bg-[#0B0B0C]' : 'bg-white'}`}>
+                {/* eslint-disable-next-line @next/next/no-img-element -- data URL */}
+                <img src={heroImage} alt={project.title} className="w-full h-auto max-h-[75vh] object-contain" />
+                <button
+                  type="button"
+                  onClick={() => setLightboxOpen(true)}
+                  aria-label={t('Ecran complet', 'Full screen')}
+                  className="absolute top-2.5 right-2.5 w-9 h-9 rounded-full bg-white/90 hover:bg-white text-[#111111] border border-[#E5E5E5] flex items-center justify-center shadow-sm cursor-pointer"
+                >
+                  <Maximize2 className="w-4 h-4" />
+                </button>
+              </div>
             ) : (
               <div className={`h-[240px] flex items-center justify-center ${eyebrow}`}>{t('Fără imagine', 'No image')}</div>
             )}
           </div>
           {hasBoth && <p className={`mt-3 ${eyebrow}`}>{t('Trage de cursor pentru a compara', 'Drag the handle to compare')}</p>}
+          {heroImage && (
+            <ImageLightbox
+              open={lightboxOpen}
+              onClose={() => setLightboxOpen(false)}
+              src={heroImage}
+              beforeSrc={hasBoth ? project.originalImage : null}
+              alt={project.title}
+              labels={{ before: t('Înainte', 'Before'), after: t('După', 'After'), close: t('Închide', 'Close'), download: t('Descarcă', 'Download') }}
+            />
+          )}
         </section>
 
         {/* ── Rezumat tehnic ────────────────────────────────────────────── */}
@@ -174,7 +206,7 @@ export default function PortalView({ project }: { project: PublicProject }) {
 
             <div className={cell}>
               <p className={eyebrow}>{t('Deviz estimativ client', 'Client estimate')}</p>
-              <p className={`mt-4 font-mono text-3xl tabular-nums tracking-tight ${sk.strong}`}>{eur(headlineTotal)}</p>
+              <p className={`mt-4 font-mono text-3xl tabular-nums tracking-tight ${sk.strong}`}>{lei(headlineTotal)}</p>
               <p className={`mt-2 text-xs leading-relaxed ${sk.muted}`}>
                 {pricing
                   ? isQuote
@@ -232,8 +264,8 @@ export default function PortalView({ project }: { project: PublicProject }) {
                             )}
                           </div>
                           <span className={`col-span-4 sm:col-span-2 sm:text-right font-mono text-xs tabular-nums ${sk.muted}`}>{qtyFmt(m.quantity)} {unitLabel(m.unit, lang)}</span>
-                          <span className={`col-span-4 sm:col-span-2 text-right font-mono text-xs tabular-nums ${sk.muted}`}>{eur(m.clientUnitPrice)}</span>
-                          <span className={`col-span-4 sm:col-span-3 text-right font-mono tabular-nums ${sk.strong}`}>{eur(m.clientLineTotal)}</span>
+                          <span className={`col-span-4 sm:col-span-2 text-right font-mono text-xs tabular-nums ${sk.muted}`}>{lei(m.clientUnitPrice)}</span>
+                          <span className={`col-span-4 sm:col-span-3 text-right font-mono tabular-nums ${sk.strong}`}>{lei(m.clientLineTotal)}</span>
                         </li>
                       ))}
                     </ul>
@@ -247,21 +279,21 @@ export default function PortalView({ project }: { project: PublicProject }) {
                 <dl className="px-5 py-4 space-y-3 text-sm">
                   <div className="flex items-baseline justify-between gap-4">
                     <dt className={sk.muted}>{t('Materiale', 'Materials')}</dt>
-                    <dd className={`font-mono tabular-nums ${sk.strong}`}>{eur(pricing.materialsSubtotal)}</dd>
+                    <dd className={`font-mono tabular-nums ${sk.strong}`}>{lei(pricing.materialsSubtotal)}</dd>
                   </div>
                   {pricing.laborSubtotal > 0 && (
                     <div className="flex items-baseline justify-between gap-4">
                       <dt className={sk.muted}>{t('Manoperă', 'Labour')}</dt>
-                      <dd className={`font-mono tabular-nums ${sk.strong}`}>{eur(pricing.laborSubtotal)}</dd>
+                      <dd className={`font-mono tabular-nums ${sk.strong}`}>{lei(pricing.laborSubtotal)}</dd>
                     </div>
                   )}
                   <div className="flex items-baseline justify-between gap-4">
                     <dt className={sk.muted}>{t('TVA', 'VAT')} <span className="font-mono tabular-nums">{String(pricing.vatRate).replace('.', ',')} %</span></dt>
-                    <dd className={`font-mono tabular-nums ${sk.muted}`}>{eur(pricing.vatAmount)}</dd>
+                    <dd className={`font-mono tabular-nums ${sk.muted}`}>{lei(pricing.vatAmount)}</dd>
                   </div>
                   <div className={`pt-3 border-t flex items-baseline justify-between gap-4 ${sk.line}`}>
                     <dt className={`${EYEBROW} ${sk.strong}`}>{t('Total estimativ', 'Estimated total')}</dt>
-                    <dd className={`font-mono text-xl tabular-nums tracking-tight ${sk.strong}`}>{eur(pricing.grandTotal)}</dd>
+                    <dd className={`font-mono text-xl tabular-nums tracking-tight ${sk.strong}`}>{lei(pricing.grandTotal)}</dd>
                   </div>
                 </dl>
                 <p className={`px-5 pt-4 border-t text-[11px] font-mono uppercase tracking-[0.14em] ${sk.line} ${sk.dim}`}>
@@ -274,8 +306,8 @@ export default function PortalView({ project }: { project: PublicProject }) {
                         'Official B2B offer: line prices include sourcing, delivery and coordinated execution. Links show equivalent market products.',
                       )
                     : t(
-                        'Estimare orientativă pe prețuri de piață (Leroy Merlin, Castorama, IKEA France, ManoMano, Brico Dépôt, La Plateforme du Bâtiment, Point.P). Oferta finală se confirmă după măsurători.',
-                        'Indicative estimate at market prices (Leroy Merlin, Castorama, IKEA France, ManoMano, Brico Dépôt, La Plateforme du Bâtiment, Point.P). The final offer is confirmed after on-site measurements.',
+                        'Estimare orientativă pe prețuri de piață (Dedeman, Leroy Merlin, Hornbach, Brico Dépôt, IKEA, Mobexpert), afișată în lei. Oferta finală se confirmă după măsurători.',
+                        'Indicative estimate at Romanian market prices (Dedeman, Leroy Merlin, Hornbach, Brico Dépôt, IKEA, Mobexpert), shown in lei. The final offer is confirmed after on-site measurements.',
                       )}
                 </p>
               </aside>

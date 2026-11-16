@@ -1,4 +1,4 @@
-// app/lib/usePlan.ts
+// app/lib/plan/usePlan.ts
 // Hook React: planul contului curent + consumul lunar de generări AI.
 // Se reîmprospătează automat la login/logout, la schimbarea planului,
 // după o generare și când tab-ul primește focus.
@@ -33,6 +33,13 @@ export interface UsePlan {
   refresh: () => Promise<void>;
 }
 
+/**
+ * Current plan and monthly AI usage for UX decisions (badges, disabled buttons, the limit notice).
+ *
+ * Purely advisory: a stale or tampered value can only change what the UI shows — the API re-resolves the effective
+ * tier and quota on every request (`QuotaService`, `RequireAgency`). Refreshes on auth events, on `PLAN_EVENT`
+ * (dispatched after checkout / a generation), cross-tab `storage` changes and when the tab regains focus.
+ */
 export function usePlan(): UsePlan {
   const [info, setInfo] = useState<PlanInfo>(GUEST_PLAN);
   const [used, setUsed] = useState<number>(0);

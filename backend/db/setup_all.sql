@@ -1,10 +1,11 @@
 -- ════════════════════════════════════════════════════════════════════════════════
--- SUCVAR — schema completă, într-un singur fișier (001 + 002 + billing_period + 003 + 004 + 005 + 006 + 007)
+-- SUCVAR — schema completă, într-un singur fișier (001 + 002 + billing_period + 003 + 004 + 005 + 006 + 007 + 008)
 -- Supabase Dashboard → SQL Editor → New query → lipește TOT → Run.
 -- IDEMPOTENT: poate fi rulat de mai multe ori; nu șterge și nu rescrie date existente.
 -- Generat din: licenta-denys/supabase/migrations/001, 002, licenta-denys/sql/billing_period.sql,
 --              backend/db/migrations/003_company_profile_and_vat.sql, 004_user_profile_details.sql,
---              005_admin_panel.sql, 006_project_procurement_items.sql, 007_french_market_defaults.sql
+--              005_admin_panel.sql, 006_project_procurement_items.sql, 007_french_market_defaults.sql,
+--              008_romanian_market_defaults.sql
 -- ════════════════════════════════════════════════════════════════════════════════
 
 
@@ -827,6 +828,34 @@ end $$;
 
 comment on column public.company_profiles.vat_id is 'N° TVA intracommunautaire (ex. FR40303265045) — CUI RO accepté';
 comment on column public.company_profiles.reg_no is 'SIREN (9 chiffres) ou SIRET (14 chiffres)';
+
+commit;
+
+notify pgrst, 'reload schema';
+
+-- ┌──────────────────────────────────────────────────────────────────────────
+-- │ 008_romanian_market_defaults.sql
+-- └──────────────────────────────────────────────────────────────────────────
+begin;
+
+alter table public.b2b_estimates alter column vat_pct set default 21;
+alter table public.b2b_estimates alter column region set default 'bucharest';
+
+do $$
+begin
+  if exists (select 1 from information_schema.columns
+             where table_schema = 'public' and table_name = 'profiles' and column_name = 'default_vat_rate') then
+    alter table public.profiles alter column default_vat_rate set default 21;
+  end if;
+  if exists (select 1 from information_schema.columns
+             where table_schema = 'public' and table_name = 'profiles' and column_name = 'default_currency') then
+    alter table public.profiles alter column default_currency set default 'RON';
+  end if;
+  if to_regclass('public.company_profiles') is not null then
+    comment on column public.company_profiles.vat_id is 'CUI / cod de înregistrare în scopuri de TVA (ex. RO12345678) — TVA intracomunitar UE acceptat';
+    comment on column public.company_profiles.reg_no is 'Nr. de ordine în Registrul Comerțului (ex. J40/1234/2020)';
+  end if;
+end $$;
 
 commit;
 

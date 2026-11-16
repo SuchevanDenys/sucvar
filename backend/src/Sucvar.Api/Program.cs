@@ -73,6 +73,9 @@ var app = builder.Build();
 StartupGuards.Validate(app.Configuration, app.Environment, app.Logger);
 app.Logger.LogInformation("[SUCVAR] .env: {Path}", dotEnvPath ?? "(none — using environment variables / appsettings)");
 
+// Middleware order matters: the exception handler wraps everything so even pipeline failures keep the { error, code }
+// envelope; CORS runs before the rate limiter so rejected cross-origin calls still carry CORS headers the browser can
+// read (Retry-After); authentication precedes authorization so the AdminOnly policy sees the validated principal.
 app.UseExceptionHandler(handler => handler.Run(async ctx =>
 {
     var error = ctx.Features.Get<IExceptionHandlerFeature>()?.Error;

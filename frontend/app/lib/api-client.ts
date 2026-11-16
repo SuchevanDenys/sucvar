@@ -26,15 +26,6 @@ export function apiBaseUrl(): string {
   return trimSlash(publicUrl || DEFAULT_API_URL);
 }
 
-/** Originea API-ului (pentru CSP `connect-src`). */
-export function apiOrigin(): string {
-  try {
-    return new URL(apiBaseUrl()).origin;
-  } catch {
-    return '';
-  }
-}
-
 export interface ApiFetchOptions extends Omit<RequestInit, 'body'> {
   /** true = atașează token-ul sesiunii Supabase curente (dacă există). */
   auth?: boolean;

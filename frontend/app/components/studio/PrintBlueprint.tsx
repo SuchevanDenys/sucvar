@@ -1,5 +1,6 @@
 // app/components/studio/PrintBlueprint.tsx
 // Print-only "Blueprint & Material Passport" (visible only with window.print()).
+import { formatLei } from '@/app/lib/format';
 import React from 'react';
 import SucvarLogo from '@/app/components/layout/SucvarLogo';
 import type { SpecItem } from '@/app/data/catalog';
@@ -60,7 +61,7 @@ export default function PrintBlueprint({
           </p>
         </div>
         {generatedImage && (
-          <img src={generatedImage} alt="Design" className="w-full h-40 object-cover rounded-sm" />
+          <img src={generatedImage} alt="Design" className="w-full h-40 object-contain rounded-sm bg-stone-50" />
         )}
       </div>
 
@@ -87,13 +88,13 @@ export default function PrintBlueprint({
             <tr key={line.id} className="border-b border-stone-200">
               <td className="p-2">{t(line.labelRo, line.labelEn)}</td>
               <td className="p-2 font-mono text-stone-500">{t(line.formulaRo, line.formulaEn)}</td>
-              <td className="p-2 font-mono text-right">{line.total.toLocaleString('fr-FR')} €</td>
+              <td className="p-2 font-mono text-right">{formatLei(line.total, { maximumFractionDigits: 0 })}</td>
             </tr>
           ))}
           <tr className="bg-stone-100 font-semibold">
             <td className="p-2">{t('Total estimat', 'Estimated total')}</td>
-            <td className="p-2 font-mono">{cost.perSqm.toLocaleString('fr-FR')} €/m²</td>
-            <td className="p-2 font-mono text-right">{cost.total.toLocaleString('fr-FR')} €</td>
+            <td className="p-2 font-mono">{formatLei(cost.perSqm, { maximumFractionDigits: 0 })}/m²</td>
+            <td className="p-2 font-mono text-right">{formatLei(cost.total, { maximumFractionDigits: 0 })}</td>
           </tr>
         </tbody>
       </table>

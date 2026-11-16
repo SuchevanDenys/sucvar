@@ -7,7 +7,7 @@ import { Check, Copy, ExternalLink, X } from 'lucide-react';
 import BeforeAfterSlider from '@/app/components/ui/BeforeAfterSlider';
 import { SPACE_MODES, type SpecItem } from '@/app/data/catalog';
 import { calculateEngineering, estimateCost } from '@/app/data/catalog';
-import { formatProjectDate } from '@/app/lib/format';
+import { formatProjectDate, formatLei } from '@/app/lib/format';
 import { getUi } from '@/app/lib/theme/tokens';
 import type { Language, SavedProject } from '@/app/types';
 import { tr } from '@/app/lib/i18n';
@@ -82,7 +82,7 @@ export default function ProjectModal({
           src={(project.generatedImage || project.originalImage) ?? ''}
           alt={project.title}
           referrerPolicy="no-referrer"
-          className="w-full max-h-[420px] object-cover rounded-md border border-neutral-300/40"
+          className="w-full max-h-[70vh] object-contain rounded-md border border-neutral-300/40 bg-neutral-500/5"
         />
       ) : null}
 
@@ -127,16 +127,16 @@ export default function ProjectModal({
                   <p className={`text-[11px] font-mono ${ui.muted}`}>{t(line.formulaRo, line.formulaEn)}</p>
                 </div>
                 <span className="text-sm font-mono font-semibold shrink-0">
-                  {line.total.toLocaleString('fr-FR')} €
+                  {formatLei(line.total, { maximumFractionDigits: 0 })}
                 </span>
               </div>
             ))}
             <div className="px-4 py-3 flex items-center justify-between gap-3">
               <span className="text-xs font-semibold uppercase tracking-widest">
-                {t('Total', 'Total')} · {cost.perSqm.toLocaleString('fr-FR')} €/m²
+                {t('Total', 'Total')} · {formatLei(cost.perSqm, { maximumFractionDigits: 0 })}/m²
               </span>
               <span className={`text-base font-mono font-semibold ${ui.accent}`}>
-                {cost.total.toLocaleString('fr-FR')} €
+                {formatLei(cost.total, { maximumFractionDigits: 0 })}
               </span>
             </div>
           </div>

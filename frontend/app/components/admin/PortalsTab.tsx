@@ -106,7 +106,7 @@ export default function PortalsTab({ ctx }: { ctx: AdminCtx }) {
               <div className={`aspect-[4/3] overflow-hidden ${ctx.isDark ? 'bg-[#1C1C1F]' : 'bg-[#F5F5F5]'}`}>
                 {p.thumbnail ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={p.thumbnail} alt={p.title} loading="lazy" className="w-full h-full object-cover" />
+                  <img src={p.thumbnail} alt={p.title} loading="lazy" className="w-full h-full object-contain" />
                 ) : (
                   <div className={`w-full h-full flex items-center justify-center ${EYEBROW} ${sk.dim}`}>{t('Fără imagine', 'No image')}</div>
                 )}

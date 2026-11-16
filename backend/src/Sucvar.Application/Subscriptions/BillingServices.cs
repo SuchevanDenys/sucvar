@@ -3,6 +3,7 @@ using Sucvar.Domain.Plans;
 
 namespace Sucvar.Application.Subscriptions;
 
+/// <summary>Result of handling one Stripe event (all three are acknowledged to Stripe with 200).</summary>
 public enum WebhookOutcome { Processed, Duplicate, Ignored }
 
 /// <summary>
@@ -16,6 +17,7 @@ public sealed class StripeWebhookProcessor(
     IWebhookIdempotencyStore idempotency,
     ILogger<StripeWebhookProcessor> logger)
 {
+    /// <summary>Handles one verified event exactly once per process; throws to make the endpoint answer 500 so Stripe retries.</summary>
     public async Task<WebhookOutcome> ProcessAsync(WebhookEvent evt, CancellationToken ct = default)
     {
         if (idempotency.WasProcessed(evt.Id)) return WebhookOutcome.Duplicate;
@@ -69,9 +71,10 @@ public sealed class StripeWebhookProcessor(
     }
 }
 
+/// <summary>409 payload when the requested plan is already covered (prevents double billing).</summary>
 public sealed record CheckoutConflict(string Code, string Error, string CurrentTier, string Redirect);
 
-/// <summary>Port of the business half of POST /api/checkout.</summary>
+/// <summary>Creates Stripe Checkout Sessions after the anti double-billing check (<see cref="PlanTiers.CanPurchase"/>).</summary>
 public sealed class CheckoutService(SubscriptionService subscriptions, IStripeGateway stripe)
 {
     /// <summary>Returns either a conflict (409) or the Stripe checkout URL (null = Stripe returned none).</summary>

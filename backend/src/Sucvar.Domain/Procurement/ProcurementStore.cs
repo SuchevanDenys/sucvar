@@ -8,7 +8,7 @@ namespace Sucvar.Domain.Procurement;
 ///
 /// The column is written by the browser (Supabase client, RLS-owned row), so it is UNTRUSTED here:
 /// every field is clamped/truncated and the retailer links are REBUILT from `query` + `procCategory`
-/// (only the French retailer search URLs of FrenchRetail) — a stored URL is never echoed back.
+/// (only the Romanian retailer search URLs of RomanianRetail) — a stored URL is never echoed back.
 /// When the column is NULL (older projects, or migration 006 not applied) the list is recomputed
 /// deterministically with <see cref="BomBuilder"/> from the saved mode / space / style / dimensions.
 /// </summary>

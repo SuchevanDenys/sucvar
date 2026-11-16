@@ -2,7 +2,7 @@
 // Single source of truth for UI language + theme (persisted in localStorage).
 // Backed by useStoredValue (useSyncExternalStore): every component that calls usePrefs() stays in
 // sync, and no setState-in-effect is needed to restore the saved values.
-// Language: French by default (Paris & Île-de-France market); EN and RO stay one click away.
+// Language: Romanian by default (Romanian market); EN and FR stay one click away.
 "use client";
 
 import { useCallback, useEffect, useMemo } from 'react';
@@ -24,6 +24,14 @@ export interface Prefs {
   setTheme: (next: ThemeMode) => void;
 }
 
+/**
+ * UI language and theme, shared by every component through `useSyncExternalStore`.
+ *
+ * Language fallback is trilingual and Romanian-first: nothing stored ⇒ `'ro'` (DEFAULT_LANGUAGE). The bound `t(ro, en, fr?)`
+ * resolves French from the explicit argument, then the FR dictionary keyed by the English string, then English.
+ * The first render on the server and on the client both use the default, so hydration never mismatches; the stored
+ * preference is applied right after mount.
+ */
 export function usePrefs(): Prefs {
   const theme: ThemeMode = useStoredValue(STORAGE_KEYS.theme) === 'dark' ? 'dark' : 'light'; // light gallery = default
   const stored = useStoredValue(STORAGE_KEYS.lang);

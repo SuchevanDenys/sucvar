@@ -150,8 +150,8 @@ public class SmartProcurementTests
         Assert.Contains(prompted, i => i.Id == "proc-led" && i.Query == "banda led profil aluminiu");
         Assert.Contains(prompted, i => i.TitleRo == "Canapea tapițată cu in" && i.Links[0].Retailer == "ikea");
         var black = Assert.Single(prompted, i => i.Id == "proc-vp-matte_black");
-        Assert.StartsWith("https://www.leroymerlin.fr/", black.Links[0].Url); // fixtures → décor/finition lane
-        Assert.Contains("robinetterie%20noir%20mat", black.Links[0].Url);
+        Assert.StartsWith("https://www.dedeman.ro/", black.Links[0].Url); // fixtures → finish lane
+        Assert.Contains("baterie%20negru%20mat", black.Links[0].Url);
         Assert.True(bom.Items.Count <= 10);
     }
 

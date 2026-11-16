@@ -9,8 +9,10 @@ using Sucvar.Infrastructure.Persistence;
 
 namespace Sucvar.Infrastructure;
 
+/// <summary>Composition of the Infrastructure layer: PostgreSQL repositories, Stripe, AI providers and image processing.</summary>
 public static class DependencyInjection
 {
+    /// <summary>Binds every Application port to its adapter and configures resilient outbound HTTP clients.</summary>
     public static IServiceCollection AddSucvarInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         var connectionString = configuration.GetConnectionString("Supabase") ?? "";

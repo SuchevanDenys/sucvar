@@ -63,7 +63,3 @@ export async function fetchSubscriptionInfo(): Promise<SubscriptionInfo> {
     return STARTER_INFO;
   }
 }
-
-export async function fetchSubscriptionTier(): Promise<PlanTier> {
-  return (await fetchSubscriptionInfo()).tier;
-}

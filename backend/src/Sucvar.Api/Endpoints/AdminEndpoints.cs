@@ -69,7 +69,7 @@ public static class AdminEndpoints
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return B2bEndpoints.HandleError(ex, logger, "/api/admin/overview");
+            return HandleError(ex, logger, "/api/admin/overview");
         }
     }
 
@@ -97,7 +97,7 @@ public static class AdminEndpoints
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return B2bEndpoints.HandleError(ex, logger, "/api/admin/users");
+            return HandleError(ex, logger, "/api/admin/users");
         }
     }
 
@@ -111,7 +111,7 @@ public static class AdminEndpoints
 
             var (text, tooLarge) = await ReadBodyTextAsync(ctx, PatchMaxBodyBytes);
             if (tooLarge is not null) return tooLarge;
-            if (!TryParseJson(text!, out var body)) return JsonError(400, "INVALID_JSON", "Cerere invalidă (JSON incorect).");
+            if (!TryParseJson(text!, out var body)) return InvalidJson();
             var parsed = AdminUserPatchParser.Parse(body);
             if (!parsed.Ok) return JsonError(400, parsed.Code!, parsed.Error!);
 
@@ -119,7 +119,7 @@ public static class AdminEndpoints
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return B2bEndpoints.HandleError(ex, logger, "/api/admin/users/{id}");
+            return HandleError(ex, logger, "/api/admin/users/{id}");
         }
     }
 
@@ -132,7 +132,7 @@ public static class AdminEndpoints
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return B2bEndpoints.HandleError(ex, logger, "/api/admin/public-projects");
+            return HandleError(ex, logger, "/api/admin/public-projects");
         }
     }
 
@@ -148,7 +148,7 @@ public static class AdminEndpoints
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return B2bEndpoints.HandleError(ex, logger, "/api/admin/public-projects/{id}/unpublish");
+            return HandleError(ex, logger, "/api/admin/public-projects/{id}/unpublish");
         }
     }
 
@@ -161,7 +161,7 @@ public static class AdminEndpoints
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return B2bEndpoints.HandleError(ex, logger, "/api/admin/audit-logs");
+            return HandleError(ex, logger, "/api/admin/audit-logs");
         }
     }
 
@@ -173,7 +173,7 @@ public static class AdminEndpoints
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return B2bEndpoints.HandleError(ex, logger, "/api/admin/settings");
+            return HandleError(ex, logger, "/api/admin/settings");
         }
     }
 
@@ -185,12 +185,12 @@ public static class AdminEndpoints
             if (limiter.Check(AdminWrite, caller.UserId) is { } wait) return TooManyRequests(ctx, wait);
             var (text, tooLarge) = await ReadBodyTextAsync(ctx, SettingsMaxBodyBytes);
             if (tooLarge is not null) return tooLarge;
-            if (!TryParseJson(text!, out var body)) return JsonError(400, "INVALID_JSON", "Cerere invalidă (JSON incorect).");
+            if (!TryParseJson(text!, out var body)) return InvalidJson();
             return Results.Json(await settings.UpdateAsync(caller, body, ctx.RequestAborted));
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return B2bEndpoints.HandleError(ex, logger, "/api/admin/settings");
+            return HandleError(ex, logger, "/api/admin/settings");
         }
     }
 

@@ -34,6 +34,10 @@ interface SpaceScenarioPanelProps {
   onLayoutChange: (layoutId: string) => void;
   onToggleFocus: (id: string) => void;
   onScopeChange: (scope: ScopeLevel) => void;
+  /** false = categoria și tipul de spațiu sunt alese în altă parte (Studio: RoomStylePicker). */
+  showSpacePicker?: boolean;
+  /** false = fără chenar propriu (inclus într-o secțiune existentă). */
+  framed?: boolean;
 }
 
 export default function SpaceScenarioPanel({
@@ -52,6 +56,8 @@ export default function SpaceScenarioPanel({
   onLayoutChange,
   onToggleFocus,
   onScopeChange,
+  showSpacePicker = true,
+  framed = true,
 }: SpaceScenarioPanelProps) {
   const sk = getSkin(isDark);
   const t = (ro: string, en: string, fr?: string) => tr(lang, ro, en, fr);
@@ -66,12 +72,14 @@ export default function SpaceScenarioPanel({
   const activeScope = getScope(scope);
 
   return (
-    <section className={`border rounded-md ${sk.card}`}>
+    <section className={framed ? `border rounded-md ${sk.card}` : ''}>
+      {framed && (
       <div className={`px-4 h-9 flex items-center justify-between border-b ${sk.line} ${eyebrow}`}>
         <span>{t('Spațiu & scenariu', 'Space & scenario')}</span>
         <span className="tabular-nums">{focusIds.length}/{MAX_FOCUS_CHIPS}</span>
       </div>
-      <div className="p-4 space-y-4">
+      )}
+      <div className={framed ? 'p-4 space-y-4' : 'space-y-4'}>
         <label className="block space-y-1.5">
           <span className={eyebrow}>{t('Nume proiect', 'Project name')}</span>
           <input
@@ -86,6 +94,7 @@ export default function SpaceScenarioPanel({
 
         {/* Categorie → tip de spațiu → configurație */}
         <div className="space-y-3">
+          {showSpacePicker && (<>
           <div className={`flex border rounded-md overflow-hidden divide-x ${sk.line} ${sk.divide}`}>
             {MODE_IDS.map((m) => (
               <button key={m} type="button" aria-pressed={mode === m} onClick={() => onModeChange(m)} className={seg(mode === m)}>
@@ -100,6 +109,7 @@ export default function SpaceScenarioPanel({
               </option>
             ))}
           </select>
+          </>)}
           <select value={layoutId} onChange={(e) => onLayoutChange(e.target.value)} className={fieldCls} aria-label={t('Configurație', 'Layout')}>
             {space.layouts.map((l) => (
               <option key={l.id} value={l.id} className={sk.option}>

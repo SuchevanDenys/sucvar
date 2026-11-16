@@ -1,17 +1,19 @@
-using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Sucvar.Application.Quota;
+using Sucvar.Domain;
 using Sucvar.Domain.Admin;
 using Sucvar.Domain.Plans;
 
 namespace Sucvar.Application.Admin;
 
+/// <summary>Users per effective plan.</summary>
 public sealed record SubscribersByPlan(int Starter, int Pro, int Agency);
 
 /// <summary>`database`: ok | down · `stripe`: ok | not_configured · `replicate`: ok | demo | not_configured.</summary>
 public sealed record SystemHealth(string Database, string Stripe, string Replicate, string AiProvider);
 
+/// <summary>Dashboard payload of <c>GET /api/admin/overview</c>. Revenue/cost figures are estimates, not accounting data.</summary>
 public sealed record AdminOverview(
     int TotalUsers,
     int NewUsersLast30Days,
@@ -55,9 +57,11 @@ public sealed record AdminUserView(
     string? CreatedAt);
 
 /// <summary>
-/// /api/admin/**: platform KPIs, user & subscription management, public-portal moderation, audit log.
-/// Every mutation is written together with its admin_audit_logs row (one transaction in the repository).
-/// Self-protection: an admin can never ban or demote their own account (400 SELF_PROTECTION).
+/// Use cases behind <c>/api/admin/**</c>: platform KPIs, user and subscription management, public-portal
+/// moderation and the audit log. Every mutation is persisted together with its <c>admin_audit_logs</c> rows in a
+/// single repository transaction, so the journal can never disagree with the data it describes.
+/// Self-protection: an admin can never ban or demote their own account (400 <c>SELF_PROTECTION</c>) — this is
+/// what guarantees the platform always keeps at least the administrator performing the action.
 /// </summary>
 public sealed class AdminService(
     IAdminRepository repository,
@@ -78,6 +82,10 @@ public sealed class AdminService(
 
     // ── Overview ───────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Builds the KPI dashboard. Degrades instead of failing: if the database is unreachable the counters are zero and
+    /// <c>SystemHealth.Database</c> reports <c>down</c>, so the page still renders and shows the outage.
+    /// </summary>
     public async Task<AdminOverview> GetOverviewAsync(CancellationToken ct = default)
     {
         var now = clock.GetUtcNow();
@@ -133,7 +141,7 @@ public sealed class AdminService(
             counts.PublicProjects,
             counts.TotalB2bEstimates,
             new SystemHealth(databaseOk ? "ok" : "down", stripe.IsConfigured ? "ok" : "not_configured", replicate, provider.Id),
-            Iso(now)!);
+            IsoTime.Format(now));
     }
 
     private async Task<bool> SafePingAsync(CancellationToken ct)
@@ -151,6 +159,7 @@ public sealed class AdminService(
 
     // ── Users ──────────────────────────────────────────────────────────────────
 
+    /// <summary>Paginated, filterable user list with effective plan and quota resolved per row.</summary>
     public async Task<PagedResult<AdminUserView>> ListUsersAsync(AdminUserQuery query, CancellationToken ct = default)
     {
         var now = clock.GetUtcNow();
@@ -159,9 +168,14 @@ public sealed class AdminService(
         return new PagedResult<AdminUserView>(rows.Items.Select(r => ToView(r, platform, now)).ToList(), rows.Total, rows.Page, rows.PageSize);
     }
 
+    /// <summary>
+    /// Applies a moderation patch (plan grant, quota adjustment, role change, ban) to <paramref name="targetId"/>.
+    /// Only fields that actually change produce an audit entry; a no-op patch writes nothing and returns the current view.
+    /// </summary>
+    /// <exception cref="AppException">400 <c>SELF_PROTECTION</c> when an admin bans or demotes themself; 404 when the user is missing.</exception>
     public async Task<AdminUserView> UpdateUserAsync(AuthUser admin, Guid targetId, AdminUserPatch patch, CancellationToken ct = default)
     {
-        var adminId = Guid.Parse(admin.UserId);
+        var adminId = admin.Id;
         if (targetId == adminId && (patch.IsBanned == true || patch.Role == Roles.User))
         {
             throw new AppException(400, "SELF_PROTECTION",
@@ -238,6 +252,7 @@ public sealed class AdminService(
         return ToView(after, platform, now);
     }
 
+    /// <summary>Projects a raw row to the admin view, resolving the effective tier and the quota limit at <paramref name="now"/>.</summary>
     public static AdminUserView ToView(AdminUserRow r, PlatformSettings platform, DateTimeOffset now)
     {
         var effective = PlanTiers.ResolveEffectiveTier(r.SubscriptionTier, r.CurrentPeriodEnd, now);
@@ -250,7 +265,7 @@ public sealed class AdminService(
             effective,
             PlanTiers.NormalizeTier(r.SubscriptionTier),
             paid ? PlanTiers.NormalizeInterval(r.BillingInterval) : null,
-            Iso(r.CurrentPeriodEnd),
+            IsoTime.Format(r.CurrentPeriodEnd),
             paid && r.CancelAtPeriodEnd,
             r.HasStripeSubscription,
             Roles.IsValid(r.Role) ? r.Role : Roles.User,
@@ -259,9 +274,9 @@ public sealed class AdminService(
             r.GenerationsUsed,
             QuotaPolicy.Limit(effective, platform, r.BonusGenerations),
             r.BonusGenerations,
-            Iso(r.QuotaResetAt),
+            IsoTime.Format(r.QuotaResetAt),
             r.ProjectsCount,
-            Iso(r.CreatedAt));
+            IsoTime.Format(r.CreatedAt));
     }
 
     // ── Public portals ─────────────────────────────────────────────────────────
@@ -269,9 +284,10 @@ public sealed class AdminService(
     public Task<PagedResult<AdminPublicProject>> ListPublicProjectsAsync(string? search, int page, int pageSize, CancellationToken ct = default) =>
         repository.ListPublicProjectsAsync(search, page, pageSize, ct);
 
+    /// <summary>Moderation takedown: revokes a public portal link (audited). 404 when missing or already private.</summary>
     public async Task UnpublishAsync(AuthUser admin, string projectId, CancellationToken ct = default)
     {
-        var adminId = Guid.Parse(admin.UserId);
+        var adminId = admin.Id;
         var entry = new AuditEntry(adminId, admin.Email, AuditActions.UnpublishProject, AuditTargets.Project, projectId,
             JsonSerializer.Serialize(new { isPublic = false }, Json));
         if (!await repository.UnpublishProjectAsync(projectId, entry, ct))
@@ -285,7 +301,4 @@ public sealed class AdminService(
         repository.ListAuditLogsAsync(page, pageSize, ct);
 
     private static decimal Money(decimal value) => Math.Round(value, 2, MidpointRounding.AwayFromZero);
-
-    private static string? Iso(DateTimeOffset? d) =>
-        d?.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss.ffffffzzz", CultureInfo.InvariantCulture);
 }

@@ -180,7 +180,7 @@ public class EstimateEndpointTests : IClassFixture<SucvarApiFactory>
         var estimate = (await put.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("estimate");
         Assert.Equal("DV-9", estimate.GetProperty("docNo").GetString());
         Assert.Equal("p-42", estimate.GetProperty("projectId").GetString());
-        Assert.Equal(20, estimate.GetProperty("vatPct").GetDouble()); // TVA taux normal (migration 007)
+        Assert.Equal(21, estimate.GetProperty("vatPct").GetDouble()); // cota standard TVA (migration 008)
         Assert.True(estimate.TryGetProperty("rateOverride", out _));
 
         var list = await client.GetFromJsonAsync<JsonElement>("/api/b2b/estimates");

@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Npgsql;
 using Sucvar.Application;
 using Sucvar.Application.Admin;
+using Sucvar.Domain;
 using Sucvar.Domain.Admin;
 using Sucvar.Domain.Portal;
 
@@ -384,7 +385,7 @@ public sealed class AdminRepository(SucvarDbContext db, ILogger<AdminRepository>
                     ProjectSql.Str(r, "owner_email"),
                     ClientStatuses.ToClientStatus(ProjectSql.Str(r, "client_status")),
                     ProjectSql.Str(r, "client_feedback") is { Length: > 0 } f ? f : null,
-                    PgErrors.Iso(ProjectSql.Date(r, "client_reviewed_at")),
+                    IsoTime.Format(ProjectSql.Date(r, "client_reviewed_at")),
                     r.GetString(8),
                     ProjectSql.Str(r, "thumbnail")));
             }
@@ -443,7 +444,7 @@ public sealed class AdminRepository(SucvarDbContext db, ILogger<AdminRepository>
                 .ToListAsync(ct);
             var items = rows.Select(x => new AuditLogEntry(
                 x.Id.ToString(), x.AdminUserId.ToString(), x.AdminEmail, x.Action, x.TargetType, x.TargetId,
-                ParseDetails(x.Details), PgErrors.Iso(x.CreatedAt))).ToList();
+                ParseDetails(x.Details), IsoTime.Format(x.CreatedAt))).ToList();
             return new PagedResult<AuditLogEntry>(items, total, page, pageSize);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

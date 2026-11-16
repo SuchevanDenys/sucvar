@@ -36,7 +36,9 @@ import {
   CATEGORIES,
   TEMPLATES,
   round2,
-  eur,
+  lei,
+  ronInput,
+  eurFromRonInput,
   clampNum,
   uid,
   download,
@@ -47,9 +49,9 @@ import {
   type InvoiceLine,
   DEFAULT_REGION,
   DEFAULT_VAT,
-  VAT_PRESETS,
 } from '@/app/lib/b2b/estimate';
 import EnterpriseGate from '@/app/components/b2b/EnterpriseGate';
+import PricingConsole from '@/app/components/b2b/PricingConsole';
 import PrintDeviz, { type PrintProject } from '@/app/components/b2b/PrintDeviz';
 import { buildCsv, buildFacturX } from '@/app/lib/b2b/exports';
 import { fetchProjectsFromDb, saveProjectToDb } from '@/app/lib/supabase/projects';
@@ -153,7 +155,7 @@ export default function B2BPage() {
     };
   }, [canLoad]);
 
-  // TVA par défaut du profil (/account : 20 % ou 10 %) pour les nouveaux devis ; un devis enregistré garde la sienne.
+  // TVA implicită din profil (/account: 21 % sau 11 %) pentru devizele noi; un deviz salvat își păstrează cota.
   const vatFromProfile = useRef(false);
   useEffect(() => {
     if (!canLoad || vatFromProfile.current) return;
@@ -322,7 +324,6 @@ export default function B2BPage() {
   // ── Shared classes ──────────────────────────────────────────────────────
   const field = `h-9 px-2.5 rounded-sm border text-sm w-full transition-colors ${sk.input}`;
   const numField = `${field} font-mono tabular-nums text-right`;
-  const range = `w-full accent-[var(--foreground)]`;
   const panel = `relative border rounded-md ${sk.card}`;
   const panelHead = `flex items-center justify-between px-5 h-9 border-b ${sk.line} ${eyebrow}`;
   const lbl = (s: string) => <span className={`block mb-1 ${eyebrow}`}>{s}</span>;
@@ -416,7 +417,7 @@ export default function B2BPage() {
                           <div className={`relative h-24 w-full overflow-hidden flex items-center justify-center ${sk.cell}`}>
                             {p.generatedImage ? (
                               // eslint-disable-next-line @next/next/no-img-element
-                              <img src={p.generatedImage} alt="" loading="lazy" className="w-full h-full object-cover" />
+                              <img src={p.generatedImage} alt="" loading="lazy" className="w-full h-full object-contain" />
                             ) : (
                               <FolderOpen className={`w-5 h-5 ${sk.dim}`} />
                             )}
@@ -512,7 +513,7 @@ export default function B2BPage() {
                       <th className="px-2 py-2.5 font-normal text-right">{t('Arie m²', 'Scope m²')}</th>
                       <th className="px-2 py-2.5 font-normal text-right">h/m²</th>
                       <th className="px-2 py-2.5 font-normal text-right">{t('Ore', 'Hours')}</th>
-                      <th className="px-2 py-2.5 font-normal text-right">€/h</th>
+                      <th className="px-2 py-2.5 font-normal text-right">lei/h</th>
                       <th className="px-5 py-2.5 font-normal text-right">{t('Cost', 'Cost')}</th>
                     </tr>
                   </thead>
@@ -526,9 +527,9 @@ export default function B2BPage() {
                         <td className={`px-2 py-2.5 text-right font-mono tabular-nums ${sk.dim}`}>{(l.hoursPerM2 * levelK).toFixed(2)}</td>
                         <td className={`px-2 py-2.5 text-right font-mono tabular-nums ${sk.muted}`}>{l.hours.toFixed(1)}</td>
                         <td className="px-2 py-2.5 w-24">
-                          <input type="number" min={0} step="0.5" value={l.rate} onChange={(e) => setRateOverride((p) => ({ ...p, [l.id]: clampNum(e.target.value) }))} className={numField} aria-label={`${l.en} rate`} />
+                          <input type="number" min={0} step="0.5" value={ronInput(l.rate)} onChange={(e) => setRateOverride((p) => ({ ...p, [l.id]: eurFromRonInput(e.target.value) }))} className={numField} aria-label={`${l.en} rate`} />
                         </td>
-                        <td className={`px-5 py-2.5 text-right font-mono tabular-nums ${sk.strong}`}>{eur(l.cost)}</td>
+                        <td className={`px-5 py-2.5 text-right font-mono tabular-nums ${sk.strong}`}>{lei(l.cost)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -537,7 +538,7 @@ export default function B2BPage() {
                       <td className={`px-5 py-3 ${eyebrow}`} colSpan={3}>{t('Total manoperă', 'Labor total')}</td>
                       <td className={`px-2 py-3 text-right font-mono tabular-nums ${sk.muted}`}>{laborHours.toFixed(1)}</td>
                       <td />
-                      <td className={`px-5 py-3 text-right font-mono tabular-nums font-medium ${sk.strong}`}>{eur(laborTotal)}</td>
+                      <td className={`px-5 py-3 text-right font-mono tabular-nums font-medium ${sk.strong}`}>{lei(laborTotal)}</td>
                     </tr>
                   </tfoot>
                 </table>
@@ -579,7 +580,7 @@ export default function B2BPage() {
                     <div key={cat.id} className={`border-b last:border-b-0 ${sk.line}`}>
                       <div className={`flex items-center justify-between px-5 h-9 ${eyebrow} ${sk.strong}`}>
                         <span>{t(cat.ro, cat.en)}</span>
-                        <span className="font-mono normal-case tracking-normal">{eur(totalByCat[cat.id] ?? 0)}</span>
+                        <span className="font-mono normal-case tracking-normal">{lei(totalByCat[cat.id] ?? 0)}</span>
                       </div>
                       <div className={`divide-y ${sk.divide}`}>
                         {rows.map((i) => (
@@ -587,8 +588,8 @@ export default function B2BPage() {
                             <input type="text" value={tr(lang, i.ro, i.en)} onChange={(e) => updateItem(i.id, tr(lang, { ro: e.target.value }, { en: e.target.value }))} placeholder={t('Descriere…', 'Description…')} className={`${field} col-span-12 sm:col-span-5`} />
                             <input type="text" value={i.unit} onChange={(e) => updateItem(i.id, { unit: e.target.value })} className={`${field} col-span-3 sm:col-span-1`} aria-label="Unit" />
                             <input type="number" min={0} step="0.5" value={i.qty} onChange={(e) => updateItem(i.id, { qty: clampNum(e.target.value) })} className={`${numField} col-span-3 sm:col-span-2`} aria-label="Quantity" />
-                            <input type="number" min={0} step="0.5" value={i.price === 0 ? '' : i.price} placeholder="0" onChange={(e) => updateItem(i.id, { price: clampNum(e.target.value) })} className={`${numField} col-span-4 sm:col-span-2`} aria-label="Unit price" />
-                            <span className={`hidden sm:block col-span-1 text-right font-mono text-xs tabular-nums ${sk.muted}`}>{(i.qty * i.price).toFixed(0)}</span>
+                            <input type="number" min={0} step="0.5" value={i.price === 0 ? '' : ronInput(i.price)} placeholder="0" onChange={(e) => updateItem(i.id, { price: eurFromRonInput(e.target.value) })} className={`${numField} col-span-4 sm:col-span-2`} aria-label="Unit price" />
+                            <span className={`hidden sm:block col-span-1 text-right font-mono text-xs tabular-nums ${sk.muted}`}>{ronInput(i.qty * i.price).toFixed(0)}</span>
                             <button type="button" onClick={() => removeItem(i.id)} aria-label={t('Șterge linia', 'Delete line')} className={`col-span-2 sm:col-span-1 inline-flex h-9 items-center justify-center rounded-sm cursor-pointer touch-manipulation ${sk.dim} ${sk.rowHover}`}>
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -630,95 +631,20 @@ export default function B2BPage() {
           </div>
 
           {/* ── RIGHT: sticky pricing console ───────────────────────────── */}
-          <aside className="lg:col-span-4 lg:sticky lg:top-20 space-y-6">
-            <section className={panel}>
-              <div className={panelHead}>
-                <span>{t('Marjă și preț final', 'Margin and final price')}</span>
-                <LiveDot label={t('În timp real', 'Live')} className={sk.dim} />
-              </div>
-              <div className="p-5 space-y-5">
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className={eyebrow}>{t('Marjă de profit', 'Profit margin')}</span>
-                    <span className={`font-mono text-sm tabular-nums ${sk.accent}`}>{margin}%</span>
-                  </div>
-                  <input type="range" min={10} max={25} step={1} value={margin} onChange={(e) => setMargin(Number(e.target.value))} className={range} aria-label="Profit margin" />
-                  <div className={`flex justify-between font-mono text-[10px] ${sk.dim}`}><span>10%</span><span>25%</span></div>
-                </div>
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className={eyebrow}>{t('Contingență', 'Contingency')}</span>
-                    <span className={`font-mono text-sm tabular-nums ${sk.accent}`}>{contingency}%</span>
-                  </div>
-                  <input type="range" min={0} max={15} step={1} value={contingency} onChange={(e) => setContingency(Number(e.target.value))} className={range} aria-label="Contingency" />
-                  <div className={`flex justify-between font-mono text-[10px] ${sk.dim}`}><span>0%</span><span>15%</span></div>
-                </div>
-                <div className="block">
-                  {lbl(t('TVA (%)', 'VAT (%)'))}
-                  {/* TVA en 1 clic : 20 % (taux normal) ou 10 % (rénovation d’un logement de plus de 2 ans) */}
-                  <div role="group" aria-label={t('Cota TVA', 'VAT rate', 'Taux de TVA')} className={`grid grid-cols-2 gap-px border mb-2 ${sk.line} ${sk.gap}`}>
-                    {VAT_PRESETS.map((p) => (
-                      <button
-                        key={p.pct}
-                        type="button"
-                        onClick={() => setVat(p.pct)}
-                        aria-pressed={vat === p.pct}
-                        className={`px-3 py-2 text-left cursor-pointer touch-manipulation transition-colors ${vat === p.pct ? sk.segOn : `${sk.cell} ${sk.segOff}`}`}
-                      >
-                        <span className="block font-mono text-xs tabular-nums">{t(p.ro, p.en, p.fr)}</span>
-                        <span className="block text-[10px] opacity-70">{t(p.hintRo, p.hintEn, p.hintFr)}</span>
-                      </button>
-                    ))}
-                  </div>
-                  <input type="number" min={0} max={100} step="0.1" value={vat} onChange={(e) => setVat(clampNum(e.target.value, 0, 100))} className={numField} aria-label={t('TVA personalizată (%)', 'Custom VAT (%)', 'TVA personnalisée (%)')} />
-                </div>
-              </div>
-
-              <dl className={`border-t divide-y text-sm ${sk.line} ${sk.divide}`}>
-                {[
-                  [t('Manoperă', 'Labor'), laborTotal],
-                  [t('Linii articole', 'Item lines'), itemsTotal],
-                  [`${t('Contingență', 'Contingency')} ${contingency}%`, contingencyAmt],
-                  [`${t('Marjă', 'Margin')} ${margin}%`, marginAmt],
-                ].map(([k, v]) => (
-                  <div key={String(k)} className="flex items-center justify-between px-5 py-2.5">
-                    <dt className={sk.muted}>{k}</dt>
-                    <dd className={`font-mono tabular-nums ${sk.strong}`}>{eur(v as number)}</dd>
-                  </div>
-                ))}
-                <div className="flex items-center justify-between px-5 py-3">
-                  <dt className={eyebrow}>{t('Total fără TVA', 'Net total')}</dt>
-                  <dd className={`font-mono tabular-nums text-lg font-medium ${sk.strong}`}>{eur(net)}</dd>
-                </div>
-                <div className="flex items-center justify-between px-5 py-2.5">
-                  <dt className={sk.muted}>{t('TVA', 'VAT')} {String(vat).replace('.', ',')} %</dt>
-                  <dd className={`font-mono tabular-nums ${sk.muted}`}>{eur(vatAmt)}</dd>
-                </div>
-                <div className="flex items-center justify-between px-5 py-3">
-                  <dt className={eyebrow}>{t('Total cu TVA', 'Gross total')}</dt>
-                  <dd className={`font-mono tabular-nums text-xl font-medium ${sk.accent}`}>{eur(gross)}</dd>
-                </div>
-              </dl>
-            </section>
-
-            <section className={panel}>
-              <div className={panelHead}><span>{t('Durată estimată', 'Estimated schedule')}</span></div>
-              <div className="p-5 flex items-end justify-between">
-                <div>
-                  <p className={`font-mono text-3xl tabular-nums tracking-tight ${sk.strong}`}>{workDays}</p>
-                  <p className={`mt-1 text-xs ${sk.dim}`}>{t('zile lucrătoare', 'working days')} · {crew} {t('persoane', 'people')} · 8 h</p>
-                </div>
-                <p className={`font-mono text-xs tabular-nums ${sk.muted}`}>{laborHours.toFixed(0)} h</p>
-              </div>
-            </section>
-
-            <p className={`text-[11px] leading-snug ${sk.dim}`}>
-              {t(
-                'Factur-X: exportul generează XML-ul CII (EN 16931) pentru a fi încorporat într-un PDF/A-3 de sistemul tău de facturare. Pentru facturile B2B din România, e-Factura (RO CIUS) rămâne canalul oficial.',
-                'Factur-X: the export generates the CII (EN 16931) XML, to be embedded in a PDF/A-3 by your invoicing system. For Romanian B2B invoices, e-Factura (RO CIUS) remains the official channel.',
-              )}
-            </p>
-          </aside>
+          <PricingConsole
+            lang={lang}
+            isDark={isDark}
+            margin={margin}
+            onMarginChange={setMargin}
+            contingency={contingency}
+            onContingencyChange={setContingency}
+            vat={vat}
+            onVatChange={setVat}
+            totals={{ laborTotal, itemsTotal, contingencyAmt, marginAmt, net, vatAmt, gross }}
+            workDays={workDays}
+            crew={crew}
+            laborHours={laborHours}
+          />
         </div>
       </div>
 

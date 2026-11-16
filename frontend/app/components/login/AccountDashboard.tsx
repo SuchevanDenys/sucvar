@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { ArrowRight, ExternalLink, Layers, LogOut, Plus, Trash2, UserCheck } from 'lucide-react';
 import { calculateEngineering, getStyle } from '@/app/data/catalog';
 import ProcurementList from '@/app/components/archive/ProcurementList';
-import { formatProjectDate } from '@/app/lib/format';
+import { formatProjectDate, formatLei } from '@/app/lib/format';
 import { buildBom } from '@/app/lib/procurement';
 import type { UsePlan } from '@/app/lib/plan/usePlan';
 import { getUi } from '@/app/lib/theme/tokens';
@@ -231,7 +231,7 @@ export default function AccountDashboard({
                       src={previewImage}
                       alt={project.title}
                       referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                      className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-[1.02]"
                     />
                   ) : (
                     <div className="w-full h-full flex flex-col items-center justify-center gap-2 px-4 text-center">
@@ -265,7 +265,7 @@ export default function AccountDashboard({
                     </p>
                     {project.totalBudget > 0 && (
                       <p className={`text-xs font-mono mt-0.5 ${ui.accent}`}>
-                        ≈ {project.totalBudget.toLocaleString('fr-FR')} €
+                        ≈ {formatLei(project.totalBudget, { maximumFractionDigits: 0 })}
                       </p>
                     )}
                   </div>
