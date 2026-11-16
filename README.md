@@ -14,6 +14,18 @@ client approval links.
 
 ---
 
+## Quick start (whole stack, one terminal)
+
+After the one-time setup below (database, `backend/.env`, `frontend/.env.local`):
+
+```bash
+./dev.sh        # or: pnpm dev  (from the repo root)
+```
+
+Starts the API with `dotnet watch` on `http://localhost:5080` and Next.js on `http://localhost:3000`, with `[API]` / `[WEB]` prefixed logs. `Ctrl+C` once stops both and frees the ports. `./dev.sh --no-watch` uses plain `dotnet run`.
+
+---
+
 ## Prerequisites
 
 | Tool | Version |

@@ -1,0 +1,10 @@
+{
+  "name": "sucvar",
+  "private": true,
+  "description": "SUCVAR monorepo root — dev orchestration only (frontend/ and backend/ keep their own tooling).",
+  "scripts": {
+    "dev": "./dev.sh",
+    "dev:no-watch": "./dev.sh --no-watch"
+  },
+  "packageManager": "pnpm@12.11.2"
+}
