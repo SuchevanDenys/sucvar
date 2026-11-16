@@ -49,6 +49,10 @@ const nextConfig: NextConfig = {
   },
   cacheComponents: true,
   partialPrefetching: true,
+  experimental: {
+    // Set by `next upgrade --agent=security` (16.4.1 → 16.4.6, security advisory).
+    agentUpgrade: 'security',
+  },
   turbopack: {
     rules: {
       "*.css": {
