@@ -718,7 +718,7 @@ export default function LoginAndAccountPage() {
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <p className="text-sm font-semibold truncate">{roleLabel}</p>
-                            <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-[#111111] text-white dark:bg-white dark:text-[#111111]">
+                            <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-[#5C1628] text-white dark:bg-[#C94A6A] dark:text-white">
                               {profile.badge}
                             </span>
                           </div>

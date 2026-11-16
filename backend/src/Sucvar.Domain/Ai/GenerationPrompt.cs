@@ -29,7 +29,20 @@ public sealed record GenerationPlan(
     long? Seed,
     double PromptStrength,
     double TransformationStrength,
-    DesignBrief? Brief = null);
+    DesignBrief? Brief = null,
+    SmartPromptParts? Parts = null,
+    string Engine = "deterministic");
+
+/// <summary>
+/// The pieces of a compiled smart prompt that an optional LLM refinement must keep: the scene, the user's locked
+/// element specs (always first), the structure cue and the photography tail, plus the slots the user owns.
+/// </summary>
+public sealed record SmartPromptParts(
+    string Scene,
+    IReadOnlyList<string> LockedSpecs,
+    string StructureCue,
+    string Tail,
+    IReadOnlySet<string> UserSlots);
 
 /// <summary>
 /// Port of the prompt pipeline in app/api/generate/route.ts (steps 2–4 and 6):
@@ -168,7 +181,7 @@ public static partial class GenerationPrompt
         var strength = ReadNumber(Js.Prop(dimensionsEl, "aiStrength"), 40, 100, 75);
         var promptStrength = Math.Min(0.9, Math.Max(0.45, Js.ToFixed(strength / 100, 2)));
 
-        // Flexible contract (free text and/or optional pills): Smart Prompt Synthesizer.
+        // Flexible contract (free text and/or optional pills): Architectural Prompt Compiler.
         // Legacy requests (styleId + dimensions + ai only) keep the exact historical prompt below.
         if (DesignVision.IsSmartRequest(payload))
         {
@@ -178,13 +191,21 @@ public static partial class GenerationPrompt
             var smartScenario = SucvarCatalog.BuildScenarioPrompt(smartSpace, SucvarCatalog.SanitizeFocusIds(smartSpace, Js.Prop(dimensionsEl, "focusIds")));
             // Compact scene noun: the catalog's long scene prompt would use half of the 72-token budget
             var scene = mode == "interiors" ? $"furnished {smartSpace.Id} interior" : smartSpace.Id;
-            var smartPrompt = SynthesizePrompt(brief, mode, scene, smartScenario, scopePrompt, smartLayout.Prompt,
+            var (smartPrompt, parts) = Compile(brief, mode, scene, smartScenario, scopePrompt, smartLayout.Prompt,
                 budget, windowsCount, extraPrompt);
-            var smartNegative = MergeTerms(userNegative, MandatoryNegatives(mode),
-                brief.PreserveStructure ? "moved walls, changed window positions, altered room geometry" : "");
-            // Full redesign needs room to move away from the photo; strict preservation keeps the geometry anchored.
-            var smartStrength = brief.PreserveStructure ? Math.Min(promptStrength, 0.8) : Math.Max(promptStrength, 0.8);
-            return new GenerationPlan(mode, smartPrompt, smartNegative, steps, guidance, seed, smartStrength, strength, brief);
+            var smartNegative = ArchitecturalPromptCompiler.NegativePrompt(mode, brief.PreserveStructure,
+                Js.AsString(Js.Prop(aiEl, "negativePrompt")) is { } rawNeg ? userNegative : null);
+
+            // Calibrated strength: preserved structure stays in the 0.62–0.80 band (finishes change, geometry holds),
+            // a full redesign needs ≥ 0.80 to move away from the photo. Default = the 0.72 sweet spot.
+            var requested = ReadNumber(Js.Prop(dimensionsEl, "aiStrength"), 40, 100, ArchitecturalPromptCompiler.RecommendedStrength * 100) / 100;
+            var smartStrength = ArchitecturalPromptCompiler.CalibrateStrength(requested, brief.PreserveStructure);
+            var smartSteps = (int)Js.Round(ReadNumber(Js.Prop(aiEl, "inferenceSteps"), AiLimits.InferenceStepsMin, AiLimits.InferenceStepsMax,
+                ArchitecturalPromptCompiler.SmartInferenceStepsDefault));
+            var smartGuidance = ReadNumber(Js.Prop(aiEl, "guidanceScale"), AiLimits.GuidanceMin, AiLimits.GuidanceMax,
+                ArchitecturalPromptCompiler.SmartGuidanceDefault);
+            return new GenerationPlan(mode, smartPrompt, smartNegative, smartSteps, smartGuidance, seed, smartStrength,
+                Math.Round(smartStrength * 100), brief, parts);
         }
 
         var prompt = BuildPrompt(
@@ -208,63 +229,149 @@ public static partial class GenerationPrompt
     public const string StructurePreserveCue = "keep existing walls, windows and doors";
     public const string StructureRedesignCue = "completely redesigned layout";
 
-    public static string PhotographyDirective(string mode) => mode == "interiors"
-        ? "photorealistic 8k architectural interior photography, accurate perspective, straight vertical lines, sharp focus"
-        : "photorealistic 8k architectural photography, accurate perspective, straight vertical lines, sharp focus";
+    public static string PhotographyDirective(string mode) => ArchitecturalPromptCompiler.PhotographyDirective(mode);
+
+    /// <summary>Compatibility wrapper: the compiled prompt only.</summary>
+    public static string SynthesizePrompt(DesignBrief brief, string mode, string scenePrompt, string scenarioPrompt, string scopePrompt,
+        string layoutPrompt, string budget, double windowsCount, string extraPrompt) =>
+        Compile(brief, mode, scenePrompt, scenarioPrompt, scopePrompt, layoutPrompt, budget, windowsCount, extraPrompt).Prompt;
 
     /// <summary>
-    /// Merges the user's vision with the optional modifiers into one CLIP-sized prompt. Priority order (later
-    /// segments are trimmed first): compact scene → recognised materials (English) → structure cue → the user's own
-    /// words when English (or the translated Romanian descriptors) → palette → lighting → style → scenario/scope/extra → layout → budget →
-    /// photography directive. Terms are de-duplicated across segments; an explicit lighting pill replaces the
-    /// automatic daylight cue and palette/materials replace the budget's generic finishes, so nothing conflicts.
+    /// Compiles the user's vision and the optional modifiers into one CLIP-sized prompt. Priority order (later
+    /// segments are trimmed first):
+    /// <list type="number">
+    /// <item>compact scene noun;</item>
+    /// <item>the user's explicit element specs, translated to precise English (highest weight = front);</item>
+    /// <item>the user's other words (English verbatim, Romanian through the descriptor glossary);</item>
+    /// <item>structure cue → preset → recognised materials not already covered → palette → lighting;</item>
+    /// <item>scale cues from the real room size;</item>
+    /// <item>style → scenario / scope / extra → layout → budget;</item>
+    /// <item>photography directive (always kept).</item>
+    /// </list>
+    /// Every non-user layer is passed through <see cref="ArchitecturalPromptCompiler.StripConflicts"/>: a style's
+    /// default floor / walls / sofa / lighting never contradicts what the user asked for. Terms are de-duplicated.
     /// </summary>
-    public static string SynthesizePrompt(DesignBrief brief, string mode, string scenePrompt, string scenarioPrompt, string scopePrompt,
-        string layoutPrompt, string budget, double windowsCount, string extraPrompt)
+    public static (string Prompt, SmartPromptParts Parts) Compile(DesignBrief brief, string mode, string scenePrompt, string scenarioPrompt,
+        string scopePrompt, string layoutPrompt, string budget, double windowsCount, string extraPrompt)
     {
         var style = brief.StyleId is null ? null : SucvarCatalog.GetStyle(brief.StyleId);
-        var materials = string.Join(", ", brief.Materials.Select(m => m.PromptEn));
-        // English text goes to the model as written; Romanian text through the descriptor glossary
-        // (the recognised materials above already carry its finishes and furniture).
+        var english = brief.HasCustomPrompt && DesignVision.LooksEnglish(brief.CustomPrompt);
+
+        // 1. What the user owns: element specs + the slots they cover (English text: slots only, words kept verbatim)
+        var specs = brief.HasCustomPrompt && !english ? ArchitecturalPromptCompiler.CompileUserSpecs(brief.CustomPrompt) : [];
+        var userSlots = new HashSet<string>(ArchitecturalPromptCompiler.ExplicitSlots(brief.CustomPrompt), StringComparer.Ordinal);
+        foreach (var s in specs) userSlots.Add(s.Slot);
+        if (brief.Lighting is not null) userSlots.Add("lighting"); // an explicit lighting pill is a user choice too
+        string Strip(string seg) => ArchitecturalPromptCompiler.StripConflicts(seg, userSlots);
+
         var userWords = !brief.HasCustomPrompt ? ""
-            : DesignVision.LooksEnglish(brief.CustomPrompt) ? brief.CustomPrompt.Replace('.', ',').Replace(';', ',')
-            : DesignVision.TranslateDescriptors(brief.CustomPrompt);
+            : english ? brief.CustomPrompt.Replace('.', ',').Replace(';', ',')
+            : DesignVision.TranslateDescriptors(ArchitecturalPromptCompiler.FreeClauses(brief.CustomPrompt));
+
+        // Lexicon materials (LED strip, plants, matte black…) unless a spec already describes the same element
+        var specSlots = specs.Select(s => s.Slot).ToHashSet();
+        var materials = string.Join(", ", brief.Materials
+            .Where(m => SpecSlotOf(m) is not { } slot || !specSlots.Contains(slot))
+            .Select(m => m.PromptEn));
+
         var palette = DesignVision.GetPalette(brief.Palette)?.Prompt ?? "";
-        var lighting = DesignVision.GetLighting(brief.Lighting)?.Prompt ?? Lighting(mode, windowsCount);
-        var budgetDetails = brief.Materials.Count > 0 || palette.Length > 0 ? "" : BudgetDetails(budget, mode);
-
+        var lighting = DesignVision.GetLighting(brief.Lighting)?.Prompt
+            ?? (userSlots.Contains("lighting") ? "" : Lighting(mode, windowsCount));
+        var budgetDetails = brief.Materials.Count > 0 || specs.Count > 0 || palette.Length > 0 ? "" : BudgetDetails(budget, mode);
         var preset = DesignVision.GetPreset(brief.Preset)?.PromptEn ?? "";
+        var structureCue = brief.PreserveStructure ? StructurePreserveCue : StructureRedesignCue;
 
+        var lockedSpecs = specs.Select(s => s.PromptEn).ToList();
         var segments = new List<string>
         {
             scenePrompt,
-            preset,
-            materials,
-            brief.PreserveStructure ? StructurePreserveCue : StructureRedesignCue,
+            string.Join(", ", lockedSpecs),
+            materials,                                   // user-named items without an element spec (LED strip, plants…)
             userWords,
-            palette,
-            lighting,
-            style is null ? "" : StyleSpecPrompt(style, mode),
-            style is null ? "" : CleanStylePrompt(style.Prompt, mode),
-            scenarioPrompt,
+            structureCue,
+            palette.Length > 0 ? Strip(palette) : "",
+            brief.Lighting is not null ? lighting : "",
+            ArchitecturalPromptCompiler.ScaleHint(brief.Scale, mode),
+            style is null ? "" : StyleSpecPrompt(style, mode).Split(',')[0].Trim(), // style anchor ("industrial loft")
+            Strip(preset),
+            brief.Lighting is null ? Strip(lighting) : "",
+            style is null ? "" : Strip(StyleSpecPrompt(style, mode)),
+            style is null ? "" : Strip(CleanStylePrompt(style.Prompt, mode)),
+            Strip(scenarioPrompt),
             scopePrompt,
             extraPrompt,
-            brief.PreserveStructure ? layoutPrompt : "",
-            budgetDetails,
+            brief.PreserveStructure ? Strip(layoutPrompt) : "",
+            Strip(budgetDetails),
             PhotographyDirective(mode),
         };
 
-        // Drop terms already said by an earlier segment (case-insensitive), keeping each segment's order.
+        var prompt = Assemble(segments);
+        return (prompt, new SmartPromptParts(scenePrompt, lockedSpecs, structureCue, PhotographyDirective(mode), userSlots));
+    }
+
+    /// <summary>
+    /// Folds an optional LLM refinement into the plan without letting it override the user: the locked specs stay
+    /// first, conflicting terms are stripped, prompt-weight syntax is removed and the CLIP budget is re-applied.
+    /// Returns the plan unchanged when the refinement is empty or unusable.
+    /// </summary>
+    public static GenerationPlan ApplyEnhancement(GenerationPlan plan, string? enhanced)
+    {
+        if (plan.Parts is not { } parts || string.IsNullOrWhiteSpace(enhanced)) return plan;
+        var clean = DesignVision.CleanCustomPrompt(enhanced.Replace('\n', ',').Replace('.', ',').Replace(';', ','))
+            .Replace("\"", "").Replace("*", "");
+        // Only the descriptive middle is taken from the model: anything restating a user-owned element is dropped
+        var body = ArchitecturalPromptCompiler.StripConflicts(clean, parts.UserSlots.Except(["lighting"]).ToHashSet());
+        if (GenerationPrompt.EstimateTokens(body) < 4) return plan;
+        var prompt = Assemble([
+            parts.Scene,
+            string.Join(", ", parts.LockedSpecs),
+            parts.StructureCue,
+            body,
+            parts.Tail,
+        ]);
+        return plan with { Prompt = prompt, Engine = "llm" };
+    }
+
+    /// <summary>
+    /// De-duplicates terms across segments (first wins) and fits them to the CLIP budget. The structure cue and
+    /// the photography tail (last segment) are reserved: they are never trimmed, whatever the user writes.
+    /// </summary>
+    private static string Assemble(IReadOnlyList<string> segments)
+    {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var deduped = segments.Select(seg => string.Join(", ", seg.Split(',')
             .Select(t => t.Trim())
             .Where(t => t.Length > 0 && seen.Add(t)))).ToList();
+        bool Reserved(int i) => i == deduped.Count - 1 || deduped[i] is StructurePreserveCue or StructureRedesignCue;
+        int Cost(string seg) => seg.Length == 0 ? 0 : EstimateTokens(seg) + 1;
 
-        // The photography directive must survive trimming: reserve its budget before fitting the rest.
-        var tail = deduped[^1];
-        var head = BuildPrompt(deduped.Take(deduped.Count - 1).ToList(), AiLimits.MaxPromptTokens - EstimateTokens(tail) - 1);
-        return head.Length == 0 ? tail : $"{head}, {tail}";
+        var reserved = deduped.Where((seg, i) => Reserved(i)).Sum(Cost);
+        var kept = new List<string>();
+        var used = 0;
+        for (var i = 0; i < deduped.Count; i++)
+        {
+            var seg = deduped[i];
+            if (seg.Length == 0) continue;
+            if (Reserved(i)) { kept.Add(seg); used += Cost(seg); reserved -= Cost(seg); continue; }
+            var fitted = i == 0 ? seg : FitSegment(seg, AiLimits.MaxPromptTokens - used - reserved);
+            if (fitted.Length == 0) continue;
+            kept.Add(fitted);
+            used += Cost(fitted);
+        }
+        return string.Join(", ", kept);
     }
+
+    /// <summary>The user-spec slot a lexicon material describes (null = no element of its own, e.g. plants, LED strip).</summary>
+    private static string? SpecSlotOf(VisionMaterial m) => m.Id switch
+    {
+        _ when m.Slot is "floor" or "walls" => m.Slot,
+        _ when m.Id.EndsWith("_sofa", StringComparison.Ordinal) => "sofa",
+        "quartz_top" => "countertop",
+        "linen_curtains" => "curtains",
+        "wool_rug" => "rug",
+        "dining_table" => "table",
+        _ => null,
+    };
 
     [GeneratedRegex(@"\s+")]
     private static partial Regex WhitespaceRegex();

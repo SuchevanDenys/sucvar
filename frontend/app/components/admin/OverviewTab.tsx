@@ -123,9 +123,9 @@ export default function OverviewTab({ ctx }: { ctx: AdminCtx }) {
                       {formatInt(count, lang)} · {pct.toLocaleString(LOCALES[lang])}%
                     </span>
                   </div>
-                  <div className={`h-2 w-full ${ctx.isDark ? 'bg-[#1C1C1F]' : 'bg-[#F5F5F5]'}`}>
+                  <div className={`h-2 w-full ${ctx.isDark ? 'bg-[#231B1E]' : 'bg-[#F5F2EF]'}`}>
                     <div
-                      className={`h-full transition-[width] duration-500 ${ctx.isDark ? 'bg-[#F5F5F5]' : 'bg-[#111111]'}`}
+                      className={`h-full transition-[width] duration-500 ${ctx.isDark ? 'bg-[#C94A6A]' : 'bg-[#5C1628]'}`}
                       style={{ width: `${pct}%`, opacity: [0.35, 0.65, 1][i] }}
                     />
                   </div>

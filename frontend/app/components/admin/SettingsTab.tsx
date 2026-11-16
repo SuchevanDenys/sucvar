@@ -42,7 +42,7 @@ function SettingsPanel({ ctx, onSaved }: { ctx: AdminCtx; onSaved: () => void })
 
   return (
     <Panel ctx={ctx} title={t('Setări SaaS', 'SaaS settings')}>
-      {state.kind === 'loading' && <div className={`h-64 animate-pulse ${ctx.isDark ? 'bg-[#1C1C1F]' : 'bg-[#F5F5F5]'}`} aria-busy="true" />}
+      {state.kind === 'loading' && <div className={`h-64 animate-pulse ${ctx.isDark ? 'bg-[#231B1E]' : 'bg-[#F5F2EF]'}`} aria-busy="true" />}
       {state.kind === 'error' && <ErrorLine ctx={ctx} message={state.message} />}
       {state.kind === 'ready' && (
         <SettingsForm
@@ -277,7 +277,7 @@ function AuditPanel({ ctx }: { ctx: AdminCtx }) {
             {state.kind === 'loading' && (
               <tr>
                 <td colSpan={5} className="px-5 sm:px-6 py-3">
-                  <div className={`h-24 animate-pulse ${ctx.isDark ? 'bg-[#1C1C1F]' : 'bg-[#F5F5F5]'}`} />
+                  <div className={`h-24 animate-pulse ${ctx.isDark ? 'bg-[#231B1E]' : 'bg-[#F5F2EF]'}`} />
                 </td>
               </tr>
             )}

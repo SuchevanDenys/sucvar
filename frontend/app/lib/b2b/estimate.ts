@@ -120,4 +120,109 @@ export function download(filename: string, content: string, mime: string, bom = 
   URL.revokeObjectURL(url);
 }
 
-export interface InvoiceLine { name: string; unit: string; qty: number; unitPrice: number; total: number }
+/** `section` = titlul secțiunii din deviz (Manoperă, Finisaje, o secțiune personalizată…), pentru grupare în exporturi. */
+export interface InvoiceLine { name: string; unit: string; qty: number; unitPrice: number; total: number; section?: string }
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Secțiuni de deviz (implicite + personalizate)
+// ═════════════════════════════════════════════════════════════════════════════
+// Ordinea din `sections` = ordinea cardurilor în editor, în PDF și în exporturi. O secțiune implicită
+// eliminată (lipsește din listă) poate fi restaurată dintr-un click; liniile ei sunt șterse la eliminare,
+// deci totalurile o exclud imediat. Liniile cu `cat` necunoscut primesc automat o secțiune (date vechi).
+
+export interface EstimateSection {
+  id: string;
+  ro: string;
+  en: string;
+  /** Creată de utilizator: titlu editabil, nu apare în bara de restaurare. */
+  custom?: boolean;
+}
+
+/** Sugestii rapide pentru „+ Secțiune nouă" (sau orice text liber). */
+export const SECTION_PRESETS: { ro: string; en: string; fr: string }[] = [
+  { ro: 'Instalații sanitare', en: 'Plumbing works', fr: 'Plomberie' },
+  { ro: 'Instalații electrice', en: 'Electrical works', fr: 'Électricité' },
+  { ro: 'Tâmplărie & Ferestre', en: 'Joinery & Windows', fr: 'Menuiserie & Fenêtres' },
+  { ro: 'Amenajări exterioare', en: 'Outdoor landscaping', fr: 'Aménagements extérieurs' },
+];
+
+const toSection = (c: Category): EstimateSection => ({ id: c.id, ro: c.ro, en: c.en });
+export const defaultSections = (): EstimateSection[] => CATEGORIES.map(toSection);
+const defaultIndex = (id: string) => CATEGORIES.findIndex((c) => c.id === id);
+
+/** Inserează o secțiune: cele implicite își reiau locul din `CATEGORIES`, cele personalizate merg la final. */
+export function insertSection(sections: EstimateSection[], sec: EstimateSection): EstimateSection[] {
+  if (sections.some((s) => s.id === sec.id)) return sections;
+  const di = defaultIndex(sec.id);
+  if (di < 0) return [...sections, sec];
+  const at = sections.findIndex((s) => defaultIndex(s.id) > di); // înaintea primei secțiuni implicite de după ea
+  return at < 0 ? [...sections, sec] : [...sections.slice(0, at), sec, ...sections.slice(at)];
+}
+
+/** Garantează o secțiune pentru fiecare `cat` folosit de linii (implicită dacă e cunoscută, altfel personalizată). */
+export function withSectionsFor(sections: EstimateSection[], items: LineItem[]): EstimateSection[] {
+  let out = sections;
+  for (const i of items) {
+    if (out.some((s) => s.id === i.cat)) continue;
+    const def = CATEGORIES.find((c) => c.id === i.cat);
+    out = insertSection(out, def ? toSection(def) : { id: i.cat, ro: i.cat || 'Altele', en: i.cat || 'Other', custom: true });
+  }
+  return out;
+}
+
+/** Secțiunile unui deviz salvat; devizele vechi (fără `sections`) pornesc de la toate secțiunile implicite. */
+export function normalizeSections(sections: EstimateSection[] | undefined, items: LineItem[]): EstimateSection[] {
+  const base = Array.isArray(sections)
+    ? sections.filter((s) => s && typeof s.id === 'string' && s.id).map((s) => ({ ...s, ro: s.ro ?? '', en: s.en ?? '' }))
+    : defaultSections();
+  return withSectionsFor(base, items);
+}
+
+/** Secțiunile implicite eliminate, în ordinea lor standard (pentru bara de restaurare). */
+export const removedDefaultSections = (sections: EstimateSection[]): Category[] =>
+  CATEGORIES.filter((c) => !sections.some((s) => s.id === c.id));
+
+/** Liniile implicite ale unei secțiuni standard (din șabloane, preț 0 de completat). */
+export const defaultItemsFor = (catId: string): LineItem[] =>
+  TEMPLATES.filter((t) => t.cat === catId).map((t) => ({ id: uid(), cat: t.cat, ro: t.ro, en: t.en, unit: t.unit, qty: t.qty, price: 0 }));
+
+/** Doar liniile care aparțin unei secțiuni active (contează în totaluri, PDF și exporturi). */
+export const activeItems = (items: LineItem[], sections: EstimateSection[]): LineItem[] => {
+  const ids = new Set(sections.map((s) => s.id));
+  return items.filter((i) => ids.has(i.cat));
+};
+
+export const newSectionId = () => `s${uid().slice(1)}`;
+
+// ── Persistență în cloud ─────────────────────────────────────────────────────
+// API-ul (`b2b_estimates.line_items`, jsonb) nu are câmp pentru secțiuni, așa că structura devizului
+// călătorește în aceeași listă, ca linii-marcaj cu `qty = 0`: portalul public și prețurile clientului
+// ignoră liniile fără cantitate, iar `decodeLayout` le scoate înapoi la încărcare.
+const SECTION_META = '__section';
+const LABOR_META = '__labor';
+
+export function encodeLayout(items: LineItem[], sections: EstimateSection[], laborOff: boolean): LineItem[] {
+  const meta: LineItem[] = sections.map((s) => ({
+    id: `§${s.id}`.slice(0, 40), cat: SECTION_META, ro: s.ro.slice(0, 200), en: s.en.slice(0, 200), unit: s.custom ? 'custom' : '', qty: 0, price: 0,
+  }));
+  meta.push({ id: '§labor', cat: LABOR_META, ro: '', en: '', unit: laborOff ? 'off' : 'on', qty: 0, price: 0 });
+  return [...meta, ...items];
+}
+
+/** Inversul lui `encodeLayout`. `sections` lipsește pentru devizele salvate înainte de secțiuni. */
+export function decodeLayout(lines: LineItem[]): { items: LineItem[]; sections?: EstimateSection[]; laborOff: boolean } {
+  const sections: EstimateSection[] = [];
+  let laborOff = false;
+  let hasLayout = false;
+  const items: LineItem[] = [];
+  for (const l of lines ?? []) {
+    if (l.cat === SECTION_META) {
+      hasLayout = true;
+      sections.push({ id: l.id.replace(/^§/, ''), ro: l.ro, en: l.en, ...(l.unit === 'custom' ? { custom: true } : {}) });
+    } else if (l.cat === LABOR_META) {
+      hasLayout = true;
+      laborOff = l.unit === 'off';
+    } else items.push(l);
+  }
+  return { items, sections: hasLayout ? sections : undefined, laborOff };
+}

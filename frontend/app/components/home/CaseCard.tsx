@@ -19,7 +19,7 @@ export default function CaseCard({ c, lang, isDark }: { c: CaseStudy; lang: Lang
   return (
     <article className="group flex flex-col">
       <Frame isDark={isDark} label={t(c.codeRo, c.codeEn)} meta={showAfter ? afterLabel : beforeLabel}>
-        <div className={`relative aspect-[16/10] overflow-hidden ${isDark ? 'bg-[#141416]' : 'bg-[#F5F5F5]'}`}>
+        <div className={`relative aspect-[16/10] overflow-hidden ${isDark ? 'bg-[#1A1416]' : 'bg-[#F5F2EF]'}`}>
           {[c.before, c.after].map((src, i) => (
             <Image
               key={src}
@@ -36,7 +36,7 @@ export default function CaseCard({ c, lang, isDark }: { c: CaseStudy; lang: Lang
             role="group"
             aria-label={t('Înainte / După', 'Before / After')}
             className={`absolute right-3 top-3 z-10 flex rounded-sm border p-0.5 backdrop-blur-md ${EYEBROW} ${
-              isDark ? 'bg-[#0B0B0C]/70 border-[#262629]' : 'bg-white/85 border-[#E5E5E5]'
+              isDark ? 'bg-[#110D0F]/70 border-[#2E2427]' : 'bg-white/85 border-[#E8E2E0]'
             }`}
           >
             {[false, true].map((after) => (
@@ -47,12 +47,10 @@ export default function CaseCard({ c, lang, isDark }: { c: CaseStudy; lang: Lang
                 onClick={() => setShowAfter(after)}
                 className={`rounded-full px-2.5 py-1 cursor-pointer touch-manipulation transition-colors duration-300 ${
                   showAfter === after
-                    ? isDark
-                      ? 'bg-white text-[#111111]'
-                      : 'bg-[#111111] text-white'
+                    ? isDark ? 'bg-[#C94A6A] text-white' : 'bg-[#5C1628] text-white'
                     : isDark
-                      ? 'text-[#A1A1AA] hover:text-white'
-                      : 'text-[#666666] hover:text-[#111111]'
+                      ? 'text-[#B5A9AC] hover:text-white'
+                      : 'text-[#685D60] hover:text-[#1B1416]'
                 }`}
               >
                 {after ? afterLabel : beforeLabel}

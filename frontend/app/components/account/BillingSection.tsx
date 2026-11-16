@@ -46,7 +46,7 @@ export default function BillingSection({
           aria-label={t('Consum generări AI', 'AI generation usage')}
           className={`h-2 w-full rounded-full overflow-hidden ${ui.soft}`}
         >
-          <div className={`h-full rounded-full ${isDark ? 'bg-[#F5F5F5]' : 'bg-[#111111]'} ${limited ? '' : 'opacity-30'}`} style={{ width: `${ratio * 100}%` }} />
+          <div className={`h-full rounded-full ${isDark ? 'bg-[#C94A6A]' : 'bg-[#5C1628]'} ${limited ? '' : 'opacity-30'}`} style={{ width: `${ratio * 100}%` }} />
         </div>
         <p className={`text-xs ${ui.muted}`}>
           {limited

@@ -24,11 +24,21 @@ export const PLAN_LIMITS = {
   starterMonthlyGenerations: 3, // proiecte / generări AI pe lună pentru planul gratuit
 } as const;
 
-// Setările cu care pornește Studio
+// Setările cu care pornește Studio — identice cu valorile implicite ale compilatorului de prompt din backend
+// (ArchitecturalPromptCompiler.SmartInferenceStepsDefault / SmartGuidanceDefault). CFG 9 = modelul respectă
+// mai fidel instrucțiunile explicite fără să suprasatureze; 40 de pași = detalii de material curate.
 export const DEFAULT_AI_SETTINGS: AiSettings = {
   extraPrompt: '',
   negativePrompt: DEFAULT_NEGATIVE_PROMPT,
-  inferenceSteps: 30,
-  guidanceScale: 7.5,
+  inferenceSteps: 40,
+  guidanceScale: 9,
   seed: null,
 };
+
+// Intensitatea transformării (img2img prompt_strength × 100). Cu structura păstrată, serverul o limitează la
+// 62–80; zona 68–75 schimbă complet finisajele și mobilierul, dar ține pereții, ferestrele și unghiul camerei.
+export const AI_STRENGTH = {
+  recommended: 72,
+  sweetSpot: { min: 68, max: 75 },
+  preserveRange: { min: 62, max: 80 },
+} as const;

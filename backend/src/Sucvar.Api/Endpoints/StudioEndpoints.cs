@@ -33,6 +33,7 @@ public static class StudioEndpoints
     {
         app.MapPost("/api/generate", Generate).WithTags("Studio").WithName("Generate").RequireActiveAccount();
         app.MapPost("/api/analyze-materials", AnalyzeMaterials).WithTags("Studio").WithName("AnalyzeMaterials").RequireActiveAccount();
+        app.MapPost("/api/prompt-preview", PromptPreview).WithTags("Studio").WithName("PromptPreview").RequireActiveAccount();
         return app;
     }
 
@@ -56,6 +57,7 @@ public static class StudioEndpoints
         QuotaService quota,
         IImageProviderSelector providers,
         IImageProcessor images,
+        IPromptEnhancer enhancer,
         ILogger<QuotaService> logger)
     {
         try
@@ -116,8 +118,10 @@ public static class StudioEndpoints
             // 2–4. Space / layout / style / AI settings / 72-token prompt (all re-validated)
             var plan = GenerationPrompt.Create(payload);
             var (provider, providerWarning) = providers.Select();
+            // 4b. Optional LLM "Prompt Architect" (free-text briefs only; skipped in demo mode — nothing would use it)
+            if (provider.Id != "demo") plan = await EnhanceAsync(plan, enhancer, ctx.RequestAborted);
             var request = new ImageGenerationRequest(image, plan.Prompt, plan.NegativePrompt, plan.InferenceSteps, plan.GuidanceScale,
-                plan.Seed, plan.PromptStrength, plan.TransformationStrength, plan.Mode);
+                plan.Seed, plan.PromptStrength, plan.TransformationStrength, plan.Mode, plan.Brief?.PreserveStructure ?? true);
 
             // 5. Demo mode (no provider credentials)
             if (provider.Id == "demo")
@@ -182,10 +186,66 @@ public static class StudioEndpoints
             ["generatedImage"] = result,
             ["isDemo"] = isDemo,
             ["promptUsed"] = prompt,
+            ["negativePromptUsed"] = plan.NegativePrompt,
+            ["promptEngine"] = plan.Engine,
+            ["parameters"] = new { promptStrength = plan.PromptStrength, guidanceScale = plan.GuidanceScale, inferenceSteps = plan.InferenceSteps },
         };
         if (warning is not null) body["warning"] = warning;
         if (plan.Brief is not null) body["vision"] = DesignVision.ToResponse(plan.Brief); // resolved brief for the Studio summary
         return body;
+    }
+
+    /// <summary>Runs the optional enhancer on smart free-text plans; the deterministic plan is kept on any failure.</summary>
+    private static async Task<GenerationPlan> EnhanceAsync(GenerationPlan plan, IPromptEnhancer enhancer, CancellationToken ct)
+    {
+        if (!enhancer.IsConfigured || plan.Brief is not { HasCustomPrompt: true } brief || plan.Parts is null) return plan;
+        var scale = brief.Scale;
+        var enhanced = await enhancer.EnhanceAsync(new PromptEnhancementRequest(
+            plan.Mode, brief.SpaceType, brief.StyleId, brief.Palette, brief.Lighting,
+            scale is { AreaKnown: true } ? scale.AreaSqm : null, scale?.Height, brief.PreserveStructure,
+            brief.CustomPrompt, plan.Prompt, plan.Parts.LockedSpecs), ct);
+        return GenerationPrompt.ApplyEnhancement(plan, enhanced);
+    }
+
+    /// <summary>
+    /// <c>POST /api/prompt-preview</c>: the compiled prompt, negative prompt and calibrated parameters for a Studio
+    /// brief, without an image and without any paid call (the LLM step is not run here; <c>enhancerAvailable</c> says
+    /// whether it would refine the prompt at render time).
+    /// </summary>
+    private static async Task<IResult> PromptPreview(HttpContext ctx, FixedWindowRateLimitStore limiter, ServerConfig config,
+        IPromptEnhancer enhancer, ILogger<QuotaService> logger)
+    {
+        try
+        {
+            if (limiter.Check(Rules.MaterialsIp, ClientIp(ctx)) is { } ipWait) return TooManyRequests(ctx, ipWait);
+            var (user, authError) = RequestAuth.Require(ctx, config);
+            if (authError is not null) return authError;
+            if (limiter.Check(Rules.MaterialsUser, user!.UserId) is { } userWait) return TooManyRequests(ctx, userWait);
+
+            var (text, tooLarge) = await ReadBodyTextAsync(ctx, MaterialsMaxBodyBytes);
+            if (tooLarge is not null) return tooLarge;
+            if (!TryParseJson(text!, out var body)) return InvalidJson();
+            if (body.ValueKind != JsonValueKind.Object) return JsonError(400, "INVALID_BODY", "Corp invalid: se așteaptă un obiect JSON.");
+            if (DesignVision.Validate(body) is { } visionError) return JsonError(400, visionError.Code, visionError.Message);
+
+            var plan = GenerationPrompt.Create(body);
+            return Results.Json(new
+            {
+                prompt = plan.Prompt,
+                negativePrompt = plan.NegativePrompt,
+                promptEngine = plan.Engine,
+                enhancerAvailable = enhancer.IsConfigured,
+                estimatedTokens = GenerationPrompt.EstimateTokens(plan.Prompt),
+                maxTokens = AiLimits.MaxPromptTokens,
+                parameters = new { promptStrength = plan.PromptStrength, guidanceScale = plan.GuidanceScale, inferenceSteps = plan.InferenceSteps },
+                vision = plan.Brief is null ? null : DesignVision.ToResponse(plan.Brief),
+            });
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogError(ex, "[SUCVAR] /api/prompt-preview");
+            return JsonError(500, "INTERNAL_ERROR", "Previzualizarea promptului a eșuat.");
+        }
     }
 
     private static async Task<IResult> AnalyzeMaterials(HttpContext ctx, FixedWindowRateLimitStore limiter, ServerConfig config, ILogger<QuotaService> logger)

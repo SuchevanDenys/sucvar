@@ -1,45 +1,35 @@
 // app/components/studio/DimensionsPanel.tsx
-// Step 02: room dimensions + budget tier.
+// Setări avansate: goluri (uși / ferestre) + nivelul de buget + costul live.
+// Lungimea / lățimea / înălțimea NU mai sunt aici: se editează în cardul mereu vizibil „Dimensiuni spațiu”
+// (RoomSizeCard), ca să existe o singură sursă pentru cote.
 "use client";
 
 import { formatLei } from '@/app/lib/format';
 import React from 'react';
 import { EYEBROW, getSkin } from '@/app/lib/theme/skin';
 import type { NumberField } from '@/app/lib/studio/constants';
-import type { BudgetTier, Language, RoomDimensions, SizePresetId } from '@/app/types';
+import type { BudgetTier, Language, RoomDimensions } from '@/app/types';
 import { tr } from '@/app/lib/i18n';
 
-const DIMENSION_FIELDS: { field: NumberField; code: string; labelRo: string; labelEn: string; step: string; unit: string }[] = [
-  { field: 'width', code: 'W', labelRo: 'Lățime', labelEn: 'Width', step: '0.1', unit: 'm' },
-  { field: 'length', code: 'L', labelRo: 'Lungime', labelEn: 'Length', step: '0.1', unit: 'm' },
-  { field: 'height', code: 'H', labelRo: 'Înălțime', labelEn: 'Height', step: '0.1', unit: 'm' },
-  { field: 'doorsCount', code: 'D', labelRo: 'Uși', labelEn: 'Doors', step: '1', unit: 'buc' },
-  { field: 'windowsCount', code: 'WN', labelRo: 'Ferestre', labelEn: 'Windows', step: '1', unit: 'buc' },
+const OPENING_FIELDS: { field: Extract<NumberField, 'doorsCount' | 'windowsCount'>; code: string; labelRo: string; labelEn: string }[] = [
+  { field: 'doorsCount', code: 'D', labelRo: 'Uși', labelEn: 'Doors' },
+  { field: 'windowsCount', code: 'WN', labelRo: 'Ferestre', labelEn: 'Windows' },
 ];
 
 interface DimensionsPanelProps {
   lang: Language;
   isDark: boolean;
   roomDimensions: RoomDimensions;
-  floorArea: number;
-  issues: string[]; // mesaje de validare (listă goală = cote valide)
   onNumberChange: (field: NumberField, e: React.ChangeEvent<HTMLInputElement>) => void;
   onBudgetChange: (budget: BudgetTier) => void;
-  /** Presetări de mărime ale spațiului curent (1 click) */
-  presets: { id: SizePresetId; label: string; size: string }[];
-  activePreset: SizePresetId | null;
-  onPresetSelect: (id: SizePresetId) => void;
-  /** Limitele glisoarelor pentru lățime / lungime (câmpurile numerice acceptă și valori mai mari) */
-  sliderMax: { width: number; length: number };
-  /** Costul estimat live: afișat sub cote ca feedback imediat */
+  /** Costul estimat live (același calcul ca devizul detaliat) */
   costTotal: number;
   costMin: number;
   costMax: number;
 }
 
 export default function DimensionsPanel({
-  lang, isDark, roomDimensions, floorArea, issues, onNumberChange, onBudgetChange,
-  presets, activePreset, onPresetSelect, sliderMax, costTotal, costMin, costMax,
+  lang, isDark, roomDimensions, onNumberChange, onBudgetChange, costTotal, costMin, costMax,
 }: DimensionsPanelProps) {
   const sk = getSkin(isDark);
   const t = (ro: string, en: string, fr?: string) => tr(lang, ro, en, fr);
@@ -56,31 +46,13 @@ export default function DimensionsPanel({
   return (
   <section className={`border rounded-md ${sk.card}`}>
     <div className={`px-4 h-9 flex items-center justify-between border-b ${sk.line} ${eyebrow}`}>
-      <span>{t('Cote & cost', 'Dimensions & cost')}</span>
+      <span>{t('Goluri & buget', 'Openings & budget')}</span>
       <span className="tabular-nums">
-        {roomDimensions.width} × {roomDimensions.length} × {roomDimensions.height} m
+        {roomDimensions.doorsCount} {t('uși', 'doors')} · {roomDimensions.windowsCount} {t('ferestre', 'windows')}
       </span>
     </div>
-    {/* Presetări de mărime: 1 click, apoi ajustare fină din câmpuri sau glisoare */}
-    <div className="p-4 space-y-2">
-      <span className={eyebrow}>{t('Mărime rapidă', 'Quick size')}</span>
-      <div className={`flex border rounded-md overflow-hidden divide-x ${sk.line} ${sk.divide}`}>
-        {presets.map((p) => (
-          <button
-            key={p.id}
-            type="button"
-            aria-pressed={activePreset === p.id}
-            onClick={() => onPresetSelect(p.id)}
-            className={`flex-1 py-2 px-2 flex flex-col items-center gap-0.5 cursor-pointer touch-manipulation transition-colors ${activePreset === p.id ? sk.segOn : sk.segOff}`}
-          >
-            <span className={EYEBROW}>{p.label}</span>
-            <span className="text-[10px] font-mono tabular-nums opacity-70">{p.size}</span>
-          </button>
-        ))}
-      </div>
-    </div>
-    <div className={`grid grid-cols-3 gap-px border-t ${sk.line} ${sk.gap}`}>
-      {DIMENSION_FIELDS.map(({ field, code, labelRo, labelEn, step, unit }) => (
+    <div className={`grid grid-cols-2 gap-px ${sk.gap}`}>
+      {OPENING_FIELDS.map(({ field, code, labelRo, labelEn }) => (
         <label
           key={field}
           className={`block p-3 cursor-text transition-colors focus-within:bg-neutral-500/[0.05] ${sk.cell}`}
@@ -92,52 +64,15 @@ export default function DimensionsPanel({
           <span className="flex items-baseline gap-1 mt-1.5">
             <input
               type="number"
-              inputMode={step === '1' ? 'numeric' : 'decimal'}
-              step={step}
+              inputMode="numeric"
+              step="1"
               min="0"
-              value={roomDimensions[field as keyof RoomDimensions] as number}
+              value={roomDimensions[field]}
               onChange={(e) => onNumberChange(field, e)}
               className={`w-full min-w-0 bg-transparent outline-none text-lg font-mono font-medium tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${sk.strong}`}
             />
-            <span className={`text-[10px] font-mono ${sk.dim}`}>{unit}</span>
+            <span className={`text-[10px] font-mono ${sk.dim}`}>buc</span>
           </span>
-        </label>
-      ))}
-      {/* Read-only derived cell */}
-      <div className={`p-3 ${sk.cell}`}>
-        <span className={`flex items-center justify-between ${eyebrow}`}>
-          <span>{t('Arie', 'Area')}</span>
-          <span className={sk.accent}>A</span>
-        </span>
-        <span className="flex items-baseline gap-1 mt-1.5">
-          <span className={`text-lg font-mono font-medium tabular-nums ${sk.muted}`}>{floorArea}</span>
-          <span className={`text-[10px] font-mono ${sk.dim}`}>m²</span>
-        </span>
-      </div>
-    </div>
-    {issues.length > 0 && (
-      <ul role="alert" className={`px-4 py-3 border-t space-y-1 text-xs text-red-500 font-mono ${sk.line}`}>
-        {issues.map((issue) => (
-          <li key={issue}>{issue}</li>
-        ))}
-      </ul>
-    )}
-    <div className={`p-4 border-t grid grid-cols-2 gap-4 ${sk.line}`}>
-      {(['width', 'length'] as const).map((field) => (
-        <label key={field} className="block space-y-1.5">
-          <span className={`flex justify-between ${eyebrow}`}>
-            <span>{field === 'width' ? t('Lățime', 'Width') : t('Lungime', 'Length')}</span>
-            <span className={`tabular-nums ${sk.strong}`}>{roomDimensions[field]} m</span>
-          </span>
-          <input
-            type="range"
-            min={1}
-            max={sliderMax[field]}
-            step={0.1}
-            value={Math.min(roomDimensions[field], sliderMax[field])}
-            onChange={(e) => onNumberChange(field, e)}
-            className="w-full accent-[var(--foreground)] touch-manipulation touch-pan-y"
-          />
         </label>
       ))}
     </div>
@@ -157,7 +92,7 @@ export default function DimensionsPanel({
         ))}
       </div>
     </div>
-    {/* Cost live: același calcul ca în devizul detaliat din dreapta */}
+    {/* Cost live: același calcul ca în devizul detaliat */}
     <div className={`px-4 py-3 border-t flex items-baseline justify-between gap-3 ${sk.line}`}>
       <span className={eyebrow}>{t('Cost estimat', 'Estimated cost')}</span>
       <span className="text-right">

@@ -201,7 +201,12 @@ public sealed class StableDiffusionImageProvider(IHttpClientFactory http, IOptio
                         ["image"] = base64,
                         ["module"] = string.IsNullOrWhiteSpace(o.SdControlNetModule) ? "mlsd" : o.SdControlNetModule.Trim(),
                         ["model"] = o.SdControlNetModel.Trim(),
-                        ["weight"] = 1,
+                        // Structure lock: full-strength line conditioning for the whole schedule keeps walls, windows
+                        // and camera fixed; a redesign loosens it so the layout can move.
+                        ["weight"] = request.PreserveStructure ? 1.0 : 0.55,
+                        ["guidance_start"] = 0.0,
+                        ["guidance_end"] = request.PreserveStructure ? 1.0 : 0.7,
+                        ["pixel_perfect"] = true,
                     }),
                 },
             };

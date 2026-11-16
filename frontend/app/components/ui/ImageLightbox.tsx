@@ -51,16 +51,16 @@ export default function ImageLightbox({ open, onClose, src, beforeSrc, alt = '',
       role="dialog"
       aria-modal="true"
       aria-label={alt || labels.after}
-      className="fixed inset-0 z-[100] flex flex-col bg-black/92 backdrop-blur-sm print:hidden"
+      className="fixed inset-0 z-[100] flex flex-col bg-[#110D0F]/92 backdrop-blur-sm print:hidden"
       onClick={onClose}
     >
       <div className="flex items-center justify-between gap-3 px-4 sm:px-6 h-16 shrink-0" onClick={(e) => e.stopPropagation()}>
         {beforeSrc ? (
           <div role="group" className="inline-flex rounded-full bg-white/10 p-1">
-            <button type="button" aria-pressed={showBefore} onClick={() => setShowBefore(true)} className={`${chip} h-7 ${showBefore ? 'bg-white text-[#111111]' : 'text-white/75 hover:text-white'}`}>
+            <button type="button" aria-pressed={showBefore} onClick={() => setShowBefore(true)} className={`${chip} h-7 ${showBefore ? 'bg-[#C94A6A] text-white' : 'text-white/75 hover:text-white'}`}>
               {labels.before}
             </button>
-            <button type="button" aria-pressed={!showBefore} onClick={() => setShowBefore(false)} className={`${chip} h-7 ${!showBefore ? 'bg-white text-[#111111]' : 'text-white/75 hover:text-white'}`}>
+            <button type="button" aria-pressed={!showBefore} onClick={() => setShowBefore(false)} className={`${chip} h-7 ${!showBefore ? 'bg-[#C94A6A] text-white' : 'text-white/75 hover:text-white'}`}>
               {labels.after}
             </button>
           </div>
@@ -70,7 +70,7 @@ export default function ImageLightbox({ open, onClose, src, beforeSrc, alt = '',
             <Download className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">{labels.download}</span>
           </a>
-          <button ref={closeRef} type="button" onClick={onClose} aria-label={labels.close} className={`${chip} w-9 justify-center px-0 bg-white text-[#111111] hover:bg-white/85`}>
+          <button ref={closeRef} type="button" onClick={onClose} aria-label={labels.close} className={`${chip} w-9 justify-center px-0 bg-[#F5F2EF] text-[#1B1416] hover:bg-white`}>
             <X className="w-4 h-4" />
           </button>
         </div>

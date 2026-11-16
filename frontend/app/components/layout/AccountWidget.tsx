@@ -156,7 +156,7 @@ function Avatar({ user, isDark }: { user: AccountUser; isDark: boolean }) {
     <span
       aria-hidden="true"
       className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
-        isDark ? 'bg-white text-[#111111]' : 'bg-[#111111] text-white'
+        isDark ? 'bg-[#C94A6A] text-white' : 'bg-[#5C1628] text-white'
       }`}
     >
       {initial}
@@ -175,10 +175,10 @@ export default function AccountWidget({ isDark, lang, active = false }: AccountW
   const ui = getUi(isDark);
   const { user, ready } = useAccountUser();
 
-  const ring = active ? (isDark ? 'ring-1 ring-white' : 'ring-1 ring-[#111111]') : '';
+  const ring = active ? (isDark ? 'ring-1 ring-white' : 'ring-1 ring-[#1B1416]') : '';
   const focus = isDark
     ? 'focus-visible:outline-white'
-    : 'focus-visible:outline-[#111111]';
+    : 'focus-visible:outline-[#1B1416]';
   const base = `inline-flex h-9 items-center rounded-full border text-xs font-medium touch-manipulation transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 ${focus} ${ui.btnGhost} ${ring}`;
 
   // Înainte de verificarea sesiunii: placeholder de aceeași mărime

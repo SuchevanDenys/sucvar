@@ -197,7 +197,36 @@ public sealed record ImageGenerationRequest(
     long? Seed,
     double PromptStrength,
     double TransformationStrength,
-    string Mode);
+    string Mode,
+    /// <summary>Structure lock: drives ControlNet weight on providers that expose it (SD); Replicate's model is always conditioned.</summary>
+    bool PreserveStructure = true);
+
+/// <summary>Inputs for the optional LLM "Prompt Architect" (all already validated by the Domain).</summary>
+public sealed record PromptEnhancementRequest(
+    string Mode,
+    string SpaceType,
+    string? StyleId,
+    string? Palette,
+    string? Lighting,
+    double? AreaSqm,
+    double? CeilingHeight,
+    bool PreserveStructure,
+    string CustomPrompt,
+    string DeterministicPrompt,
+    IReadOnlyList<string> LockedSpecs);
+
+/// <summary>
+/// Optional LLM step that rewrites the compiled prompt into a more cohesive render description. It is configured
+/// only when an LLM key exists; any failure or timeout falls back to the deterministic compiler (never fails a render).
+/// </summary>
+public interface IPromptEnhancer
+{
+    /// <summary>'anthropic' | 'openai' | 'openrouter' | 'none'</summary>
+    string Id { get; }
+    bool IsConfigured { get; }
+    /// <summary>Comma-separated English render terms, or null when nothing usable came back.</summary>
+    Task<string?> EnhanceAsync(PromptEnhancementRequest request, CancellationToken ct = default);
+}
 
 /// <summary>Provider output: a URL or data URL, plus whether it came from the demo provider (no real AI call).</summary>
 public sealed record ImageGenerationResult(string ImageUrl, bool IsDemo);

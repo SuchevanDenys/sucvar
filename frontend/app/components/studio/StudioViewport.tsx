@@ -38,7 +38,7 @@ export default function StudioViewport({
   const [lightbox, setLightbox] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const hasResult = Boolean(originalImage && generatedImage);
-  const backdrop = isDark ? 'bg-[#0B0B0C]' : 'bg-[#F5F5F5]';
+  const backdrop = isDark ? 'bg-[#110D0F]' : 'bg-[#F5F2EF]';
 
   const dropProps = onFile && !isLoading
     ? {
@@ -60,7 +60,7 @@ export default function StudioViewport({
     <div className={`relative border rounded-xl p-2 sm:p-3 ${sk.card}`}>
       <div className={`flex items-center justify-between gap-3 px-1.5 pb-2.5 text-[12px] ${sk.muted}`}>
         <span className="flex items-center gap-2">
-          <span className={`h-1.5 w-1.5 rounded-full ${isLoading ? 'bg-amber-500 animate-pulse' : hasResult ? 'bg-emerald-500' : isDark ? 'bg-[#52525B]' : 'bg-[#A3A3A3]'}`} />
+          <span className={`h-1.5 w-1.5 rounded-full ${isLoading ? 'bg-amber-500 animate-pulse' : hasResult ? 'bg-emerald-500' : isDark ? 'bg-[#62535A]' : 'bg-[#A99EA1]'}`} />
           {isLoading ? t('Randare în curs', 'Rendering') : hasResult ? t('Randare finalizată', 'Render complete') : originalImage ? t('Fotografie încărcată', 'Photo loaded') : t('Canvas', 'Canvas')}
         </span>
         <span className="flex items-center gap-3">
@@ -100,15 +100,15 @@ export default function StudioViewport({
             <>
               <div aria-hidden className="scan-line z-10" />
               <div className="absolute inset-0 z-20 flex items-center justify-center p-4" role="status" aria-live="polite">
-                <div className="w-full max-w-xs rounded-xl bg-[#0B0B0C]/75 backdrop-blur-md px-5 py-4 text-white shadow-2xl">
+                <div className="w-full max-w-xs rounded-xl bg-[#110D0F]/75 backdrop-blur-md px-5 py-4 text-white shadow-2xl">
                   <p className="text-[13px] font-medium">{loadingLabel}</p>
                   <div className="mt-3 h-1 w-full overflow-hidden rounded-full bg-white/15">
-                    <div className="studio-progress h-full w-1/3 rounded-full bg-white" />
+                    <div className="studio-progress h-full w-1/3 rounded-full bg-[#C94A6A]" />
                   </div>
                   <div className="mt-3 flex items-center justify-between text-[11px] text-white/60">
                     <span className="flex gap-1">
                       {Array.from({ length: loadingSteps }).map((_, i) => (
-                        <span key={i} className={`h-1.5 w-1.5 rounded-full ${i <= loadingStep ? 'bg-white' : 'bg-white/25'}`} />
+                        <span key={i} className={`h-1.5 w-1.5 rounded-full ${i <= loadingStep ? 'bg-[#D65D7B]' : 'bg-white/25'}`} />
                       ))}
                     </span>
                     <span>{t('de obicei 20–60 s', 'usually 20–60 s')}</span>
@@ -126,7 +126,7 @@ export default function StudioViewport({
           disabled={!onPickFile}
           className={`w-full aspect-[4/3] max-h-[72vh] rounded-lg border border-dashed flex flex-col items-center justify-center gap-4 px-6 text-center cursor-pointer touch-manipulation transition-colors ${sk.grid} ${dragOver ? 'dropzone-active' : `${sk.line} ${sk.rowHover}`}`}
         >
-          <span className={`flex h-14 w-14 items-center justify-center rounded-full border ${sk.line} ${isDark ? 'bg-[#141416]' : 'bg-white'}`}>
+          <span className={`flex h-14 w-14 items-center justify-center rounded-full border ${sk.line} ${isDark ? 'bg-[#1A1416]' : 'bg-white'}`}>
             <ImagePlus className={`w-6 h-6 ${sk.strong}`} />
           </span>
           <span>

@@ -1,40 +1,38 @@
 // app/lib/theme/tokens.ts
 // Color classes used by every page (language/theme state lives in usePrefs.ts).
 //
-// Design invariant — "Pure Monochrome Scandinavian Gallery":
-//   light  #FFFFFF page · #F5F5F5 passe-partout surfaces · #111111 ink
-//   dark   #0B0B0C page · #141416 surfaces              · #F5F5F5 ink
-// Only neutral greys are allowed for lines/muted text. No blue (or any hue) as an accent: emphasis comes from
-// weight, contrast and the ink colour itself. Status colours (red errors, amber limits) are the only exceptions.
+// Design invariant — "Bordeaux + Warm Alabaster & Champagne" (mirrors skin.ts):
+//   light  #FFFFFF page · #FAF8F6 / #F5F2EF alabaster · #1B1416 espresso ink · bordeaux #5C1628
+//   dark   #110D0F page · #1A1416 cards · #2E2427 lines · #F5F2EF ink · ruby-bordeaux #C94A6A
+// Status colours (red errors, amber limits) remain the only other hues.
 // Classes are spelled out in full because Tailwind cannot detect class names assembled by interpolation.
 
-// Monochrome gallery palette: pure white / stone grey (light) · matte charcoal (dark). Zero blue.
 const lightUi = {
-  page: 'bg-white text-[#111111]',
-  header: 'bg-white/90 backdrop-blur-md border-[#E5E5E5] text-[#111111]',
-  card: 'bg-white border-[#E5E5E5] text-[#111111]',
-  soft: 'bg-[#F5F5F5]',
-  line: 'border-[#E5E5E5]',
-  muted: 'text-[#666666]',
-  accent: 'text-[#111111]',
-  btn: 'bg-[#111111] text-white hover:bg-[#2A2A2A]',
+  page: 'bg-white text-[#1B1416]',
+  header: 'bg-white/90 backdrop-blur-md border-[#E8E2E0] text-[#1B1416]',
+  card: 'bg-white border-[#E8E2E0] text-[#1B1416]',
+  soft: 'bg-[#FAF8F6]',
+  line: 'border-[#E8E2E0]',
+  muted: 'text-[#685D60]',
+  accent: 'text-[#5C1628]',
+  btn: 'bg-[#5C1628] text-white hover:bg-[#450E1D] active:bg-[#360A16]',
   btnGhost:
-    'border-[#E5E5E5] text-[#111111] hover:border-[#111111] hover:bg-[#F5F5F5]',
-  input: 'border-[#E5E5E5] text-[#111111] focus:border-[#111111]',
+    'border-[#E8E2E0] text-[#1B1416] hover:border-[#5C1628]/40 hover:text-[#5C1628] hover:bg-[#FAF8F6]',
+  input: 'border-[#E8E2E0] text-[#1B1416] focus:border-[#5C1628]',
 };
 
 const darkUi = {
-  page: 'bg-[#0B0B0C] text-[#F5F5F5]',
-  header: 'bg-[#0B0B0C]/90 backdrop-blur-md border-[#262629] text-[#F5F5F5]',
-  card: 'bg-[#141416] border-[#262629] text-[#F5F5F5]',
-  soft: 'bg-[#1C1C1F]',
-  line: 'border-[#262629]',
-  muted: 'text-[#A1A1AA]',
-  accent: 'text-white',
-  btn: 'bg-white text-[#111111] hover:bg-[#E5E5E5]',
+  page: 'bg-[#110D0F] text-[#F5F2EF]',
+  header: 'bg-[#110D0F]/90 backdrop-blur-md border-[#2E2427] text-[#F5F2EF]',
+  card: 'bg-[#1A1416] border-[#2E2427] text-[#F5F2EF]',
+  soft: 'bg-[#231B1E]',
+  line: 'border-[#2E2427]',
+  muted: 'text-[#B5A9AC]',
+  accent: 'text-[#D65D7B]',
+  btn: 'bg-[#C94A6A] text-white hover:bg-[#D65D7B]',
   btnGhost:
-    'border-[#262629] text-[#F5F5F5] hover:border-[#F5F5F5]/60 hover:bg-[#1C1C1F]',
-  input: 'border-[#262629] text-[#F5F5F5] focus:border-[#F5F5F5]',
+    'border-[#2E2427] text-[#F5F2EF] hover:border-[#C94A6A]/60 hover:bg-[#231B1E]',
+  input: 'border-[#2E2427] text-[#F5F2EF] focus:border-[#C94A6A]',
 };
 
 // Every page calls getUi(isDark) and uses the returned classes

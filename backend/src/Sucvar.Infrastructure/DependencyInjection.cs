@@ -45,6 +45,9 @@ public static class DependencyInjection
         services.AddSingleton<StableDiffusionImageProvider>();
         services.AddSingleton<IImageProviderSelector, ImageProviderSelector>();
         services.AddSingleton<IImageProcessor, SkiaImageProcessor>();
+        services.Configure<PromptEnhancerOptions>(configuration.GetSection("PromptEnhancer"));
+        services.AddSingleton<IPromptEnhancer, LlmPromptEnhancer>();
+        services.AddHttpClient(LlmPromptEnhancer.HttpClientName);
 
         // Resilience: retries only for safe methods (a retried POST to Replicate would bill twice).
         services.AddHttpClient(HttpClientNames.Replicate, c => c.BaseAddress = new Uri("https://api.replicate.com/"))

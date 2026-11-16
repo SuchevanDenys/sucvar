@@ -37,10 +37,12 @@ interface PricingConsoleProps {
   workDays: number;
   crew: number;
   laborHours: number;
+  /** Secțiunea „Manoperă" eliminată din deviz: rândul ei dispare din defalcare. */
+  laborOff?: boolean;
 }
 
 export default function PricingConsole({
-  lang, isDark, margin, onMarginChange, contingency, onContingencyChange, vat, onVatChange, totals, workDays, crew, laborHours,
+  lang, isDark, margin, onMarginChange, contingency, onContingencyChange, vat, onVatChange, totals, workDays, crew, laborHours, laborOff = false,
 }: PricingConsoleProps) {
   const sk = getSkin(isDark);
   const t = (ro: string, en: string, fr?: string) => tr(lang, ro, en, fr);
@@ -100,7 +102,7 @@ export default function PricingConsole({
 
         <dl className={`border-t divide-y text-sm ${sk.line} ${sk.divide}`}>
           {[
-            [t('Manoperă', 'Labor'), laborTotal],
+            ...(laborOff ? [] : [[t('Manoperă', 'Labor'), laborTotal]]),
             [t('Linii articole', 'Item lines'), itemsTotal],
             [`${t('Contingență', 'Contingency')} ${contingency}%`, contingencyAmt],
             [`${t('Marjă', 'Margin')} ${margin}%`, marginAmt],

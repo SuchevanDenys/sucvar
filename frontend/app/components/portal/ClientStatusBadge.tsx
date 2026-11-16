@@ -26,10 +26,10 @@ export default function ClientStatusBadge({
 }) {
   const tone =
     status === 'approved'
-      ? isDark ? 'bg-[#F5F5F5] text-[#111111] border-[#F5F5F5]' : 'bg-[#111111] text-white border-[#111111]'
+      ? isDark ? 'bg-[#C94A6A] text-white border-[#C94A6A]' : 'bg-[#5C1628] text-white border-[#5C1628]'
       : status === 'changes_requested'
-        ? isDark ? 'text-[#F5F5F5] border-[#F5F5F5]' : 'text-[#111111] border-[#111111]'
-        : isDark ? 'border-[#262629] text-[#A1A1AA]' : 'border-[#E5E5E5] text-[#666666]';
+        ? isDark ? 'text-[#F5F2EF] border-[#F5F2EF]' : 'text-[#1B1416] border-[#1B1416]'
+        : isDark ? 'border-[#2E2427] text-[#B5A9AC]' : 'border-[#E8E2E0] text-[#685D60]';
   const Icon = status === 'approved' ? Check : status === 'changes_requested' ? PencilLine : Clock;
   const label = CLIENT_STATUS_LABELS[status];
   return (

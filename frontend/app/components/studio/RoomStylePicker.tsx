@@ -57,13 +57,15 @@ export default function RoomStylePicker({
 }: RoomStylePickerProps) {
   const sk = getSkin(isDark);
   const t = (ro: string, en: string, fr?: string) => tr(lang, ro, en, fr);
-  const activeRing = isDark ? 'border-white ring-1 ring-white' : 'border-[#111111] ring-1 ring-[#111111]';
-  const idleCard = `${sk.line} ${isDark ? 'hover:border-[#52525B]' : 'hover:border-[#A3A3A3]'}`;
+  const activeRing = isDark
+    ? 'border-[#C94A6A] ring-1 ring-[#C94A6A] bg-[#C94A6A]/[0.08]'
+    : 'border-[#5C1628] ring-1 ring-[#5C1628] bg-[rgba(92,22,40,0.05)]';
+  const idleCard = `${sk.line} ${isDark ? 'hover:border-[#C94A6A]/50' : 'hover:border-[#5C1628]/35'}`;
 
   return (
     <StudioCard isDark={isDark} step="02" title={t('Cameră & stil', 'Room & style')}>
       {/* Categoria */}
-      <div role="radiogroup" aria-label={t('Categorie', 'Category')} className={`grid grid-cols-3 p-1 rounded-lg ${isDark ? 'bg-[#0B0B0C]' : 'bg-[#F5F5F5]'}`}>
+      <div role="radiogroup" aria-label={t('Categorie', 'Category')} className={`grid grid-cols-3 p-1 rounded-lg ${isDark ? 'bg-[#110D0F]' : 'bg-[#F5F2EF]'}`}>
         {MODE_IDS.map((m) => (
           <button
             key={m}
@@ -73,7 +75,7 @@ export default function RoomStylePicker({
             disabled={disabled}
             onClick={() => onModeChange(m)}
             className={`h-9 rounded-md text-[13px] font-medium cursor-pointer touch-manipulation transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-              mode === m ? `${isDark ? 'bg-[#262629] text-white' : 'bg-white text-[#111111] shadow-sm'}` : sk.muted
+              mode === m ? `${isDark ? 'bg-[#2E2427] text-[#E07F98] shadow-[inset_0_0_0_1px_rgba(201,74,106,0.4)]' : 'bg-white text-[#5C1628] shadow-[0_1px_2px_rgba(27,20,22,0.08),inset_0_0_0_1px_rgba(92,22,40,0.2)]'}` : `${sk.muted} ${isDark ? 'hover:text-[#F5F2EF]' : 'hover:text-[#1B1416]'}`
             }`}
           >
             {tr(lang, SPACE_MODES[m].labelRo, SPACE_MODES[m].labelEn)}
@@ -100,7 +102,7 @@ export default function RoomStylePicker({
                 disabled={disabled}
                 onClick={() => onSpaceChange(s.id)}
                 className={`inline-flex items-center gap-2 h-9 pl-2.5 pr-3.5 rounded-full border text-[13px] cursor-pointer touch-manipulation transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                  active ? `${sk.segOn} ${isDark ? 'border-white' : 'border-[#111111]'}` : `${sk.line} ${sk.segOff}`
+                  active ? `${sk.chipOn}` : `${sk.line} ${sk.segOff}`
                 }`}
               >
                 <Icon className="w-4 h-4 shrink-0" aria-hidden />
@@ -130,7 +132,7 @@ export default function RoomStylePicker({
             <span className={`block text-[11px] leading-tight mt-0.5 truncate ${sk.muted}`}>
               {styleChoice === AUTO && autoStyleName ? autoStyleName : t('din descriere', 'from your brief')}
             </span>
-            {styleChoice === AUTO && <Check className="absolute top-2 right-2 w-3.5 h-3.5" aria-hidden />}
+            {styleChoice === AUTO && <Check className={`absolute top-2 right-2 w-3.5 h-3.5 ${sk.brandText}`} aria-hidden />}
           </button>
           {VISUAL_STYLES.map((v) => {
             const active = styleChoice === v.id;
@@ -150,7 +152,11 @@ export default function RoomStylePicker({
                   ))}
                 </span>
                 <span className={`mt-2 block text-[13px] font-medium leading-tight truncate ${sk.strong}`}>{tr(lang, v.nameRo, v.nameEn)}</span>
-                {active && <Check className="absolute top-2 right-2 w-3.5 h-3.5 text-white mix-blend-difference" aria-hidden />}
+                {active && (
+                  <span className={`absolute top-1.5 right-1.5 flex h-4.5 w-4.5 items-center justify-center rounded-full text-white ${sk.brand}`} aria-hidden>
+                    <Check className="w-3 h-3" strokeWidth={2.5} />
+                  </span>
+                )}
               </button>
             );
           })}

@@ -103,7 +103,7 @@ export default function PortalsTab({ ctx }: { ctx: AdminCtx }) {
         <ul className={`grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-px border ${sk.gap} ${sk.line}`}>
           {state.data.items.map((p) => (
             <li key={p.id} className={`flex flex-col ${sk.cell}`}>
-              <div className={`aspect-[4/3] overflow-hidden ${ctx.isDark ? 'bg-[#1C1C1F]' : 'bg-[#F5F5F5]'}`}>
+              <div className={`aspect-[4/3] overflow-hidden ${ctx.isDark ? 'bg-[#231B1E]' : 'bg-[#F5F2EF]'}`}>
                 {p.thumbnail ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={p.thumbnail} alt={p.title} loading="lazy" className="w-full h-full object-contain" />

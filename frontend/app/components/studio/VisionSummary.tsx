@@ -38,7 +38,7 @@ export default function VisionSummary({ lang, isDark, vision, costTotal }: Visio
       </div>
       <div className="p-4 space-y-3">
         {vision.customPrompt ? (
-          <blockquote className={`text-sm leading-relaxed border-l-2 pl-3 ${isDark ? 'border-white' : 'border-[#111111]'} ${sk.strong}`}>
+          <blockquote className={`text-sm leading-relaxed border-l-2 pl-3 ${isDark ? 'border-[#C94A6A]' : 'border-[#5C1628]'} ${sk.strong}`}>
             „{vision.customPrompt}”
           </blockquote>
         ) : (

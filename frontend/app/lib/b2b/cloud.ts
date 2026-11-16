@@ -11,7 +11,7 @@
 import { apiFetch } from '@/app/lib/api-client';
 import type { EstimateClient, EstimatePayload, EstimateRecord } from '@/app/lib/database.types';
 import { getAccessToken } from '@/app/lib/supabase/auth';
-import type { RegionId, TradeId } from './estimate';
+import { decodeLayout, encodeLayout, type RegionId, type TradeId } from './estimate';
 import { loadWorkspace, saveWorkspace, type Workspace } from './portfolio';
 
 const ENDPOINT = '/api/b2b/estimates';
@@ -42,7 +42,8 @@ export function workspaceToPayload(projectId: string, ws: Workspace, net: number
     vatPct: ws.vat,
     scope: ws.scope as Record<string, number>,
     rateOverride: ws.rateOverride as Record<string, number>,
-    lineItems: ws.items,
+    // Secțiunile + Manopera eliminată călătoresc ca linii-marcaj (qty 0) — vezi `encodeLayout`
+    lineItems: ws.sections ? encodeLayout(ws.items, ws.sections, !!ws.laborOff) : ws.items,
     subtotal: net,
     total: gross,
   };
@@ -50,6 +51,7 @@ export function workspaceToPayload(projectId: string, ws: Workspace, net: number
 
 // Înregistrare din cloud → Workspace local
 function recordToWorkspace(r: EstimateRecord): Workspace {
+  const layout = decodeLayout(r.lineItems ?? []);
   return {
     client: r.client,
     docNo: r.docNo,
@@ -62,7 +64,9 @@ function recordToWorkspace(r: EstimateRecord): Workspace {
     contingency: r.contingencyPct,
     margin: r.marginPct,
     vat: r.vatPct,
-    items: r.lineItems,
+    items: layout.items,
+    ...(layout.sections ? { sections: layout.sections } : {}),
+    laborOff: layout.laborOff,
     updatedAt: r.updatedAt,
   };
 }

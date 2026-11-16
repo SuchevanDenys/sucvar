@@ -107,7 +107,7 @@ export default function PortalView({ project }: { project: PublicProject }) {
               {t(style.architecturalBrief.ro, style.architecturalBrief.en)}
             </p>
             {project.designBrief && (
-              <figure className={`mt-5 max-w-2xl border-l-2 pl-4 ${isDark ? 'border-white' : 'border-[#111111]'}`}>
+              <figure className={`mt-5 max-w-2xl border-l-2 pl-4 ${isDark ? 'border-[#C94A6A]' : 'border-[#5C1628]'}`}>
                 <figcaption className={`font-mono text-[11px] uppercase tracking-[0.18em] ${sk.dim}`}>
                   {t('Viziunea proiectului', 'Design vision')}
                 </figcaption>
@@ -128,7 +128,7 @@ export default function PortalView({ project }: { project: PublicProject }) {
 
         {/* ── Înainte / După ────────────────────────────────────────────── */}
         <section aria-label={t('Comparație înainte / după', 'Before / after comparison')}>
-          <div className={`border p-2 sm:p-3 ${sk.line} ${isDark ? 'bg-[#141416]' : 'bg-[#F5F5F5]'}`}>
+          <div className={`border p-2 sm:p-3 ${sk.line} ${isDark ? 'bg-[#1A1416]' : 'bg-[#F5F2EF]'}`}>
             {hasBoth ? (
               <BeforeAfterSlider
                 beforeImg={project.originalImage as string}
@@ -139,14 +139,14 @@ export default function PortalView({ project }: { project: PublicProject }) {
                 expandLabel={t('Ecran complet', 'Full screen')}
               />
             ) : heroImage ? (
-              <div className={`relative flex items-center justify-center rounded-md overflow-hidden ${isDark ? 'bg-[#0B0B0C]' : 'bg-white'}`}>
+              <div className={`relative flex items-center justify-center rounded-md overflow-hidden ${isDark ? 'bg-[#110D0F]' : 'bg-white'}`}>
                 {/* eslint-disable-next-line @next/next/no-img-element -- data URL */}
                 <img src={heroImage} alt={project.title} className="w-full h-auto max-h-[75vh] object-contain" />
                 <button
                   type="button"
                   onClick={() => setLightboxOpen(true)}
                   aria-label={t('Ecran complet', 'Full screen')}
-                  className="absolute top-2.5 right-2.5 w-9 h-9 rounded-full bg-white/90 hover:bg-white text-[#111111] border border-[#E5E5E5] flex items-center justify-center shadow-sm cursor-pointer"
+                  className="absolute top-2.5 right-2.5 w-9 h-9 rounded-full bg-white/90 hover:bg-white text-[#1B1416] border border-[#E8E2E0] flex items-center justify-center shadow-sm cursor-pointer"
                 >
                   <Maximize2 className="w-4 h-4" />
                 </button>
@@ -235,7 +235,7 @@ export default function PortalView({ project }: { project: PublicProject }) {
                 </div>
                 {itemGroups.map(({ cat, rows }) => (
                   <div key={cat.id}>
-                    <p className={`px-5 h-9 flex items-center ${EYEBROW} ${sk.strong} ${isDark ? 'bg-[#141416]' : 'bg-[#F5F5F5]'}`}>{t(cat.ro, cat.en)}</p>
+                    <p className={`px-5 h-9 flex items-center ${EYEBROW} ${sk.strong} ${isDark ? 'bg-[#1A1416]' : 'bg-[#F5F2EF]'}`}>{t(cat.ro, cat.en)}</p>
                     <ul className={`divide-y ${sk.divide}`}>
                       {rows.map((m) => (
                         <li key={m.id} className="grid grid-cols-12 gap-x-3 gap-y-1 px-5 py-3.5 text-sm">
@@ -316,7 +316,7 @@ export default function PortalView({ project }: { project: PublicProject }) {
             <div className={`mt-5 border divide-y ${sk.line} ${sk.divide}`}>
               {groups.map(({ cat, rows }) => (
                 <div key={cat.id}>
-                  <p className={`px-5 h-9 flex items-center ${EYEBROW} ${sk.strong} ${isDark ? 'bg-[#141416]' : 'bg-[#F5F5F5]'}`}>{t(cat.ro, cat.en)}</p>
+                  <p className={`px-5 h-9 flex items-center ${EYEBROW} ${sk.strong} ${isDark ? 'bg-[#1A1416]' : 'bg-[#F5F2EF]'}`}>{t(cat.ro, cat.en)}</p>
                   <ul className={`divide-y ${sk.divide}`}>
                     {rows.map((m, i) => (
                       <li key={`${cat.id}-${i}`} className="flex items-baseline justify-between gap-4 px-5 py-3 text-sm">

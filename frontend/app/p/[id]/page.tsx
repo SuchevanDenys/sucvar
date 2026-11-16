@@ -47,10 +47,10 @@ async function PortalLoader({ params }: { params: Promise<{ id: string }> }) {
 
 function PortalSkeleton() {
   return (
-    <div className="min-h-screen bg-white dark:bg-[#0B0B0C]" aria-busy="true">
+    <div className="min-h-screen bg-white dark:bg-[#110D0F]" aria-busy="true">
       <div className="mx-auto max-w-[1240px] px-4 sm:px-6 lg:px-10 pt-24 space-y-6">
-        <div className="h-8 w-64 rounded-sm bg-[#F5F5F5] dark:bg-[#141416] animate-pulse" />
-        <div className="h-[320px] sm:h-[520px] rounded-md bg-[#F5F5F5] dark:bg-[#141416] animate-pulse" />
+        <div className="h-8 w-64 rounded-sm bg-[#F5F2EF] dark:bg-[#1A1416] animate-pulse" />
+        <div className="h-[320px] sm:h-[520px] rounded-md bg-[#F5F2EF] dark:bg-[#1A1416] animate-pulse" />
       </div>
     </div>
   );

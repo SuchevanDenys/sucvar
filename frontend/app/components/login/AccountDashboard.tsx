@@ -86,12 +86,12 @@ export default function AccountDashboard({
         )}
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-xs font-mono uppercase px-2 py-0.5 rounded-full bg-[#111111] text-white dark:bg-white dark:text-[#111111]">
+            <span className="text-xs font-mono uppercase px-2 py-0.5 rounded-full bg-[#5C1628] text-white dark:bg-[#C94A6A] dark:text-white">
               {userRole}
             </span>
             <span
               className={`text-[10px] font-mono font-semibold uppercase px-2 py-0.5 rounded-full border tracking-widest ${
-                plan.isPro ? 'bg-[#111111] text-white border-[#111111] dark:bg-white dark:text-[#111111] dark:border-white' : `${ui.muted} border-current`
+                plan.isPro ? 'bg-[#5C1628] text-white border-[#5C1628] dark:bg-[#C94A6A] dark:text-white dark:border-[#C94A6A]' : `${ui.muted} border-current`
               }`}
             >
               {plan.isPro ? 'PRO' : 'STUDIO'}
@@ -242,10 +242,10 @@ export default function AccountDashboard({
                     </div>
                   )}
 
-                  <span className="absolute top-3 left-3 bg-black/70 backdrop-blur-sm text-white text-[10px] font-mono uppercase tracking-widest px-2.5 py-1 rounded-full">
+                  <span className="absolute top-3 left-3 bg-[#110D0F]/70 backdrop-blur-sm text-white text-[10px] font-mono uppercase tracking-widest px-2.5 py-1 rounded-full">
                     {styleLabel}
                   </span>
-                  <span className="absolute bottom-3 right-3 bg-[#111111] text-white dark:bg-white dark:text-[#111111] text-[10px] font-semibold uppercase tracking-widest px-2.5 py-1 rounded-full">
+                  <span className="absolute bottom-3 right-3 bg-[#5C1628] text-white dark:bg-[#C94A6A] dark:text-white text-[10px] font-semibold uppercase tracking-widest px-2.5 py-1 rounded-full">
                     {t('Vezi devizul →', 'View specs →')}
                   </span>
                 </div>

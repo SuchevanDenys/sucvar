@@ -35,7 +35,8 @@ public sealed record DesignBrief(
     double AreaSqm,
     bool PreserveStructure,
     IReadOnlyList<VisionMaterial> Materials,
-    string? Preset = null)
+    string? Preset = null,
+    RoomScale? Scale = null)
 {
     public bool HasCustomPrompt => CustomPrompt.Length > 0;
 }
@@ -372,7 +373,8 @@ public static partial class DesignVision
         else if (InferSpace(mode, customPrompt) is { } s) { spaceId = s; spaceInferred = true; }
         else spaceId = SucvarCatalog.GetSpace(mode, null).Id;
 
-        var area = GenerationPrompt.ReadNumber(Js.Prop(payload, "areaSqm"), MinAreaSqm, MaxAreaSqm, DefaultAreaSqm);
+        var scale = ResolveScale(payload);
+        var area = scale.AreaSqm;
         var preserve = Js.Prop(payload, "preserveStructure") is not { ValueKind: JsonValueKind.False };
 
         return new DesignBrief(
@@ -386,7 +388,29 @@ public static partial class DesignVision
             Js.Round(area * 10) / 10,
             preserve,
             DetectMaterials(customPrompt),
-            preset?.Id);
+            preset?.Id,
+            scale);
+    }
+
+    /// <summary>
+    /// Room size from the request: explicit <c>areaSqm</c> wins, else <c>dimensions.width × length</c>, else the
+    /// default (marked unknown so no scale cue is invented). Height comes from <c>dimensions.height</c>.
+    /// </summary>
+    public static RoomScale ResolveScale(JsonElement payload)
+    {
+        var dims = Js.IsRecord(Js.Prop(payload, "dimensions")) ? Js.Prop(payload, "dimensions") : null;
+        double? Dim(string name, double min, double max)
+        {
+            var v = GenerationPrompt.ReadNumber(Js.Prop(dims, name), min, max, double.NaN);
+            return double.IsNaN(v) ? null : Math.Round(v, 2);
+        }
+        var width = Dim("width", 1, 100);
+        var length = Dim("length", 1, 100);
+        var height = Dim("height", 2, 15);
+        var explicitArea = GenerationPrompt.ReadNumber(Js.Prop(payload, "areaSqm"), MinAreaSqm, MaxAreaSqm, double.NaN);
+        if (!double.IsNaN(explicitArea)) return new RoomScale(length, width, height, explicitArea, true);
+        if (width is { } w && length is { } l) return new RoomScale(length, width, height, w * l, true);
+        return new RoomScale(length, width, height, DefaultAreaSqm, false);
     }
 
     /// <summary>Client-facing summary of the brief (camelCase JSON via the web serializer).</summary>
@@ -402,6 +426,11 @@ public static partial class DesignVision
         areaSqm = b.AreaSqm,
         preserveStructure = b.PreserveStructure,
         preset = b.Preset,
+        dimensions = b.Scale is { } sc
+            ? new { length = sc.Length, width = sc.Width, height = sc.Height, areaSqm = Js.Round(sc.AreaSqm * 10) / 10, volumeM3 = sc.Volume }
+            : null,
+        // What the compiler understood from the free text (element → English phrase) — shown in "Prompt optimizat AI"
+        userSpecs = ArchitecturalPromptCompiler.CompileUserSpecs(b.CustomPrompt).Select(s => new { slot = s.Slot, promptEn = s.PromptEn }).ToList(),
         materials = b.Materials.Select(m => new { id = m.Id, slot = m.Slot, titleRo = m.TitleRo, titleEn = m.TitleEn }).ToList(),
     };
 

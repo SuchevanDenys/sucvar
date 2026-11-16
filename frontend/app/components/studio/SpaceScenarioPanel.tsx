@@ -137,7 +137,7 @@ export default function SpaceScenarioPanel({
                   disabled={blocked}
                   onClick={() => onToggleFocus(s.id)}
                   className={`inline-flex items-center gap-1.5 min-h-9 px-3 py-1.5 rounded-sm border text-left text-xs leading-snug cursor-pointer touch-manipulation transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-                    active ? `${sk.segOn} ${isDark ? 'border-white' : 'border-[#111111]'}` : `${sk.btnGhost}`
+                    active ? `${sk.chipOn}` : `${sk.btnGhost}`
                   }`}
                 >
                   {active && <Check className="w-3 h-3 shrink-0" aria-hidden />}

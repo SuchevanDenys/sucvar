@@ -1,4 +1,5 @@
 // app/components/layout/Navbar.tsx
+// v6.0 — Bordeaux + Alabaster: translucent obsidian glass over the landing hero (#hero), solid themed bar after it.
 // v5.1 — discreet ADMIN entry in the account menu, shown only when GET /api/profile says role === 'admin'.
 // v5.0 — monochrome gallery bar: solid white/charcoal, 1px hairline, centered uppercase nav, no blue.
 // v4.3 — plan-aware account menu (STARTER / PRO / AGENCY row + B2B lock state).
@@ -38,6 +39,10 @@ export default function Navbar() {
   const [tier, setTier] = useState<PlanTier | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  // Landing hero overlay: `overHero` = the bar currently sits on top of the photo; `scrolled` = page has moved.
+  const [overHero, setOverHero] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const headerRef = useRef<HTMLElement>(null);
 
   // Session email (Supabase first, Demo profile fallback) — refreshed on navigation
   useEffect(() => {
@@ -95,6 +100,30 @@ export default function Navbar() {
     };
   }, [menuOpen]);
 
+  // Bara transparentă peste fotografia hero: urmărim (rAF, pasiv) dacă bara încă stă deasupra secțiunii #hero.
+  useEffect(() => {
+    const hero = pathname === '/' ? document.getElementById('hero') : null;
+    if (!hero) return; // în afara landing-ului `glass` e oricum false (derivat din pathname)
+    let frame = 0;
+    const measure = () => {
+      frame = 0;
+      const barH = headerRef.current?.getBoundingClientRect().height ?? 64;
+      setOverHero(hero.getBoundingClientRect().bottom > barH);
+      setScrolled(window.scrollY > 8);
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(measure);
+    };
+    frame = requestAnimationFrame(measure);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+    };
+  }, [pathname]);
+
   // Observer pe secțiunea care conține ancora #planuri (ancora e pe container, secțiunea are padding-ul)
   useEffect(() => {
     if (pathname !== '/') return; // isHome / isPricing already require pathname === '/'
@@ -109,9 +138,16 @@ export default function Navbar() {
     return () => observer.disconnect();
   }, [pathname]);
 
-  // Bara are mereu aceeași suprafață ca pagina (alb de galerie / cărbune mat)
-  const chromeDark = isDark;
-  const hk = sk;
+  // Peste fotografia hero bara folosește mereu cromatica întunecată (text ivoriu pe sticlă obsidian),
+  // indiferent de temă; după hero revine la suprafața paginii.
+  const glass = pathname === '/' && overHero && !menuOpen;
+  const chromeDark = isDark || glass;
+  const hk = glass ? getSkin(true) : sk;
+  const headerSurface = glass
+    ? `${scrolled ? 'bg-[#110D0F]/55' : 'bg-[#110D0F]/30'} border-white/10 text-[#F5F2EF] shadow-none`
+    : isDark
+      ? 'bg-[#110D0F]/95 border-[#2E2427] text-[#F5F2EF] shadow-[0_1px_0_rgba(0,0,0,0.2)]'
+      : 'bg-white/95 border-[#E8E2E0] text-[#1B1416] shadow-[0_8px_24px_-20px_rgba(27,20,22,0.35)]';
 
   const isHome = pathname === '/' && !pricingVisible;
   const isPricing = (pathname === '/' && pricingVisible) || pathname === '/checkout';
@@ -151,7 +187,7 @@ export default function Navbar() {
   };
 
   // ── Styles ──────────────────────────────────────────────────────────────
-  const navHover = isDark ? 'hover:text-white' : 'hover:text-[#111111]';
+  const navHover = chromeDark ? 'hover:text-white' : 'hover:text-[#5C1628]';
   const navLink = (active: boolean) =>
     `relative h-16 inline-flex items-center text-[11px] font-medium uppercase tracking-[0.24em] transition-colors duration-300 ${
       active ? hk.strong : `${hk.muted} ${navHover}`
@@ -159,10 +195,10 @@ export default function Navbar() {
   const activeBar = (active: boolean) =>
     `absolute inset-x-0 -bottom-px h-[2px] transition-opacity duration-200 ${
       active ? 'opacity-100' : 'opacity-0'
-    } ${isDark ? 'bg-white' : 'bg-[#111111]'}`;
+    } ${chromeDark ? 'bg-[#C94A6A]' : 'bg-[#5C1628]'}`;
   const mobileTab = (active: boolean) =>
     `flex flex-col items-center justify-center gap-1 text-[9px] tracking-[0.18em] uppercase font-mono touch-manipulation transition-colors ${
-      active ? `${sk.strong}` : sk.dim
+      active ? sk.brandText : sk.dim
     }`;
 
   const initials = (email ?? '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 2).toUpperCase();
@@ -176,10 +212,9 @@ export default function Navbar() {
     <>
       {/* ── TOP HEADER ───────────────────────────────────────────────────── */}
       <header
+        ref={headerRef}
         data-sticky-header
-        className={`sticky top-0 z-40 border-b pt-[env(safe-area-inset-top)] transition-colors duration-500 print:hidden ${
-          isDark ? 'bg-[#0B0B0C]/95 border-[#262629] text-[#F5F5F5]' : 'bg-white/95 border-[#E5E5E5] text-[#111111]'
-        } backdrop-blur-md`}
+        className={`sticky top-0 z-40 border-b pt-[env(safe-area-inset-top)] backdrop-blur-md transition-[background-color,border-color,color,box-shadow] duration-500 ease-out print:hidden ${headerSurface}`}
       >
         <div className={`${CONTAINER} h-16 grid grid-cols-[1fr_auto] md:grid-cols-[1fr_auto_1fr] items-center gap-6`}>
           <div className="flex items-center gap-5">
@@ -257,8 +292,8 @@ export default function Navbar() {
                   aria-expanded={menuOpen}
                   aria-label={tr(lang, 'Meniu cont', 'Account menu')}
                   className={`h-8 w-8 inline-flex items-center justify-center rounded-full border cursor-pointer touch-manipulation transition-opacity hover:opacity-80 ${
-                    isAgency ? (isDark ? 'border-white' : 'border-[#111111]') : sk.line
-                  } ${isDark ? 'bg-[#141416] text-[#F5F5F5]' : 'bg-[#F5F5F5] text-[#111111]'}`}
+                    isAgency ? (chromeDark ? 'border-[#C94A6A]' : 'border-[#5C1628]') : hk.line
+                  } ${chromeDark ? 'bg-[#1A1416] text-[#F5F2EF]' : 'bg-[#F5F2EF] text-[#1B1416]'}`}
                 >
                   <span className="font-mono text-[10.5px] tracking-wider">{initials || '··'}</span>
                 </button>

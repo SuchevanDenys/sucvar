@@ -25,14 +25,13 @@ import {
   SPACE_MODES,
   VISUAL_STYLES,
   calculateEngineering,
-  detectSizePreset,
   estimateCost,
   generateSpecItems,
   getSizePreset,
   getSpace,
   getStyle,
 } from '@/app/data/catalog';
-import { DEFAULT_AI_SETTINGS, PLAN_LIMITS } from '@/app/lib/studio/aiConfig';
+import { AI_STRENGTH, DEFAULT_AI_SETTINGS, PLAN_LIMITS } from '@/app/lib/studio/aiConfig';
 import { getAccessToken, getSessionEmail } from '@/app/lib/supabase/auth';
 import { getProjectById, saveProjectToDb } from '@/app/lib/supabase/projects';
 import { buildBom } from '@/app/lib/procurement';
@@ -60,6 +59,7 @@ import { useLoadingTicker } from '@/app/lib/studio/useLoadingTicker';
 import DimensionsPanel from '@/app/components/studio/DimensionsPanel';
 import ExpertAiSettings from '@/app/components/studio/ExpertAiSettings';
 import RoomStylePicker from '@/app/components/studio/RoomStylePicker';
+import RoomSizeCard, { INTERIOR_SIZE_PRESETS, type RoomSizePreset } from '@/app/components/studio/RoomSizeCard';
 import SourcePhotoCard from '@/app/components/studio/SourcePhotoCard';
 import { StudioCard } from '@/app/components/studio/StudioCard';
 import PlanLimitNotice from '@/app/components/studio/PlanLimitNotice';
@@ -73,6 +73,7 @@ import {
   type DesignBriefMeta,
   type LightingId,
   type PaletteId,
+  type PromptInsight,
   type VisionResponse,
 } from '@/app/lib/studio/vision';
 import type { BomItem, BomResult } from '@/app/lib/procurement';
@@ -84,7 +85,7 @@ import EngineeringPanel from '@/app/components/studio/EngineeringPanel';
 import ManufacturerSpecs from '@/app/components/studio/ManufacturerSpecs';
 import PrintBlueprint from '@/app/components/studio/PrintBlueprint';
 import ShareControl from '@/app/components/portal/ShareControl';
-import type { AiSettings, DesignMode, RoomDimensions, SavedProject, ScopeLevel, SizePresetId } from '@/app/types';
+import type { AiSettings, DesignMode, RoomDimensions, SavedProject, ScopeLevel } from '@/app/types';
 import { apiFetch, readJson } from '@/app/lib/api-client';
 import { LOCALES, tr, trList } from '@/app/lib/i18n';
 
@@ -114,12 +115,16 @@ export default function StudioPage() {
   const [roomDimensions, setRoomDimensions] = useState<RoomDimensions>(() =>
     dimensionsForSpace('interiors', SPACE_MODES.interiors.spaces[0].id, {
       budget: 'standard',
-      aiStrength: 75,
+      aiStrength: AI_STRENGTH.recommended, // 72 %: zona optimă cu structura păstrată
       scope: DEFAULT_SCOPE,
     }),
   );
   const [originalImage, setOriginalImage] = useState<string | null>(null);
   const [aiSettings, setAiSettings] = useState<AiSettings>(DEFAULT_AI_SETTINGS);
+  // „Prompt optimizat AI": ultimul prompt compilat (previzualizare sau randare) + cheia intrării care l-a produs
+  const [promptInsight, setPromptInsight] = useState<(PromptInsight & { key: string }) | null>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   // ── Stare: rezultatul generării și mesajele de interfață ──
   // (loading / eroare / salvare sunt stări separate, ca fiecare acțiune să aibă feedback clar)
@@ -257,22 +262,15 @@ export default function StudioPage() {
   const currentStyle = getStyle(selectedStyleId);
   const currentSpace = getSpace(mode, selectedSpace);
 
-  // Presetări de mărime ale spațiului curent (Compact / Standard / Spacious)
-  const presetLabels: Record<SizePresetId, { ro: string; en: string }> = {
-    compact: { ro: 'Compact', en: 'Compact' },
-    standard: { ro: 'Standard', en: 'Standard' },
-    spacious: { ro: 'Spacious / Open', en: 'Spacious / Open' },
-  };
-  const sizePresets = SIZE_PRESET_IDS.map((id) => {
-    const p = getSizePreset(currentSpace, id);
-    return { id, label: t(presetLabels[id].ro, presetLabels[id].en), size: `${p.width} × ${p.length} m` };
-  });
-  const activePreset = detectSizePreset(currentSpace, roomDimensions.width, roomDimensions.length);
-  // Glisoarele merg până la ~1.5× presetarea „Spacious” (valori mai mari se pot tasta)
-  const sliderMax = {
-    width: Math.ceil(currentSpace.sizePresets.spacious.width * 1.5),
-    length: Math.ceil(currentSpace.sizePresets.spacious.length * 1.5),
-  };
+  // Presetări de mărime: interioare = apartamente tipice din România (12 / 20 / 32 m²);
+  // exterior / grădină = presetările spațiului din catalog.
+  const sizePresets: RoomSizePreset[] = mode === 'interiors'
+    ? INTERIOR_SIZE_PRESETS.map((p) => ({ id: p.id, label: t(p.ro, p.en), length: p.length, width: p.width, height: p.height }))
+    : SIZE_PRESET_IDS.map((id) => {
+        const p = getSizePreset(currentSpace, id);
+        const labels = { compact: t('Compact', 'Compact'), standard: 'Standard', spacious: t('Spațios', 'Spacious') };
+        return { id, label: labels[id], length: p.length, width: p.width, height: p.height };
+      });
 
   // Cantitățile (arii, materiale, iluminat) se recalculează live la fiecare schimbare a cotelor
   const calculatedMaterials = useMemo(
@@ -349,13 +347,6 @@ export default function StudioPage() {
     applySpaceSelection(mode, id);
   };
 
-  // Suprafața din opțiunile avansate: o cameră 4:5 cu aria cerută (cotele exacte rămân editabile)
-  const handleAreaChange = (area: number) => {
-    const width = Math.round(Math.sqrt(area * 0.8) * 10) / 10;
-    const length = Math.round((area / width) * 10) / 10;
-    setRoomDimensions((p) => ({ ...p, width, length }));
-  };
-
   // Pornire rapidă: fotografia demo din /showcase trece prin același flux ca o încărcare
   const handleDemoPhoto = async () => {
     setErrorMessage(null);
@@ -379,17 +370,9 @@ export default function StudioPage() {
     }
   };
 
-  // Presetare de mărime: setează lățime, lungime, înălțime și ferestre dintr-un click
-  const handleSizePreset = (id: SizePresetId) => {
-    const p = getSizePreset(currentSpace, id);
-    setRoomDimensions((prev) => ({
-      ...prev,
-      width: p.width,
-      length: p.length,
-      height: p.height,
-      windowsCount: p.windowsCount,
-    }));
-  };
+  // Presetare de mărime: lungime × lățime × înălțime dintr-un click (cererea AI și costul se actualizează imediat)
+  const handleSizePreset = (preset: RoomSizePreset) =>
+    setRoomDimensions((prev) => ({ ...prev, length: preset.length, width: preset.width, height: preset.height }));
 
   // Scenariile (chips) se bifează / debifează; maximum MAX_FOCUS_CHIPS simultan
   const handleToggleFocus = (id: string) =>
@@ -447,6 +430,66 @@ export default function StudioPage() {
       setErrorMessage(photoErrorMessage(err instanceof PhotoError ? err.code : 'decode', t));
     } finally {
       setIsPhotoLoading(false);
+    }
+  };
+
+  // Brief-ul trimis la /api/generate și /api/prompt-preview (aceleași câmpuri: previzualizarea = randarea)
+  const buildBriefPayload = (space: string, dims: RoomDimensions) => ({
+    mode,
+    spaceType: space,
+    roomType: space,
+    // Stil omis = „Auto”: serverul îl deduce din descriere
+    ...(styleChoice !== AUTO ? { styleId: styleChoice, style: styleChoice } : {}),
+    customPrompt: trimmedPrompt || undefined,
+    palette: palette ?? undefined,
+    lighting: lighting ?? undefined,
+    areaSqm: roundedArea(dims),
+    preserveStructure,
+    dimensions: dims,
+    ai: aiSettings,
+  });
+  const previewSpace = (!spaceTouched && inferSpaceFromText(mode, trimmedPrompt)) || selectedSpace;
+  const briefKey = JSON.stringify(buildBriefPayload(previewSpace, roomDimensions));
+
+  // „Prompt optimizat AI": compilează promptul pe server fără fotografie și fără a consuma o generare
+  const handlePreviewPrompt = async () => {
+    if (!hasIntent || isPreviewLoading) return;
+    setIsPreviewLoading(true);
+    setPreviewError(null);
+    const key = briefKey;
+    try {
+      const res = await apiFetch('/api/prompt-preview', {
+        method: 'POST',
+        token: await getAccessToken(),
+        json: buildBriefPayload(previewSpace, roomDimensions),
+      });
+      const data = await readJson<{
+        prompt?: string; negativePrompt?: string; promptEngine?: string; enhancerAvailable?: boolean;
+        estimatedTokens?: number; maxTokens?: number; parameters?: PromptInsight['parameters']; vision?: VisionResponse;
+      }>(res);
+      if (!res.ok || typeof data.prompt !== 'string') {
+        throw new Error(res.status === 401
+          ? t('Autentifică-te pentru a previzualiza promptul.', 'Sign in to preview the prompt.')
+          : (data.error ?? t('Previzualizarea a eșuat.', 'Preview failed.')));
+      }
+      setPromptInsight({
+        key,
+        source: 'preview',
+        prompt: data.prompt,
+        negativePrompt: data.negativePrompt ?? '',
+        engine: data.promptEngine ?? 'deterministic',
+        parameters: data.parameters,
+        userSpecs: data.vision?.userSpecs ?? [],
+        estimatedTokens: data.estimatedTokens,
+        maxTokens: data.maxTokens,
+        enhancerAvailable: data.enhancerAvailable,
+      });
+    } catch (err) {
+      setPreviewError(err instanceof TypeError
+        ? t('Conexiunea cu serverul a eșuat.', 'Could not reach the server.')
+        : err instanceof Error ? err.message : 'Error');
+    } finally {
+      setIsPreviewLoading(false);
     }
   };
 
@@ -510,23 +553,12 @@ export default function StudioPage() {
         signal: controller.signal,
         method: 'POST',
         token: accessToken,
-        json: {
-          image: originalImage,
-          mode,
-          spaceType: requestSpace,
-          roomType: requestSpace,
-          // Stil omis = „Auto”: serverul îl deduce din descriere
-          ...(styleChoice !== AUTO ? { styleId: styleChoice, style: styleChoice } : {}),
-          customPrompt: trimmedPrompt || undefined,
-          palette: palette ?? undefined,
-          lighting: lighting ?? undefined,
-          areaSqm: roundedArea(requestDims),
-          preserveStructure,
-          dimensions: requestDims,
-          ai: aiSettings,
-        },
+        json: { image: originalImage, ...buildBriefPayload(requestSpace, requestDims) },
       });
-      const data = await readJson<{ result?: unknown; isDemo?: boolean; warning?: string; vision?: VisionResponse }>(res);
+      const data = await readJson<{
+        result?: unknown; isDemo?: boolean; warning?: string; vision?: VisionResponse;
+        promptUsed?: string; negativePromptUsed?: string; promptEngine?: string; parameters?: PromptInsight['parameters'];
+      }>(res);
       if (!res.ok) {
         const code = typeof data.code === 'string' ? data.code : '';
         if (code === 'LIMIT_REACHED') {
@@ -568,6 +600,17 @@ export default function StudioPage() {
       setIsDemoResult(Boolean(data.isDemo));
       setProviderNote(typeof data.warning === 'string' ? data.warning : null);
       setVision(data.vision && typeof data.vision === 'object' ? data.vision : null);
+      if (typeof data.promptUsed === 'string') {
+        setPromptInsight({
+          key: JSON.stringify(buildBriefPayload(requestSpace, requestDims)),
+          source: 'render',
+          prompt: data.promptUsed,
+          negativePrompt: data.negativePromptUsed ?? '',
+          engine: data.promptEngine ?? 'deterministic',
+          parameters: data.parameters,
+          userSpecs: data.vision?.userSpecs ?? [],
+        });
+      }
       setIssueDate(new Date().toLocaleDateString(LOCALES[lang]));
 
       setTimeout(() => specSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 400);
@@ -719,7 +762,7 @@ export default function StudioPage() {
   );
 
   return (
-    <div className={`min-h-screen font-sans pb-36 lg:pb-24 transition-colors print:bg-white print:text-black print:pb-0 ${sk.page}`}>
+    <div className={`min-h-screen font-sans pb-36 lg:pb-24 transition-colors print:bg-white print:text-[#1B1416] print:pb-0 ${sk.page}`}>
       <Navbar />
 
       {/* ═══════════════ WORKSPACE ═══════════════════════════════════════════ */}
@@ -810,6 +853,18 @@ export default function StudioPage() {
                 disabled={isLoading}
               />
 
+              {/* Dimensiuni spațiu: mereu vizibile (cererea AI + costul / lista de materiale folosesc aceleași cote) */}
+              <RoomSizeCard
+                lang={lang}
+                isDark={isDark}
+                roomDimensions={roomDimensions}
+                presets={sizePresets}
+                onPresetSelect={handleSizePreset}
+                onNumberChange={handleNumberChange}
+                issues={dimensionIssues}
+                disabled={isLoading}
+              />
+
               <VisionPanel
                 lang={lang}
                 isDark={isDark}
@@ -845,7 +900,7 @@ export default function StudioPage() {
                   {!plan.isLoading && !plan.isPro && plan.limit > 0 && (
                     <div className="flex gap-1" aria-hidden>
                       {Array.from({ length: plan.limit }).map((_, i) => (
-                        <span key={i} className={`h-1 flex-1 rounded-full ${i < plan.used ? (isDark ? 'bg-white/20' : 'bg-[#111111]/15') : (isDark ? 'bg-white' : 'bg-[#111111]')}`} />
+                        <span key={i} className={`h-1 flex-1 rounded-full ${i < plan.used ? (isDark ? 'bg-[#C94A6A]/25' : 'bg-[#5C1628]/15') : (isDark ? 'bg-[#C94A6A]' : 'bg-[#5C1628]')}`} />
                       ))}
                     </div>
                   )}
@@ -876,7 +931,7 @@ export default function StudioPage() {
                     <span className="min-w-0">
                       <span className={`block text-[14px] font-semibold ${sk.strong}`}>{t('Setări avansate', 'Advanced settings')}</span>
                       <span className={`block text-[12px] mt-0.5 truncate ${sk.muted}`}>
-                        {t('Cote, buget, scenarii, parametri AI', 'Dimensions, budget, scenarios, AI parameters')} · {calculatedMaterials.floorArea} m²
+                        {t('Scenarii, goluri, buget, parametri AI', 'Scenarios, openings, budget, AI parameters')}
                       </span>
                     </span>
                   </span>
@@ -884,23 +939,6 @@ export default function StudioPage() {
                 </button>
                 {isProjectDetailsOpen && (
                   <div className={`px-5 pb-5 pt-4 space-y-5 border-t ${sk.line}`}>
-                    <label className="block space-y-2">
-                      <span className="flex items-center justify-between text-[13px]">
-                        <span className={`font-medium ${sk.strong}`}>{t('Suprafață', 'Floor area')}</span>
-                        <span className={`font-mono tabular-nums ${sk.strong}`}>{calculatedMaterials.floorArea} m²</span>
-                      </span>
-                      <input
-                        type="range"
-                        min={4}
-                        max={120}
-                        step={1}
-                        disabled={isLoading}
-                        value={Math.min(120, Math.max(4, Math.round(calculatedMaterials.floorArea)))}
-                        onChange={(e) => handleAreaChange(Number(e.target.value))}
-                        className="w-full accent-[var(--foreground)] touch-manipulation touch-pan-y"
-                      />
-                    </label>
-
                     <SpaceScenarioPanel
                       lang={lang}
                       isDark={isDark}
@@ -925,20 +963,25 @@ export default function StudioPage() {
                       lang={lang}
                       isDark={isDark}
                       roomDimensions={roomDimensions}
-                      floorArea={calculatedMaterials.floorArea}
-                      issues={dimensionIssues}
                       onNumberChange={handleNumberChange}
                       onBudgetChange={(budget) => setRoomDimensions((p) => ({ ...p, budget }))}
-                      presets={sizePresets}
-                      activePreset={activePreset}
-                      onPresetSelect={handleSizePreset}
-                      sliderMax={sliderMax}
                       costTotal={costEstimate.total}
                       costMin={costEstimate.min}
                       costMax={costEstimate.max}
                     />
 
-                    <ExpertAiSettings lang={lang} isDark={isDark} settings={aiSettings} onChange={setAiSettings} />
+                    <ExpertAiSettings
+                      lang={lang}
+                      isDark={isDark}
+                      settings={aiSettings}
+                      onChange={setAiSettings}
+                      insight={promptInsight}
+                      stale={promptInsight !== null && promptInsight.key !== briefKey}
+                      onPreview={() => void handlePreviewPrompt()}
+                      previewLoading={isPreviewLoading}
+                      previewError={previewError}
+                      canPreview={hasIntent}
+                    />
                   </div>
                 )}
               </section>

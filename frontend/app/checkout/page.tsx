@@ -111,7 +111,7 @@ export default function CheckoutPage() {
               onChange={(next) => writeStorage(STORAGE_KEYS.billingInterval, next)}
               lang={lang}
               wrapClass={ui.line}
-              segOn={isDark ? "bg-white text-[#111111]" : "bg-[#111111] text-white"}
+              segOn={isDark ? "bg-[#C94A6A] text-white" : "bg-[#5C1628] text-white"}
               segOff={`${ui.muted} hover:bg-neutral-500/10`}
             />
           )}

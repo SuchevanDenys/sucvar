@@ -1,6 +1,7 @@
 // app/components/studio/VisionPanel.tsx
 // Studio · 03 — Personalizare: descriere liberă (RO/EN), materiale dintr-un click, rafinare pe element
-// (pereți, pardoseală, mobilier…), paletă, lumină și comutatorul „Păstrează pereții și ferestrele existente”.
+// (pereți, pardoseală, mobilier…), paletă, lumină și comutatorul „Păstrează structura camerei (pereți, ferestre)”
+// (activ implicit: geometria fotografiei rămâne blocată, se transformă finisajele, mobilierul și lumina).
 // Totul se scrie în `customPrompt` (contractul existent al /api/generate) — fără câmpuri noi în API.
 "use client";
 
@@ -91,7 +92,7 @@ export default function VisionPanel(props: VisionPanelProps) {
 
   const pill = (active: boolean) =>
     `inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[12px] whitespace-nowrap cursor-pointer touch-manipulation active:scale-[0.97] transition-[background-color,border-color,transform] disabled:opacity-40 disabled:cursor-not-allowed ${
-      active ? `${sk.segOn} ${isDark ? 'border-white' : 'border-[#111111]'}` : `${sk.line} ${sk.segOff}`
+      active ? `${sk.chipOn}` : `${sk.line} ${sk.segOff}`
     }`;
   const label = `text-[13px] font-medium ${sk.strong}`;
 
@@ -200,7 +201,7 @@ export default function VisionPanel(props: VisionPanelProps) {
                 }
               }}
               placeholder={t(activeElement.hintRo, activeElement.hintEn)}
-              className={`min-w-0 flex-1 bg-transparent text-[13px] outline-none ${sk.strong} ${isDark ? 'placeholder:text-[#71717A]' : 'placeholder:text-[#A3A3A3]'}`}
+              className={`min-w-0 flex-1 bg-transparent text-[13px] outline-none ${sk.strong} ${isDark ? 'placeholder:text-[#8A7D80]' : 'placeholder:text-[#A99EA1]'}`}
             />
             <button
               type="button"
@@ -247,7 +248,7 @@ export default function VisionPanel(props: VisionPanelProps) {
       <div className={`flex items-start justify-between gap-4 rounded-lg border p-3.5 ${sk.line}`}>
         <label htmlFor={switchId} className="space-y-1 cursor-pointer">
           <span className={`block ${label}`}>
-            {t('Păstrează pereții și ferestrele existente', 'Keep existing walls and windows')}
+            {t('Păstrează structura camerei (pereți, ferestre)', 'Keep the room structure (walls, windows)', 'Conserver la structure de la pièce (murs, fenêtres)')}
           </span>
           <span className={`block text-[12px] leading-relaxed ${sk.muted}`}>
             {preserveStructure
@@ -264,13 +265,13 @@ export default function VisionPanel(props: VisionPanelProps) {
           onClick={() => onPreserveStructureChange(!preserveStructure)}
           className={`relative shrink-0 w-10 h-6 rounded-full border transition-colors cursor-pointer touch-manipulation disabled:opacity-40 ${
             preserveStructure
-              ? isDark ? 'bg-white border-white' : 'bg-[#111111] border-[#111111]'
-              : `${sk.line} ${isDark ? 'bg-[#1C1C1F]' : 'bg-[#F5F5F5]'}`
+              ? isDark ? 'bg-[#C94A6A] border-[#C94A6A]' : 'bg-[#5C1628] border-[#5C1628]'
+              : `${sk.line} ${isDark ? 'bg-[#231B1E]' : 'bg-[#F5F2EF]'}`
           }`}
         >
           <span
             className={`absolute top-0.5 left-0.5 w-[18px] h-[18px] rounded-full transition-transform ${
-              preserveStructure ? `translate-x-4 ${isDark ? 'bg-[#111111]' : 'bg-white'}` : 'bg-[#A1A1AA]'
+              preserveStructure ? 'translate-x-4 bg-white' : 'bg-[#B5A9AC]'
             }`}
           />
         </button>
@@ -289,7 +290,7 @@ export default function VisionPanel(props: VisionPanelProps) {
               type="button"
               disabled={disabled}
               onClick={() => onCustomPromptChange(applyInspiration(customPrompt, p, lang))}
-              className={`inline-flex h-7 items-center rounded-full px-2.5 text-[11px] cursor-pointer touch-manipulation transition-colors disabled:opacity-40 ${isDark ? 'bg-[#1C1C1F] hover:bg-[#262629]' : 'bg-[#F5F5F5] hover:bg-[#EDEDED]'} ${sk.muted}`}
+              className={`inline-flex h-7 items-center rounded-full px-2.5 text-[11px] cursor-pointer touch-manipulation transition-colors disabled:opacity-40 ${isDark ? 'bg-[#231B1E] hover:bg-[#2E2427]' : 'bg-[#F5F2EF] hover:bg-[#EFEAE6]'} ${sk.muted}`}
             >
               {tr(lang, p.labelRo, p.labelEn, p.labelFr)}
             </button>

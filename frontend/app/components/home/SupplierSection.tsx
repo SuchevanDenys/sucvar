@@ -18,7 +18,7 @@ export default function SupplierSection({ lang, isDark }: { lang: Language; isDa
   const sk = getSkin(isDark);
   const t = (ro: string, en: string, fr?: string) => tr(lang, ro, en, fr);
   const sectionY = sectionSpacing(sk.line);
-  const groupHoverAccent = isDark ? 'group-hover:text-white' : 'group-hover:text-[#111111]';
+  const groupHoverAccent = isDark ? 'group-hover:text-white' : 'group-hover:text-[#1B1416]';
 
   return (
     <section className={sectionY}>

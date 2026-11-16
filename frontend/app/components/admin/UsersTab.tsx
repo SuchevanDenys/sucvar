@@ -102,7 +102,7 @@ export default function UsersTab({ ctx, selfId }: { ctx: AdminCtx; selfId: strin
               Array.from({ length: 6 }, (_, i) => (
                 <tr key={i}>
                   <td colSpan={6} className="px-4 py-3">
-                    <div className={`h-6 animate-pulse ${ctx.isDark ? 'bg-[#1C1C1F]' : 'bg-[#F5F5F5]'}`} />
+                    <div className={`h-6 animate-pulse ${ctx.isDark ? 'bg-[#231B1E]' : 'bg-[#F5F2EF]'}`} />
                   </td>
                 </tr>
               ))}

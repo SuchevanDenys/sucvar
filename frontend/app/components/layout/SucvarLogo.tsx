@@ -13,9 +13,8 @@ export default function SucvarLogo({
   withWordmark = false,
   isDark = false,
 }: SucvarLogoProps) {
-  // Monochrome: the origin point follows the ink colour (currentColor); isDark kept for API compatibility
-  void isDark;
-  const inkColor = 'currentColor';
+  // Brand accent: the origin point and crosshair are bordeaux (ruby on dark chrome); the strokes follow the ink.
+  const inkColor = isDark ? '#C94A6A' : '#5C1628';
 
   return (
     <span className="inline-flex items-center gap-3">
@@ -32,7 +31,7 @@ export default function SucvarLogo({
         {/* Corner B: bottom bar + right leg (lower half of the S) */}
         <path d="M6 27H26V16" stroke="currentColor" strokeWidth="2.2" strokeLinecap="square" />
         {/* Construction axis through the origin point */}
-        <path d="M6 16H26" stroke={inkColor} strokeWidth="1" opacity="0.45" />
+        <path d="M6 16H26" stroke="currentColor" strokeWidth="1" opacity="0.45" />
         {/* Origin point + small crosshair ticks */}
         <circle cx="16" cy="16" r="2.4" fill={inkColor} />
         <path d="M16 11.5V13.5M16 18.5V20.5" stroke={inkColor} strokeWidth="1.2" />

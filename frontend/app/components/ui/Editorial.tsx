@@ -52,7 +52,7 @@ export function Frame({
           <span className="tabular-nums">{meta}</span>
         </figcaption>
       )}
-      <div className={`relative border p-2 sm:p-3 ${sk.line} ${isDark ? 'bg-[#141416]' : 'bg-[#F5F5F5]'}`}>
+      <div className={`relative border p-2 sm:p-3 ${sk.line} ${isDark ? 'bg-[#1A1416]' : 'bg-[#F5F2EF]'}`}>
         {children}
       </div>
     </figure>
@@ -77,7 +77,7 @@ export function SectionHeading({
   return (
     <div>
       <p className={`flex items-center gap-3 ${EYEBROW} ${sk.dim}`}>
-        <span className={sk.strong}>§{index}</span>
+        <span className={sk.accent}>§{index}</span>
         <span className={`h-px w-8 ${ruleClass(isDark)}`} />
         {eyebrow}
       </p>

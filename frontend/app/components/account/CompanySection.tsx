@@ -101,7 +101,7 @@ export default function CompanySection({
                   aria-pressed={on}
                   title={t(p.hintRo, p.hintEn, p.hintFr)}
                   className={`flex-1 h-8 px-2 border text-[11px] font-mono tabular-nums cursor-pointer touch-manipulation transition-colors ${ui.line} ${
-                    on ? 'bg-[#111111] text-white border-[#111111] dark:bg-[#F5F5F5] dark:text-[#0B0B0C] dark:border-[#F5F5F5]' : ui.muted
+                    on ? 'bg-[#5C1628] text-white border-[#5C1628] dark:bg-[#C94A6A] dark:text-white dark:border-[#C94A6A]' : ui.muted
                   }`}
                 >
                   {p.pct} %

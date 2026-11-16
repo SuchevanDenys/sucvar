@@ -72,13 +72,13 @@ export default function PlanBadge({ isDark, lang }: PlanBadgeProps) {
         }
         className={`${base} border opacity-100 ${
           isDark
-            ? 'border-white bg-white text-[#111111]'
-            : 'border-[#111111] bg-[#111111] text-white'
+            ? 'border-[#C94A6A] bg-[#C94A6A] text-white'
+            : 'border-[#5C1628] bg-[#5C1628] text-white'
         }`}
       >
         <span
           aria-hidden
-          className={`h-1.5 w-1.5 rounded-full bg-current`}
+          className={`h-1.5 w-1.5 rounded-full ${isDark ? 'bg-[#E3C49F]' : 'bg-[#D9B88F]'}`}
         />
         BUSINESS
       </Link>
@@ -90,8 +90,11 @@ export default function PlanBadge({ isDark, lang }: PlanBadgeProps) {
       <Link
         href="/account"
         title={tr(lang, 'Plan Professional — proiecte nelimitate', 'Professional plan — unlimited projects')}
-        className={`${base} ${isDark ? 'bg-white text-[#111111]' : 'bg-[#111111] text-white'}`}
+        className={`${base} border ${
+          isDark ? 'bg-[#A67C52]/[0.14] border-[#A67C52]/45 text-[#D2AE87]' : 'bg-[#A67C52]/[0.08] border-[#A67C52]/40 text-[#7D5A35]'
+        }`}
       >
+        <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${isDark ? 'bg-[#C49A6C]' : 'bg-[#A67C52]'}`} />
         PRO
       </Link>
     );
@@ -103,7 +106,7 @@ export default function PlanBadge({ isDark, lang }: PlanBadgeProps) {
       title={
         tr(lang, `Plan Studio (gratuit) — ${used ?? 0} din ${limit ?? 0} proiecte folosite luna aceasta. Vezi planurile.`, `Studio plan (free) — ${used ?? 0} of ${limit ?? 0} projects used this month. View plans.`, `Offre Studio (gratuite) — ${used ?? 0} projets sur ${limit ?? 0} utilisés ce mois-ci. Voir les offres.`)
       }
-      className={`${base} border opacity-70 ${isDark ? 'border-[#3F3F46] text-[#A1A1AA]' : 'border-[#BDBDBD] text-[#666666]'}`}
+      className={`${base} border opacity-70 ${isDark ? 'border-[#4A3A3F] text-[#B5A9AC]' : 'border-[#CEC4C1] text-[#685D60]'}`}
     >
       STUDIO
     </Link>

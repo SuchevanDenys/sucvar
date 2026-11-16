@@ -70,7 +70,7 @@ export default function StylePicker({ lang, isDark, selectedStyleId, onSelect }:
               onClick={() => handleSelect(v.id)}
               aria-pressed={active}
               className={`group inline-flex h-10 items-center gap-2 rounded-sm border px-3 text-xs whitespace-nowrap cursor-pointer touch-manipulation active:scale-[0.97] transition-[background-color,border-color,transform] ${
-                active ? `${sk.segOn} ${isDark ? 'border-white' : 'border-[#111111]'}` : `${sk.line} ${sk.segOff}`
+                active ? `${sk.chipOn}` : `${sk.line} ${sk.segOff}`
               }`}
             >
               <span className="flex gap-0.5">

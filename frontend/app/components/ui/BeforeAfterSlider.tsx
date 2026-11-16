@@ -53,7 +53,7 @@ export default function BeforeAfterSlider({
   return (
     <div
       style={{ aspectRatio: aspect }}
-      className={`relative w-full mx-auto rounded-lg overflow-hidden select-none bg-[#F5F5F5] dark:bg-[#141416] border border-[#E5E5E5] dark:border-[#262629] z-10 [&:has(input:focus-visible)]:ring-1 [&:has(input:focus-visible)]:ring-[#111111] dark:[&:has(input:focus-visible)]:ring-white ${className}`}
+      className={`relative w-full mx-auto rounded-lg overflow-hidden select-none bg-[#FAF8F6] dark:bg-[#1A1416] border border-[#E8E2E0] dark:border-[#2E2427] z-10 [&:has(input:focus-visible)]:ring-2 [&:has(input:focus-visible)]:ring-[#5C1628] dark:[&:has(input:focus-visible)]:ring-[#C94A6A] ${className}`}
     >
       {/* Layer 1: "after" image, fully visible */}
       <img
@@ -70,7 +70,7 @@ export default function BeforeAfterSlider({
         draggable={false}
         onLoad={onBeforeLoad}
         style={{ clipPath: `inset(0 ${100 - pos}% 0 0)` }}
-        className="absolute inset-0 w-full h-full object-contain pointer-events-none bg-[#F5F5F5] dark:bg-[#141416]"
+        className="absolute inset-0 w-full h-full object-contain pointer-events-none bg-[#F5F2EF] dark:bg-[#1A1416]"
       />
 
       {/* Divider: wrapper is centered on `pos` so line and handle always align */}
@@ -78,17 +78,17 @@ export default function BeforeAfterSlider({
         style={{ left: `${pos}%` }}
         className="absolute inset-y-0 w-9 -translate-x-1/2 pointer-events-none z-20"
       >
-        <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-white shadow-[0_0_10px_rgba(0,0,0,0.6)]" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white border border-[#111111]/15 text-[#111111] flex items-center justify-center shadow-[0_4px_16px_rgba(0,0,0,0.35)]">
-          <MoveHorizontal className="w-4 h-4" />
+        <div className="absolute inset-y-0 left-1/2 w-[2px] -translate-x-1/2 bg-white/95 shadow-[0_0_12px_rgba(17,13,15,0.55)]" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-[#5C1628] dark:bg-[#C94A6A] ring-2 ring-white/95 text-white flex items-center justify-center shadow-[0_6px_20px_-4px_rgba(92,22,40,0.65)]">
+          <MoveHorizontal className="w-4 h-4" strokeWidth={2} />
         </div>
       </div>
 
       {/* Labels */}
-      <span className="absolute top-3 left-3 z-20 bg-white/90 border border-[#E5E5E5] backdrop-blur-sm text-[#111111] text-[10px] font-mono uppercase tracking-[0.18em] px-2.5 py-1 pointer-events-none rounded-full">
+      <span className="absolute top-3 left-3 z-20 bg-white/90 border border-[#E8E2E0] backdrop-blur-sm text-[#1B1416] text-[10px] font-mono uppercase tracking-[0.18em] px-2.5 py-1 pointer-events-none rounded-full">
         {beforeLabel}
       </span>
-      <span className={`absolute top-3 ${onExpand ? 'right-14' : 'right-3'} z-20 bg-[#111111]/90 border border-white/10 backdrop-blur-sm text-white text-[10px] font-mono uppercase tracking-[0.18em] px-2.5 py-1 pointer-events-none rounded-full`}>
+      <span className={`absolute top-3 ${onExpand ? 'right-14' : 'right-3'} z-20 bg-[#5C1628]/90 dark:bg-[#C94A6A]/90 border border-white/15 backdrop-blur-sm text-white text-[10px] font-mono uppercase tracking-[0.18em] px-2.5 py-1 pointer-events-none rounded-full`}>
         {afterLabel}
       </span>
 
@@ -111,7 +111,7 @@ export default function BeforeAfterSlider({
           onClick={onExpand}
           aria-label={expandLabel}
           title={expandLabel}
-          className="absolute top-2.5 right-2.5 z-40 w-9 h-9 rounded-full bg-white/90 hover:bg-white text-[#111111] border border-[#E5E5E5] backdrop-blur-sm flex items-center justify-center shadow-sm cursor-pointer transition-colors"
+          className="absolute top-2.5 right-2.5 z-40 w-9 h-9 rounded-full bg-white/90 hover:bg-white text-[#1B1416] hover:text-[#5C1628] border border-[#E8E2E0] backdrop-blur-sm flex items-center justify-center shadow-sm cursor-pointer transition-colors"
         >
           <Maximize2 className="w-4 h-4" />
         </button>

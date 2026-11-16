@@ -159,15 +159,15 @@ export default function ShareControl({ projectId, isDark, lang, initial, onChang
             aria-hidden
             className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border transition-colors ${
               isPublic
-                ? isDark ? 'bg-[#F5F5F5] border-[#F5F5F5]' : 'bg-[#111111] border-[#111111]'
-                : isDark ? 'bg-[#0B0B0C] border-[#3F3F46]' : 'bg-white border-[#BDBDBD]'
+                ? isDark ? 'bg-[#C94A6A] border-[#C94A6A]' : 'bg-[#5C1628] border-[#5C1628]'
+                : isDark ? 'bg-[#110D0F] border-[#4A3A3F]' : 'bg-white border-[#CEC4C1]'
             }`}
           >
             <span
               className={`absolute top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full transition-[left,background-color] ${
                 isPublic
-                  ? `left-[18px] ${isDark ? 'bg-[#111111]' : 'bg-white'}`
-                  : `left-[2px] ${isDark ? 'bg-[#A1A1AA]' : 'bg-[#666666]'}`
+                  ? `left-[18px] bg-white`
+                  : `left-[2px] ${isDark ? 'bg-[#B5A9AC]' : 'bg-[#685D60]'}`
               }`}
             />
           </span>
@@ -211,7 +211,7 @@ export default function ShareControl({ projectId, isDark, lang, initial, onChang
       </p>
 
       {sharing?.clientFeedback && (
-        <blockquote className={`border-l-2 pl-3 text-xs leading-relaxed whitespace-pre-line break-words ${isDark ? 'border-[#F5F5F5]/40' : 'border-[#111111]/40'} ${sk.muted}`}>
+        <blockquote className={`border-l-2 pl-3 text-xs leading-relaxed whitespace-pre-line break-words ${isDark ? 'border-[#F5F2EF]/40' : 'border-[#1B1416]/40'} ${sk.muted}`}>
           <span className={`block mb-1 ${EYEBROW} ${sk.dim}`}>{t('Mesajul clientului', 'Client message')}</span>
           {sharing.clientFeedback}
         </blockquote>
@@ -226,7 +226,7 @@ export default function ShareControl({ projectId, isDark, lang, initial, onChang
         }`}
       >
         {toast && (
-          <span className={`inline-flex items-center gap-2 h-10 px-4 rounded-full shadow-[0_12px_32px_-12px_rgba(0,0,0,0.45)] ${EYEBROW} ${isDark ? 'bg-[#F5F5F5] text-[#111111]' : 'bg-[#111111] text-white'}`}>
+          <span className={`inline-flex items-center gap-2 h-10 px-4 rounded-full shadow-[0_12px_32px_-12px_rgba(0,0,0,0.45)] ${EYEBROW} ${isDark ? 'bg-[#C94A6A] text-white' : 'bg-[#5C1628] text-white'}`}>
             <Check className="w-3.5 h-3.5" aria-hidden />
             {t('Link copiat', 'Link copied')}
           </span>

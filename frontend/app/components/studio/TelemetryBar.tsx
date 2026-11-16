@@ -43,8 +43,8 @@ export default function TelemetryBar({ lang, isDark, isLoading, statusLabel, mod
                     key={i}
                     className={`h-1.5 w-3 rounded-full ${
                       i < Number(plan.used)
-                        ? isDark ? 'bg-white' : 'bg-[#111111]'
-                        : isDark ? 'bg-white/[0.14]' : 'bg-[#111111]/[0.12]'
+                        ? isDark ? 'bg-[#C94A6A]' : 'bg-[#5C1628]'
+                        : isDark ? 'bg-[#C94A6A]/20' : 'bg-[#5C1628]/[0.12]'
                     }`}
                   />
                 ))}

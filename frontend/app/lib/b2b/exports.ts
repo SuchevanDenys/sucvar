@@ -23,6 +23,7 @@ export function countryOf(vatId: string | undefined): string {
   return m && m[1] !== 'EL' ? m[1] : m?.[1] === 'EL' ? 'GR' : 'RO';
 }
 
+/** Liniile vin deja grupate pe secțiuni (ordinea editorului; secțiunile fără linii lipsesc), cu `section` ca titlu. */
 export function buildCsv({
   lines,
   net,
@@ -38,12 +39,12 @@ export function buildCsv({
 }): string {
   const q = (s: string) => `"${s.replace(/"/g, '""')}"`;
   const rows = [
-    ['No', 'Description', 'UM', 'Qty', 'Unit price (RON, excl. VAT)', 'Total (RON, excl. VAT)'].map(q).join(';'),
-    ...lines.map((l, i) => [i + 1, q(l.name), q(l.unit), l.qty, toRon(l.unitPrice).toFixed(2), toRon(l.total).toFixed(2)].join(';')),
+    ['No', 'Section', 'Description', 'UM', 'Qty', 'Unit price (RON, excl. VAT)', 'Total (RON, excl. VAT)'].map(q).join(';'),
+    ...lines.map((l, i) => [i + 1, q(l.section ?? ''), q(l.name), q(l.unit), l.qty, toRon(l.unitPrice).toFixed(2), toRon(l.total).toFixed(2)].join(';')),
     '',
-    [q('Net total'), '', '', '', '', toRon(net).toFixed(2)].join(';'),
-    [q(`VAT ${vat}%`), '', '', '', '', toRon(vatAmt).toFixed(2)].join(';'),
-    [q('Gross total'), '', '', '', '', toRon(gross).toFixed(2)].join(';'),
+    [q('Net total'), '', '', '', '', '', toRon(net).toFixed(2)].join(';'),
+    [q(`VAT ${vat}%`), '', '', '', '', '', toRon(vatAmt).toFixed(2)].join(';'),
+    [q('Gross total'), '', '', '', '', '', toRon(gross).toFixed(2)].join(';'),
   ];
   return rows.join('\r\n');
 }
@@ -76,7 +77,7 @@ export function buildFacturX({
     .map(
       (l, i) => `
   <ram:IncludedSupplyChainTradeLineItem>
-    <ram:AssociatedDocumentLineDocument><ram:LineID>${i + 1}</ram:LineID></ram:AssociatedDocumentLineDocument>
+    <ram:AssociatedDocumentLineDocument><ram:LineID>${i + 1}</ram:LineID>${l.section ? `<ram:IncludedNote><ram:Content>${xmlEsc(l.section)}</ram:Content></ram:IncludedNote>` : ''}</ram:AssociatedDocumentLineDocument>
     <ram:SpecifiedTradeProduct><ram:Name>${xmlEsc(l.name)}</ram:Name></ram:SpecifiedTradeProduct>
     <ram:SpecifiedLineTradeAgreement><ram:NetPriceProductTradePrice><ram:ChargeAmount>${toRon(l.unitPrice).toFixed(2)}</ram:ChargeAmount></ram:NetPriceProductTradePrice></ram:SpecifiedLineTradeAgreement>
     <ram:SpecifiedLineTradeDelivery><ram:BilledQuantity unitCode="${unitCode(l.unit)}">${l.qty}</ram:BilledQuantity></ram:SpecifiedLineTradeDelivery>

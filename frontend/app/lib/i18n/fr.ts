@@ -3,6 +3,10 @@
 // Utilisé par tr()/frenchOf() quand un appel ne fournit pas explicitement le français.
 // Les chaînes calculées par l’API (quantités, lumens, kelvins…) sont traduites par patterns.ts.
 export const FR: Record<string, string> = {
+  "Item / Description": "Article / Description",
+  "Unit price (lei)": "Prix unitaire (lei)",
+  "Price / unit": "Prix / unité",
+  "Unit": "Unité",
   "The address does not match any SUCVAR page.": "L’adresse demandée ne correspond à aucune page SUCVAR.",
   "Your saved data was not affected. Try again; if the problem persists, reload the page.": "Vos données enregistrées n’ont pas été affectées. Réessayez ; si le problème persiste, rechargez la page.",
   "Cancellation and refund policy": "Politique d’annulation et de remboursement",
@@ -1524,4 +1528,27 @@ export const FR: Record<string, string> = {
   "Materials at depot prices": "Matériaux à prix dépôt",
   "Premium furniture and decor": "Mobilier et décoration haut de gamme",
   "VAT 11%: reduced rate, applicable under the Romanian Fiscal Code (e.g. supply of housing).": "TVA 11 % : taux réduit, applicable selon le Code fiscal roumain (ex. livraison de logements).",
+  // Studio — dimensiuni, prompt optimizat AI
+  "Spacious": "Spacieux",
+  "Length (m)": "Longueur (m)",
+  "Width (m)": "Largeur (m)",
+  "Height (m)": "Hauteur (m)",
+  "Length in metres": "Longueur en mètres",
+  "Width in metres": "Largeur en mètres",
+  "Height in metres": "Hauteur en mètres",
+  "Openings & budget": "Ouvertures et budget",
+  "Scenarios, openings, budget, AI parameters": "Scénarios, ouvertures, budget, paramètres IA",
+  "optimal": "optimal",
+  "Negative": "Négatif",
+  "LLM refined": "affiné par LLM",
+  "compiler": "compilateur",
+  "steps": "étapes",
+  "Used for the last render.": "Utilisé pour le dernier rendu.",
+  "Preview; at render time an LLM may refine it further.": "Aperçu ; au rendu, un LLM peut encore l’affiner.",
+  "Preview (deterministic compiler).": "Aperçu (compilateur déterministe).",
+  "No compiled prompt yet.": "Aucun prompt compilé pour l’instant.",
+  "Settings changed since — preview again. ": "Les réglages ont changé depuis — relancez l’aperçu. ",
+  "Sign in to preview the prompt.": "Connectez-vous pour prévisualiser le prompt.",
+  "Preview failed.": "L’aperçu a échoué.",
+  "Keep the room structure (walls, windows)": "Conserver la structure de la pièce (murs, fenêtres)",
 };

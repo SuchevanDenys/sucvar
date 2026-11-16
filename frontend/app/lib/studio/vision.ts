@@ -163,6 +163,25 @@ export interface VisionResponse {
   areaSqm: number;
   preserveStructure: boolean;
   materials: VisionMaterialSummary[];
+  /** Cotele folosite pentru indiciile de scară (backend ≥ compilatorul arhitectural) */
+  dimensions?: { length: number | null; width: number | null; height: number | null; areaSqm: number; volumeM3: number | null } | null;
+  /** Ce a înțeles compilatorul din descriere: element → frază în engleză */
+  userSpecs?: { slot: string; promptEn: string }[];
+}
+
+/** Promptul efectiv trimis modelului (POST /api/prompt-preview sau răspunsul /api/generate). */
+export interface PromptInsight {
+  prompt: string;
+  negativePrompt: string;
+  /** 'deterministic' = compilatorul arhitectural; 'llm' = rafinat de un model de limbaj */
+  engine: string;
+  parameters?: { promptStrength: number; guidanceScale: number; inferenceSteps: number };
+  userSpecs: { slot: string; promptEn: string }[];
+  estimatedTokens?: number;
+  maxTokens?: number;
+  enhancerAvailable?: boolean;
+  /** 'preview' = calculat înainte de randare; 'render' = folosit efectiv la ultima randare */
+  source: 'preview' | 'render';
 }
 
 const normalize = (text: string) =>

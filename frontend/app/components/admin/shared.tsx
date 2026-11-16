@@ -149,7 +149,7 @@ export function Drawer({ ctx, title, onClose, children }: { ctx: AdminCtx; title
 
   return (
     <div className="fixed inset-0 z-[60] flex justify-end" role="dialog" aria-modal="true" aria-label={title}>
-      <button type="button" aria-label={ctx.t('Închide', 'Close')} onClick={onClose} className="absolute inset-0 bg-black/40 cursor-default" />
+      <button type="button" aria-label={ctx.t('Închide', 'Close')} onClick={onClose} className="absolute inset-0 bg-[#110D0F]/40 cursor-default" />
       <div
         ref={ref}
         tabIndex={-1}

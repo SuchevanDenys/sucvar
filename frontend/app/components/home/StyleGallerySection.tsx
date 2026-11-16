@@ -67,12 +67,12 @@ export default function StyleGallerySection({ lang, isDark }: { lang: Language; 
                   className="group block touch-manipulation"
                   aria-label={`${t(style.nameRo, style.nameEn)} — ${t('deschide în Studio', 'open in Studio')}`}
                 >
-                  {/* Passe-partout #F5F5F5 cu „tabloul” paletei de materiale centrat */}
-                  <div className={`relative aspect-[4/5] p-8 transition-colors duration-500 ${isDark ? 'bg-[#141416] group-hover:bg-[#1C1C1F]' : 'bg-[#F5F5F5] group-hover:bg-[#EDEDED]'}`}>
+                  {/* Passe-partout #F5F2EF cu „tabloul” paletei de materiale centrat */}
+                  <div className={`relative aspect-[4/5] p-8 transition-colors duration-500 ${isDark ? 'bg-[#1A1416] group-hover:bg-[#231B1E]' : 'bg-[#F5F2EF] group-hover:bg-[#EFEAE6]'}`}>
                     <span className={`absolute left-4 top-4 font-mono text-[10px] tabular-nums ${sk.dim}`}>
                       {String(i + 1).padStart(2, '0')}
                     </span>
-                    <div className={`flex h-full w-full overflow-hidden shadow-[0_1px_2px_rgba(0,0,0,0.06),0_18px_30px_-18px_rgba(0,0,0,0.35)] transition-transform duration-500 group-hover:scale-[1.02] border-[6px] ${isDark ? 'border-[#0B0B0C]' : 'border-white'}`}>
+                    <div className={`flex h-full w-full overflow-hidden shadow-[0_1px_2px_rgba(0,0,0,0.06),0_18px_30px_-18px_rgba(0,0,0,0.35)] transition-transform duration-500 group-hover:scale-[1.02] border-[6px] ${isDark ? 'border-[#110D0F]' : 'border-white'}`}>
                       {style.palette.map((c, ci) => (
                         <span
                           key={c.hex}

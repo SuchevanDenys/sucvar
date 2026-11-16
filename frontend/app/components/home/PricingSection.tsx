@@ -10,7 +10,7 @@ import React from 'react';
 import Link from 'next/link';
 import { Check, Minus } from 'lucide-react';
 import BillingToggle from '@/app/components/ui/BillingToggle';
-import { LiveDot, SectionHeading } from '@/app/components/ui/Editorial';
+import { SectionHeading } from '@/app/components/ui/Editorial';
 import Reveal from '@/app/components/ui/Reveal';
 import { PRICING_PLANS } from '@/app/data/catalog';
 import { CAPABILITY_MATRIX, TIER_WORKFLOWS } from '@/app/data/home';
@@ -45,10 +45,14 @@ export default function PricingSection({ lang, isDark }: { lang: Language; isDar
   const radioClass = (isSelected: boolean): string => {
     const base = 'w-3.5 h-3.5 rounded-full border flex items-center justify-center';
     if (!isSelected) return `${base} ${sk.line}`;
-    return `${base} ${isDark ? 'border-white' : 'border-[#111111]'}`;
+    return `${base} ${isDark ? 'border-[#C94A6A]' : 'border-[#5C1628]'}`;
   };
-  const radioDot = `w-1.5 h-1.5 rounded-full ${isDark ? 'bg-white' : 'bg-[#111111]'}`;
-  const selectedCell = isDark ? 'bg-[#1C1C1F]' : 'bg-[#F5F5F5]';
+  const radioDot = `w-1.5 h-1.5 rounded-full ${isDark ? 'bg-[#C94A6A]' : 'bg-[#5C1628]'}`;
+  const selectedCell = isDark ? 'bg-[#C94A6A]/[0.06]' : 'bg-[#FAF8F6]';
+  // Planul recomandat (PRO): ramă bordo fină + aură caldă de alabastru, ca o lucrare pusă în passe-partout
+  const featuredFrame = isDark
+    ? 'ring-1 ring-inset ring-[#C94A6A]/45 bg-[linear-gradient(180deg,rgba(201,74,106,0.08),transparent_45%)]'
+    : 'ring-1 ring-inset ring-[#5C1628]/25 bg-[linear-gradient(180deg,rgba(92,22,40,0.045),transparent_45%)]';
 
   return (
     <section className={sectionY}>
@@ -83,6 +87,7 @@ export default function PricingSection({ lang, isDark }: { lang: Language; isDar
           <div className={`mt-6 grid grid-cols-1 lg:grid-cols-3 gap-px border rounded-md overflow-hidden ${sk.line} ${sk.gap}`}>
             {PRICING_PLANS.map((plan, idx) => {
               const isSelected = selectedPlan === plan.id;
+              const isFeatured = Boolean(plan.popular);
               const features = trList(lang, plan.featuresRo, plan.featuresEn);
               const buttonClass = isSelected ? sk.btn : sk.btnGhost;
               // Rang plan: cardul activ / inclus în planul curent nu se mai poate cumpăra
@@ -120,17 +125,27 @@ export default function PricingSection({ lang, isDark }: { lang: Language; isDar
                   }}
                   className={`relative flex flex-col justify-between p-8 lg:p-10 cursor-pointer transition-colors duration-500 touch-manipulation ${
                     isSelected ? selectedCell : `${sk.cell} ${sk.rowHover}`
-                  }`}
+                  } ${isFeatured ? featuredFrame : ''}`}
                 >
-                  {isSelected && (
-                    <span aria-hidden className={`absolute inset-x-0 top-0 h-[2px] ${isDark ? 'bg-white' : 'bg-[#111111]'}`} />
+                  {(isSelected || isFeatured) && (
+                    <span
+                      aria-hidden
+                      className={`absolute inset-x-0 top-0 h-[2px] ${
+                        isSelected ? sk.brand : 'bg-linear-to-r from-[#A67C52]/0 via-[#A67C52] to-[#A67C52]/0'
+                      }`}
+                    />
                   )}
 
                   <div>
                     <div className="flex items-center justify-between">
                       <span className={`font-mono text-sm tabular-nums ${sk.strong}`}>{String(idx + 1).padStart(2, '0')}</span>
                       <span className="flex items-center gap-3">
-                        {plan.popular && <LiveDot label={t('Recomandat', 'Recommended')} className={sk.muted} />}
+                        {isFeatured && (
+                          <span className={`inline-flex h-6 items-center gap-1.5 rounded-sm border px-2 font-mono text-[10px] font-semibold uppercase tracking-[0.18em] ${sk.brassBadge}`}>
+                            <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${sk.brassDot}`} />
+                            PRO · {t('Recomandat', 'Recommended')}
+                          </span>
+                        )}
                         <span className={radioClass(isSelected)}>{isSelected && <span className={radioDot} />}</span>
                       </span>
                     </div>
@@ -142,7 +157,7 @@ export default function PricingSection({ lang, isDark }: { lang: Language; isDar
                       {price.struck && (
                         <span className={`font-mono text-xl tabular-nums line-through ${sk.dim}`}>{price.struck}</span>
                       )}
-                      <span className={`font-mono text-5xl tabular-nums tracking-[-0.04em] ${sk.strong}`}>{price.main}</span>
+                      <span className={`font-mono text-5xl tabular-nums tracking-[-0.04em] ${isFeatured ? sk.accent : sk.strong}`}>{price.main}</span>
                       <span className={`${EYEBROW} ${sk.dim}`}>{t(plan.periodRo, plan.periodEn)}</span>
                     </div>
                     {/* Totalul anual: se vede clar cât se facturează o dată pe an */}
@@ -189,7 +204,7 @@ export default function PricingSection({ lang, isDark }: { lang: Language; isDar
                     <ul className={`mt-10 space-y-3.5 border-t pt-8 ${sk.line}`}>
                       {features.map((feature) => (
                         <li key={feature} className={`flex items-start gap-3 text-sm ${sk.muted}`}>
-                          <Check className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${sk.strong}`} strokeWidth={1.75} />
+                          <Check className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${isFeatured ? sk.brandText : sk.strong}`} strokeWidth={1.75} />
                           <span>{feature}</span>
                         </li>
                       ))}

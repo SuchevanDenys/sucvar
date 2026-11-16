@@ -11,18 +11,18 @@ export default function GlobalError({ error, retry }: { error: Error & { digest?
 
   return (
     <html lang="fr">
-      <body style={{ margin: 0, fontFamily: 'system-ui, sans-serif', background: '#0B0B0C', color: '#F5F5F5' }}>
+      <body style={{ margin: 0, fontFamily: 'system-ui, sans-serif', background: '#110D0F', color: '#F5F2EF' }}>
         <title>SUCVAR | Erreur</title>
         <main style={{ maxWidth: 520, margin: '0 auto', padding: '96px 24px', textAlign: 'center' }}>
-          <p style={{ fontSize: 11, letterSpacing: '0.28em', textTransform: 'uppercase', color: '#A1A1AA' }}>
+          <p style={{ fontSize: 11, letterSpacing: '0.28em', textTransform: 'uppercase', color: '#B5A9AC' }}>
             {error.digest ? `ERR · ${error.digest}` : 'ERR'}
           </p>
           <h1 style={{ fontSize: 24, fontWeight: 600 }}>L’application n’a pas pu être chargée</h1>
-          <p style={{ fontSize: 14, color: '#A1A1AA' }}>Vos données enregistrées n’ont pas été affectées.</p>
+          <p style={{ fontSize: 14, color: '#B5A9AC' }}>Vos données enregistrées n’ont pas été affectées.</p>
           <button
             type="button"
             onClick={() => retry()}
-            style={{ marginTop: 16, height: 44, padding: '0 24px', border: 0, borderRadius: 2, background: '#F5F5F5', color: '#111111', fontWeight: 600, cursor: 'pointer' }}
+            style={{ marginTop: 16, height: 44, padding: '0 24px', border: 0, borderRadius: 2, background: '#F5F2EF', color: '#1B1416', fontWeight: 600, cursor: 'pointer' }}
           >
             Réessayer
           </button>

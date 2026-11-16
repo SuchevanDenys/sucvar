@@ -83,7 +83,7 @@ export function SubscriptionCard({ plan, lang, isDark }: SubscriptionProps & { i
               t('Plan activ', 'Active plan'),
               <span
                 className={`inline-block text-xs font-mono px-2 py-0.5 rounded-full tracking-widest ${
-                  isPaid ? 'bg-[#111111] text-white dark:bg-white dark:text-[#111111]' : `border border-current ${ui.muted}`
+                  isPaid ? 'bg-[#5C1628] text-white dark:bg-[#C94A6A] dark:text-white' : `border border-current ${ui.muted}`
                 }`}
               >
                 {planName(plan.tier)}

@@ -25,7 +25,7 @@ export function StudioCard({ isDark, step, title, hint, aside, children, classNa
         <div className="min-w-0">
           <h2 className={`flex items-center gap-2 text-[15px] font-semibold tracking-tight ${sk.strong}`}>
             {step && (
-              <span className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 font-mono text-[10px] ${isDark ? 'bg-white text-[#111111]' : 'bg-[#111111] text-white'}`}>
+              <span className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 font-mono text-[10px] ${isDark ? 'bg-[#C94A6A] text-white' : 'bg-[#5C1628] text-white'}`}>
                 {step}
               </span>
             )}

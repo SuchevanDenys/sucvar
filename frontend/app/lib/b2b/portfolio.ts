@@ -16,7 +16,7 @@ import { calculateEngineering } from '@/app/data/catalog';
 import { STORAGE_KEYS, readStorage, writeStorage } from '@/app/lib/storage';
 import type { SavedProject } from '@/app/types';
 import type { Party } from './exports';
-import { uid, type LineItem, type RegionId, type TradeId } from './estimate';
+import { uid, type EstimateSection, type LineItem, type RegionId, type TradeId } from './estimate';
 
 export interface ClientMeta {
   name: string;
@@ -41,6 +41,10 @@ export interface Workspace {
   margin: number;
   vat: number;
   items: LineItem[];
+  /** Secțiunile active, în ordine (absent la devizele vechi → toate secțiunile implicite). */
+  sections?: EstimateSection[];
+  /** Secțiunea „Manoperă" eliminată din deviz (exclusă din totaluri, PDF și exporturi). */
+  laborOff?: boolean;
   updatedAt: string;
 }
 

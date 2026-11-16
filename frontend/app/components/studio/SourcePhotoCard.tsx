@@ -1,15 +1,21 @@
 // app/components/studio/SourcePhotoCard.tsx
 // Studio · 01 — fotografia sursă: zonă drag-and-drop (sau click / cameră pe mobil), previzualizare COMPLETĂ
-// (object-contain, fără decupare), „Schimbă fotografia”, camera demo și intensitatea transformării AI.
+// (object-contain, fără decupare), „Schimbă fotografia”, camera demo și intensitatea transformării AI
+// (banda recomandată 68–75 % e marcată pe glisor).
 "use client";
 
-import React, { useRef, useState } from 'react';
+import React, { useId, useRef, useState } from 'react';
 import { ImagePlus, RefreshCw, Wand2 } from 'lucide-react';
 import { tr } from '@/app/lib/i18n';
+import { AI_STRENGTH } from '@/app/lib/studio/aiConfig';
 import { ACCEPTED_PHOTO_TYPES } from '@/app/lib/studio/constants';
 import { getSkin } from '@/app/lib/theme/skin';
 import type { Language } from '@/app/types';
 import { StudioCard } from './StudioCard';
+
+const STRENGTH_MIN = 40, STRENGTH_MAX = 100;
+/** Poziția (%) a unei valori pe glisor, pentru banda recomandată */
+const pct = (v: number) => ((v - STRENGTH_MIN) / (STRENGTH_MAX - STRENGTH_MIN)) * 100;
 
 interface SourcePhotoCardProps {
   lang: Language;
@@ -34,6 +40,8 @@ export default function SourcePhotoCard({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const locked = isLoading || isPhotoLoading;
+  const helpId = useId();
+  const inSweetSpot = aiStrength >= AI_STRENGTH.sweetSpot.min && aiStrength <= AI_STRENGTH.sweetSpot.max;
 
   const pick = () => fileInputRef.current?.click();
   const onInput = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -56,7 +64,7 @@ export default function SourcePhotoCard({
     onDragLeave: () => setDragOver(false),
     onDrop,
   };
-  const backdrop = isDark ? 'bg-[#0B0B0C]' : 'bg-[#F5F5F5]';
+  const backdrop = isDark ? 'bg-[#110D0F]' : 'bg-[#F5F2EF]';
 
   return (
     <StudioCard
@@ -85,7 +93,7 @@ export default function SourcePhotoCard({
           {/* eslint-disable-next-line @next/next/no-img-element -- data URL */}
           <img src={originalImage} alt={t('Fotografia sursă', 'Source photo')} className="block w-full h-auto max-h-64 object-contain" />
           {dragOver && (
-            <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-white text-[13px] font-medium">
+            <span className="absolute inset-0 flex items-center justify-center bg-[#110D0F]/45 text-white text-[13px] font-medium">
               {t('Eliberează pentru a înlocui', 'Drop to replace')}
             </span>
           )}
@@ -136,19 +144,37 @@ export default function SourcePhotoCard({
 
       <label className="block space-y-2">
         <span className="flex items-center justify-between text-[13px]">
-          <span className={`font-medium ${sk.strong}`}>{t('Intensitatea transformării', 'Transformation strength')}</span>
-          <span className={`font-mono tabular-nums ${sk.strong}`}>{aiStrength}%</span>
+          <span className={`font-medium ${sk.strong}`}>{t('Intensitate transformare', 'Transformation strength')}</span>
+          <span className={`font-mono tabular-nums ${sk.strong}`}>
+            {aiStrength}%
+            {inSweetSpot && <span className={`ml-1.5 text-[11px] font-sans ${sk.muted}`}>· {t('optim', 'optimal', 'optimal')}</span>}
+          </span>
         </span>
-        <input
-          type="range" min={40} max={100}
-          value={aiStrength}
-          onChange={onStrengthChange}
-          disabled={isLoading}
-          className="w-full accent-[var(--foreground)] touch-manipulation touch-pan-y"
-        />
+        <span className="relative block">
+          {/* Banda recomandată 68–75 % (structură păstrată, finisaje complet transformate) */}
+          <span
+            aria-hidden
+            className={`pointer-events-none absolute top-1/2 -translate-y-1/2 h-2 rounded-full ${isDark ? 'bg-[#C94A6A]/30' : 'bg-[#5C1628]/15'}`}
+            style={{ left: `${pct(AI_STRENGTH.sweetSpot.min)}%`, width: `${pct(AI_STRENGTH.sweetSpot.max) - pct(AI_STRENGTH.sweetSpot.min)}%` }}
+          />
+          <input
+            type="range" min={STRENGTH_MIN} max={STRENGTH_MAX}
+            value={aiStrength}
+            onChange={onStrengthChange}
+            disabled={isLoading}
+            aria-describedby={helpId}
+            className="relative w-full accent-[var(--foreground)] touch-manipulation touch-pan-y"
+          />
+        </span>
         <span className={`flex justify-between text-[11px] ${sk.muted}`}>
           <span>{t('Subtil', 'Subtle')}</span>
           <span>{t('Transformare completă', 'Full makeover')}</span>
+        </span>
+        <span id={helpId} className={`block text-[11px] leading-relaxed ${sk.muted}`}>
+          {t(
+            `Recomandat ${AI_STRENGTH.sweetSpot.min}–${AI_STRENGTH.sweetSpot.max}%: finisajele, mobilierul și lumina se schimbă complet, iar pereții, ferestrele și unghiul rămân. Cu structura păstrată, AI-ul aplică între ${AI_STRENGTH.preserveRange.min} și ${AI_STRENGTH.preserveRange.max}%.`,
+            `Recommended ${AI_STRENGTH.sweetSpot.min}–${AI_STRENGTH.sweetSpot.max}%: finishes, furniture and light change completely while walls, windows and camera angle stay. With structure kept, the AI applies ${AI_STRENGTH.preserveRange.min}–${AI_STRENGTH.preserveRange.max}%.`,
+          )}
         </span>
       </label>
     </StudioCard>

@@ -42,8 +42,8 @@ export default function AdminPage() {
 
       {account.isLoading && (
         <div className={`${CONTAINER} pt-12 space-y-6`} aria-busy="true">
-          <div className={`h-10 w-64 animate-pulse ${isDark ? 'bg-[#1C1C1F]' : 'bg-[#F5F5F5]'}`} />
-          <div className={`h-64 animate-pulse ${isDark ? 'bg-[#141416]' : 'bg-[#F5F5F5]'}`} />
+          <div className={`h-10 w-64 animate-pulse ${isDark ? 'bg-[#231B1E]' : 'bg-[#F5F2EF]'}`} />
+          <div className={`h-64 animate-pulse ${isDark ? 'bg-[#1A1416]' : 'bg-[#F5F2EF]'}`} />
         </div>
       )}
 
@@ -102,12 +102,12 @@ export default function AdminPage() {
                   aria-controls={`admin-panel-${x.id}`}
                   onClick={() => setTab(x.id)}
                   className={`relative shrink-0 h-12 px-4 first:pl-0 inline-flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.2em] cursor-pointer transition-colors ${
-                    active ? sk.strong : `${sk.muted} ${isDark ? 'hover:text-white' : 'hover:text-[#111111]'}`
+                    active ? sk.strong : `${sk.muted} ${isDark ? 'hover:text-white' : 'hover:text-[#1B1416]'}`
                   }`}
                 >
                   <span className={`font-mono ${sk.dim}`}>{x.index}</span>
                   {x.label}
-                  <span className={`absolute left-0 right-0 -bottom-px h-[2px] ${active ? (isDark ? 'bg-white' : 'bg-[#111111]') : 'bg-transparent'}`} />
+                  <span className={`absolute left-0 right-0 -bottom-px h-[2px] ${active ? (isDark ? 'bg-[#C94A6A]' : 'bg-[#5C1628]') : 'bg-transparent'}`} />
                 </button>
               );
             })}

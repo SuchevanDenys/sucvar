@@ -4,9 +4,10 @@
 // materiale pe categorii, manoperă, totaluri, condiții și semnături. Format A4 (vezi @page în globals.css).
 import React from 'react';
 import SucvarLogo from '@/app/components/layout/SucvarLogo';
-import { CATEGORIES, lei, type LineItem } from '@/app/lib/b2b/estimate';
+import { lei, type EstimateSection, type LineItem } from '@/app/lib/b2b/estimate';
 import type { Party } from '@/app/lib/b2b/exports';
 import type { ClientMeta } from '@/app/lib/b2b/portfolio';
+import { toRon } from '@/app/lib/format';
 import { tr, unitLabel } from '@/app/lib/i18n';
 import type { Language } from '@/app/types';
 
@@ -31,8 +32,12 @@ interface PrintDevizProps {
   projectName: string;
   seller: Party;
   client: ClientMeta;
+  /** Gol = secțiunea „Manoperă" a fost eliminată din deviz (tabelul și rândul din totaluri dispar). */
   labor: PrintLaborRow[];
+  /** Doar liniile secțiunilor active. */
   items: LineItem[];
+  /** Secțiunile active, în ordinea editorului; cele fără linii nu se tipăresc. */
+  sections: EstimateSection[];
   totals: {
     labor: number; materials: number;
     contingency: number; contingencyPct: number;
@@ -45,10 +50,14 @@ interface PrintDevizProps {
 const th = 'p-2 font-semibold';
 const num = 'p-2 font-mono text-right tabular-nums whitespace-nowrap';
 
-export default function PrintDeviz({ lang, docNo, printDate, project, projectName, seller, client, labor, items, totals, schedule }: PrintDevizProps) {
+export default function PrintDeviz({ lang, docNo, printDate, project, projectName, seller, client, labor, items, sections, totals, schedule }: PrintDevizProps) {
   const t = (ro: string, en: string, fr?: string) => tr(lang, ro, en, fr);
   const title = project?.title || projectName;
   const laborRows = labor.filter((l) => l.hours > 0);
+  const showLabor = labor.length > 0;
+  const printed = sections
+    .map((sec) => ({ sec, rows: items.filter((i) => i.cat === sec.id) }))
+    .filter((g) => g.rows.length > 0);
   const hasImages = !!(project?.originalImage || project?.generatedImage);
 
   const meta: [string, string][] = [
@@ -131,16 +140,14 @@ export default function PrintDeviz({ lang, docNo, printDate, project, projectNam
           </tr>
         </thead>
         <tbody>
-          {items.length === 0 && (
+          {printed.length === 0 && (
             <tr><td colSpan={5} className="p-2 text-stone-500">{t('Nu au fost definite linii de materiale.', 'No material lines defined.')}</td></tr>
           )}
-          {CATEGORIES.map((cat) => {
-            const rows = items.filter((i) => i.cat === cat.id);
-            if (!rows.length) return null;
+          {printed.map(({ sec, rows }) => {
             const sub = rows.reduce((s, i) => s + i.qty * i.price, 0);
             return (
-              <React.Fragment key={cat.id}>
-                <tr className="bg-stone-50 font-semibold break-inside-avoid"><td colSpan={4} className="p-2">{t(cat.ro, cat.en)}</td><td className={num}>{lei(sub)}</td></tr>
+              <React.Fragment key={sec.id}>
+                <tr className="bg-stone-50 font-semibold break-inside-avoid"><td colSpan={4} className="p-2">{t(sec.ro, sec.en) || '—'}</td><td className={num}>{lei(sub)}</td></tr>
                 {rows.map((i) => (
                   <tr key={i.id} className="border-t border-stone-200 break-inside-avoid">
                     <td className="p-2">{(tr(lang, i.ro, i.en)) || '—'}</td>
@@ -157,7 +164,8 @@ export default function PrintDeviz({ lang, docNo, printDate, project, projectNam
         </tbody>
       </table>
 
-      {/* Manoperă */}
+      {/* Manoperă (lipsește dacă secțiunea a fost eliminată din deviz) */}
+      {showLabor && (<>
       <h2 className="mt-6 mb-1.5 uppercase tracking-[0.18em] text-[10px] font-semibold text-[#111111]">{t('2. Manoperă', '2. Labour')}</h2>
       <table className="w-full border border-stone-300 break-inside-avoid">
         <thead>
@@ -174,7 +182,7 @@ export default function PrintDeviz({ lang, docNo, printDate, project, projectNam
             <tr key={l.name} className="border-t border-stone-200">
               <td className="p-2">{l.name}</td>
               <td className={num}>{l.hours.toFixed(1)}</td>
-              <td className={num}>{l.rate.toFixed(2)}</td>
+              <td className={num}>{toRon(l.rate).toFixed(2)}</td>
               <td />
               <td className={num}>{lei(l.cost)}</td>
             </tr>
@@ -182,23 +190,24 @@ export default function PrintDeviz({ lang, docNo, printDate, project, projectNam
           <tr className="border-t border-stone-300 font-semibold"><td className="p-2" colSpan={4}>{t('Total manoperă', 'Labour total')}</td><td className={num}>{lei(totals.labor)}</td></tr>
         </tbody>
       </table>
+      </>)}
 
       {/* Totaluri */}
       <div className="mt-6 flex items-start justify-between gap-8 break-inside-avoid">
         <div className="flex-1 text-stone-600 space-y-1">
           <p><span className="font-semibold text-[#1A1A1A]">{t('Durată estimată', 'Estimated duration')}:</span> {schedule.days} {t('zile lucrătoare', 'working days')} ({schedule.crew} {t('persoane', 'people')}, {schedule.hours.toFixed(0)} h)</p>
           {client.notes && <p className="whitespace-pre-line"><span className="font-semibold text-[#1A1A1A]">{t('Observații', 'Notes')}:</span> {client.notes}</p>}
-          <p className="text-[10px]">{t('Cantitățile provin din cotele proiectului; prețurile sunt exprimate în EUR.', 'Quantities derive from the project dimensions; prices are in EUR.')}</p>
+          <p className="text-[10px]">{t('Cantitățile provin din cotele proiectului; prețurile sunt exprimate în lei, fără TVA.', 'Quantities derive from the project dimensions; prices are in lei, excl. VAT.', 'Les quantités proviennent des cotes du projet ; les prix sont exprimés en lei, HT.')}</p>
         </div>
         <table className="w-72 border border-stone-300 shrink-0">
           <tbody>
             <tr><td className="p-2">{t('Materiale', 'Materials')}</td><td className={num}>{lei(totals.materials)}</td></tr>
-            <tr><td className="p-2">{t('Manoperă', 'Labour')}</td><td className={num}>{lei(totals.labor)}</td></tr>
+            {showLabor && <tr><td className="p-2">{t('Manoperă', 'Labour')}</td><td className={num}>{lei(totals.labor)}</td></tr>}
             <tr><td className="p-2">{t('Contingență', 'Contingency')} {totals.contingencyPct}%</td><td className={num}>{lei(totals.contingency)}</td></tr>
             <tr><td className="p-2">{t('Marjă', 'Margin')} {totals.marginPct}%</td><td className={num}>{lei(totals.margin)}</td></tr>
             <tr className="border-t border-stone-300 font-semibold"><td className="p-2">{t('Total fără TVA', 'Net total')}</td><td className={num}>{lei(totals.net)}</td></tr>
             <tr><td className="p-2">{t('TVA', 'VAT')} {String(totals.vat).replace('.', ',')} %{totals.vat === 11 ? ` — ${t('cota redusă', 'reduced rate', 'taux réduit')}` : ''}</td><td className={num}>{lei(totals.vatAmt)}</td></tr>
-            <tr className="bg-[#111111] text-white font-semibold text-xs"><td className="p-2">{t('Total cu TVA', 'Gross total')}</td><td className={num}>{lei(totals.gross)}</td></tr>
+            <tr className="bg-[#5C1628] text-white font-semibold text-xs"><td className="p-2">{t('Total cu TVA', 'Gross total')}</td><td className={num}>{lei(totals.gross)}</td></tr>
           </tbody>
         </table>
       </div>

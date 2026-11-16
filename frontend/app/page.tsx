@@ -1,4 +1,4 @@
-// app/page.tsx — landing page (monochrome Scandinavian gallery).
+// app/page.tsx — landing page (Bordeaux + Warm Alabaster & Champagne).
 // Ordinea secțiunilor: hero → intro (telemetrie + slider) → §01 proces → §02 studii de caz → §03 formule →
 // §04 furnizori → §05 stiluri → §06 planuri → footer. Secțiunile §04–§06 au stare/logică proprie și trăiesc
 // în `components/home/*`; aici rămân secțiunile pur prezentaționale.
@@ -15,6 +15,7 @@ import PricingSection from '@/app/components/home/PricingSection';
 import StyleGallerySection from '@/app/components/home/StyleGallerySection';
 import SupplierSection from '@/app/components/home/SupplierSection';
 import Footer from '@/app/components/layout/Footer';
+import heroImage from '@/public/hero.jpg';
 import Navbar from '@/app/components/layout/Navbar';
 import BeforeAfterSlider from '@/app/components/ui/BeforeAfterSlider';
 import { Frame, LiveDot, SectionHeading } from '@/app/components/ui/Editorial';
@@ -34,7 +35,7 @@ export default function HomePage() {
   const sk = getSkin(isDark);
   const t = (textRo: string, textEn: string, fr?: string) => tr(lang, textRo, textEn, fr);
   // Full class strings (Tailwind can't see classes built by interpolation)
-  const groupHoverStrong = isDark ? 'hover:text-white group-hover:text-white' : 'hover:text-[#111111] group-hover:text-[#111111]';
+  const groupHoverStrong = isDark ? 'hover:text-[#D65D7B] group-hover:text-[#D65D7B]' : 'hover:text-[#5C1628] group-hover:text-[#5C1628]';
   const sectionY = sectionSpacing(sk.line);
   const btnBase = 'inline-flex items-center justify-center gap-2 h-12 sm:h-11 px-6 rounded-sm text-[13px] font-medium touch-manipulation select-none';
 
@@ -58,71 +59,83 @@ export default function HomePage() {
       <Navbar />
 
       <main>
-        {/* ================= HERO (split 50/50 editorial) ================= */}
-        <section className={`border-b ${sk.line}`}>
-          <div className={`${CONTAINER} grid grid-cols-1 items-center gap-12 pt-14 pb-16 lg:grid-cols-2 lg:gap-16 lg:pt-20 lg:pb-24`}>
-            {/* Stânga: text editorial */}
-            <div className="order-2 lg:order-1">
+        {/* ================= HERO (full-bleed architectural photograph) =================
+            The section slides under the sticky Navbar (negative margin = bar height + hairline + iOS safe area), so the
+            bar renders as translucent obsidian glass over the photo. Overlays: vertical gradient (top bar + bottom
+            fade), horizontal gradient (darkens the text column → AAA contrast for ivory type over the bright marble)
+            and a faint bordeaux glow. The image is a static import → width/height + blur placeholder for free. */}
+        <section
+          id="hero"
+          className="relative isolate -mt-[calc(4rem+1px+env(safe-area-inset-top))] flex min-h-[100svh] flex-col overflow-hidden bg-[#110D0F] text-[#F5F2EF]"
+        >
+          <div aria-hidden className="absolute inset-0 -z-10">
+            <Image
+              src={heroImage}
+              alt=""
+              fill
+              priority
+              placeholder="blur"
+              quality={90}
+              sizes="100vw"
+              className="hero-image object-cover object-[60%_center]"
+            />
+            <div className="absolute inset-0 bg-linear-to-b from-[#110D0F]/85 via-[#110D0F]/55 to-[#110D0F]/95" />
+            <div className="absolute inset-0 bg-linear-to-r from-[#110D0F]/80 via-[#110D0F]/35 to-transparent" />
+            <div className="absolute inset-0 bg-[radial-gradient(120%_80%_at_0%_100%,rgba(92,22,40,0.38),transparent_60%)]" />
+          </div>
+
+          <div className={`${CONTAINER} flex flex-1 flex-col justify-center pt-[calc(4rem+env(safe-area-inset-top)+3.5rem)] pb-16 lg:pb-20`}>
+            <div className="max-w-2xl">
               <Reveal>
-                <p className={`flex items-center gap-4 text-[11px] font-medium uppercase tracking-[0.3em] ${sk.muted}`}>
-                  <span className={`h-px w-8 ${isDark ? 'bg-[#F5F5F5]/40' : 'bg-[#111111]/40'}`} />
+                <p className="flex items-center gap-4 text-[11px] font-medium uppercase tracking-[0.3em] text-[#E9DCCB]">
+                  <span aria-hidden className="h-px w-10 bg-[#C49A6C]" />
                   {t('Studio de arhitectură interioară asistată de AI', 'AI-assisted interior architecture studio')}
                 </p>
               </Reveal>
 
               <Reveal delay={80}>
-                <h1 className={`mt-8 max-w-xl text-[2.6rem] font-bold leading-[1.02] tracking-tight sm:text-6xl lg:text-[4.25rem] ${sk.strong}`}>
+                <h1 className="mt-8 text-[2.75rem] font-bold leading-[1.02] tracking-tight text-[#FAF8F6] sm:text-6xl lg:text-[4.75rem]">
                   {t('Din fotografie,', 'From a photograph')}{' '}
-                  <span className={sk.muted}>{t('un interior gata de construit.', 'to an interior ready to build.')}</span>
+                  <span className="font-light text-[#F5F2EF]/75">{t('un interior gata de construit.', 'to an interior ready to build.')}</span>
                 </h1>
               </Reveal>
 
               <Reveal delay={160}>
-                <p className={`mt-8 max-w-md text-[15px] leading-[1.8] ${sk.muted}`}>
+                <p className="mt-8 max-w-lg text-[15px] leading-[1.8] text-[#F5F2EF]/80">
                   {t(
                     'Încarci o fotografie a camerei, iar în câteva minute SUCVAR îți livrează o randare fotorealistă, o listă de cantități cu prețuri și linkuri către magazine și o ofertă elegantă, gata de trimis clientului.',
                     'Upload a photo of the room and, within minutes, SUCVAR delivers a photorealistic design, an itemised bill of quantities with prices and retailer links, and a polished quote ready to send to your client.',
                   )}
                 </p>
                 <div className="mt-10 flex flex-wrap items-center gap-3">
-                  <Link href="/generate" className={`group ${btnBase} ${sk.btn}`}>
+                  <Link href="/generate" className={`group ${btnBase} ${sk.btn} ring-1 ring-inset ring-white/10`}>
                     <span>{t('Începe un proiect', 'Start a project')}</span>
                     <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-0.5" strokeWidth={1.5} />
                   </Link>
-                  <a href="#proof" className={`group ${btnBase} ${sk.btnGhost}`}>
+                  <a
+                    href="#proof"
+                    className={`group ${btnBase} border border-white/30 bg-white/[0.04] text-[#F5F2EF] backdrop-blur-sm hover:border-white/60 hover:bg-white/10 active:scale-[0.98]`}
+                  >
                     <span>{t('Vezi proiectele', 'View case studies')}</span>
                     <ArrowUpRight
                       className="w-4 h-4 transition-transform duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
                       strokeWidth={1.5}
                     />
                   </a>
-                  <Link href="/b2b" className={`${btnBase} ${sk.muted} ${groupHoverStrong} hover:underline underline-offset-4`}>
+                  <Link href="/b2b" className={`${btnBase} text-[#F5F2EF]/75 hover:text-white hover:underline underline-offset-4`}>
                     {t('Pentru firme (B2B)', 'For firms (B2B)')}
                   </Link>
                 </div>
               </Reveal>
             </div>
+          </div>
 
-            {/* Dreapta: fotografie arhitecturală neîncadrată, pe passe-partout de galerie */}
-            <Reveal delay={120} className="order-1 lg:order-2">
-              <figure>
-                <div className={`p-4 sm:p-6 lg:p-8 ${isDark ? 'bg-[#141416]' : 'bg-[#F5F5F5]'}`}>
-                  <Image
-                    src="/hero.jpg"
-                    alt={t('Exterior arhitectural minimalist, în tonuri de obsidian', 'Minimalist architectural exterior in obsidian tones')}
-                    width={1376}
-                    height={768}
-                    priority
-                    sizes="(min-width: 1024px) 50vw, 100vw"
-                    className="block h-auto w-full object-contain"
-                  />
-                </div>
-                <figcaption className={`mt-3 flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.2em] ${sk.dim}`}>
-                  <span>{t('Obsidian minimalist', 'Minimalist Obsidian')}</span>
-                  <span className="tabular-nums">EXT-01</span>
-                </figcaption>
-              </figure>
-            </Reveal>
+          {/* Legenda fotografiei, ca o etichetă de galerie */}
+          <div className={`${CONTAINER} pb-8`}>
+            <div className="flex items-center justify-between border-t border-white/15 pt-4 font-mono text-[10px] uppercase tracking-[0.2em] text-[#F5F2EF]/70">
+              <span>{t('Marmură Calacatta · nuc fumuriu', 'Calacatta marble · smoked walnut', 'Marbre Calacatta · noyer fumé')}</span>
+              <span className="tabular-nums">INT-01</span>
+            </div>
           </div>
         </section>
 

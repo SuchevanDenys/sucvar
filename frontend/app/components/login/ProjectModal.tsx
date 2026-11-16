@@ -43,7 +43,7 @@ export default function ProjectModal({
 
   return (
     <div
-    className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
+    className="fixed inset-0 z-50 bg-[#110D0F]/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
     onClick={onClose}
   >
     <div

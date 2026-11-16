@@ -36,8 +36,9 @@ public class SmartPromptTests
         Assert.Equal(["oak_floor", "linen_sofa", "matte_black"], brief.Materials.Select(m => m.Id).ToArray());
 
         // Romanian text reaches the English-only model as recognised materials + translated descriptors
-        Assert.Contains("white oak wood flooring", plan.Prompt);
-        Assert.Contains("linen upholstered sofa", plan.Prompt);
+        Assert.Contains("natural matte white oak plank flooring", plan.Prompt);
+        Assert.Contains("cream natural linen upholstered sofa", plan.Prompt);
+        Assert.Contains("matte black fixtures and accents", plan.Prompt);
         Assert.Contains("warm", Terms(plan.Prompt));
         Assert.DoesNotContain("Vreau", plan.Prompt);
         Assert.Contains(GenerationPrompt.StructurePreserveCue, plan.Prompt);
@@ -216,6 +217,46 @@ public class SmartStudioEndpointTests : IClassFixture<SucvarApiFactory>
     }
 
     [Fact]
+    public async Task Generate_reports_the_compiled_prompt_negative_and_calibrated_parameters()
+    {
+        var res = await Client().PostAsJsonAsync("/api/generate", new
+        {
+            image = PngDataUrl(), mode = "interiors", style = "industrial",
+            customPrompt = "Pardoseală: parchet stejar, pereți alb cald", preserveStructure = true,
+            dimensions = new { length = 4.0, width = 3.0, height = 2.55, aiStrength = 72 },
+        });
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("deterministic", body.GetProperty("promptEngine").GetString());
+        Assert.DoesNotContain("microcement", body.GetProperty("promptUsed").GetString());
+        Assert.Contains("floating furniture", body.GetProperty("negativePromptUsed").GetString());
+        Assert.Equal(0.72, body.GetProperty("parameters").GetProperty("promptStrength").GetDouble(), 3);
+        var vision = body.GetProperty("vision");
+        Assert.Equal(12, vision.GetProperty("dimensions").GetProperty("areaSqm").GetDouble());
+        Assert.Equal("walls", vision.GetProperty("userSpecs")[1].GetProperty("slot").GetString());
+    }
+
+    [Fact]
+    public async Task Prompt_preview_compiles_without_an_image_or_quota()
+    {
+        var res = await Client("starter").PostAsJsonAsync("/api/prompt-preview", new
+        {
+            mode = "interiors", customPrompt = "canapea bordo, lumină caldă", areaSqm = 12,
+        });
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Contains("deep bordeaux upholstered sofa", body.GetProperty("prompt").GetString());
+        Assert.False(body.GetProperty("enhancerAvailable").GetBoolean());
+        Assert.True(body.GetProperty("estimatedTokens").GetInt32() <= body.GetProperty("maxTokens").GetInt32() + 2);
+
+        var invalid = await Client().PostAsJsonAsync("/api/prompt-preview", new { mode = "interiors" });
+        Assert.Equal("PROMPT_OR_STYLE_REQUIRED", (await invalid.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+
+        var anonymous = await _factory.CreateClient().PostAsJsonAsync("/api/prompt-preview", new { customPrompt = "living" });
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
+    }
+
+    [Fact]
     public async Task Generate_without_prompt_or_style_is_a_400()
     {
         var res = await Client().PostAsJsonAsync("/api/generate", new { image = PngDataUrl(), mode = "interiors", customPrompt = "  " });
@@ -242,5 +283,228 @@ public class SmartStudioEndpointTests : IClassFixture<SucvarApiFactory>
 
         var neither = await Client().PostAsJsonAsync("/api/analyze-materials", new { mode = "interiors", spaceType = "kitchen" });
         Assert.Equal("INVALID_STYLE", (await neither.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+    }
+}
+
+/// <summary>Architectural Prompt Compiler: RO→EN, user-intent priority, conflict resolution, scale and calibration.</summary>
+public class ArchitecturalPromptCompilerTests
+{
+    private static JsonElement Payload(object value) => JsonSerializer.SerializeToElement(value);
+
+    private static string[] Terms(string prompt) => prompt.Split(',').Select(t => t.Trim()).ToArray();
+
+    [Fact]
+    public void Casual_romanian_is_compiled_into_precise_english_element_specs()
+    {
+        var specs = ArchitecturalPromptCompiler.CompileUserSpecs("vreau parchet stejar natur, pereti alb cald, canapea bordo, lumina calda");
+        Assert.Equal(
+            [
+                ("floor", "natural matte white oak plank flooring"),
+                ("walls", "warm alabaster white matte walls"),
+                ("sofa", "deep bordeaux upholstered sofa"),
+                ("lighting", "warm 3000K indirect lighting"),
+            ],
+            specs.Select(s => (s.Slot, s.PromptEn)).ToArray());
+    }
+
+    [Theory]
+    [InlineData("pereți: verde salvie mat", "walls", "sage green matte walls")]
+    [InlineData("Pardoseală: parchet în spic din stejar deschis", "floor", "light matte white oak herringbone parquet flooring")]
+    [InlineData("canapea din catifea verde smarald", "sofa", "emerald green velvet upholstered sofa")]
+    [InlineData("blat din marmură albă", "countertop", "soft white polished marble countertop")]
+    [InlineData("draperii din in bej", "curtains", "warm beige natural linen curtains")]
+    [InlineData("lumină naturală", "lighting", "abundant natural daylight")]
+    [InlineData("mobilier minimalist", "furniture", "minimalist furniture")]
+    [InlineData("gresie gri antracit", "floor", "anthracite grey large-format porcelain tile flooring")]
+    public void Element_clauses_translate_with_diacritics_and_inflections(string ro, string slot, string en)
+    {
+        var spec = Assert.Single(ArchitecturalPromptCompiler.CompileUserSpecs(ro));
+        Assert.Equal(slot, spec.Slot);
+        Assert.Equal(en, spec.PromptEn);
+    }
+
+    [Fact]
+    public void Bare_elements_and_mood_words_produce_no_spec()
+    {
+        Assert.Empty(ArchitecturalPromptCompiler.CompileUserSpecs("o canapea în living"));
+        Assert.Empty(ArchitecturalPromptCompiler.CompileUserSpecs("living minimalist cald"));
+    }
+
+    [Fact]
+    public void Explicit_user_instructions_lead_the_prompt_and_romanian_never_reaches_the_model()
+    {
+        var plan = GenerationPrompt.Create(Payload(new
+        {
+            mode = "interiors", style = "industrial",
+            customPrompt = "vreau parchet stejar natur, pereti alb cald, canapea bordo, lumina calda",
+        }));
+        Assert.StartsWith("furnished living room interior, natural matte white oak plank flooring, warm alabaster white matte walls, " +
+                          "deep bordeaux upholstered sofa, warm 3000K indirect lighting", plan.Prompt);
+        var words = plan.Prompt.ToLowerInvariant().Split([' ', ','], StringSplitOptions.RemoveEmptyEntries);
+        foreach (var ro in new[] { "parchet", "pereti", "canapea", "lumina", "vreau", "bordo", "cald" }) Assert.DoesNotContain(ro, words);
+        Assert.EndsWith(GenerationPrompt.PhotographyDirective("interiors"), plan.Prompt);
+        Assert.True(GenerationPrompt.EstimateTokens(plan.Prompt) <= AiLimits.MaxPromptTokens + 2);
+    }
+
+    [Fact]
+    public void User_floor_choice_strips_the_style_presets_conflicting_floor()
+    {
+        var styleOnly = GenerationPrompt.Create(Payload(new { mode = "interiors", style = "industrial", preserveStructure = true }));
+        Assert.Contains("microcement", styleOnly.Prompt); // Industrial's default concrete floor
+
+        var withOak = GenerationPrompt.Create(Payload(new { mode = "interiors", style = "industrial", customPrompt = "Pardoseală: parchet stejar" }));
+        Assert.Contains("white oak plank flooring", withOak.Prompt);
+        Assert.DoesNotContain("microcement", withOak.Prompt);
+        Assert.Contains("exposed brick walls", withOak.Prompt); // walls were not mentioned → the style keeps them
+        Assert.Contains("industrial loft", withOak.Prompt);     // the style itself stays
+
+        var withWalls = GenerationPrompt.Create(Payload(new { mode = "interiors", style = "industrial", customPrompt = "parchet stejar, pereți albi" }));
+        Assert.DoesNotContain("brick", withWalls.Prompt);
+        Assert.Contains("soft white matte walls", withWalls.Prompt);
+    }
+
+    [Fact]
+    public void English_text_is_kept_verbatim_but_still_owns_its_elements()
+    {
+        var plan = GenerationPrompt.Create(Payload(new { mode = "interiors", style = "industrial", customPrompt = "warm oak floor and white plaster walls" }));
+        Assert.Contains("warm oak floor and white plaster walls", plan.Prompt);
+        Assert.DoesNotContain("microcement", plan.Prompt);
+        Assert.DoesNotContain("brick", plan.Prompt);
+    }
+
+    [Fact]
+    public void Explicit_lighting_replaces_style_and_automatic_lighting()
+    {
+        var plan = GenerationPrompt.Create(Payload(new { mode = "interiors", style = "modern", customPrompt = "living cu lumină caldă" }));
+        Assert.Contains("warm 3000K indirect lighting", plan.Prompt);
+        Assert.DoesNotContain("bright natural daylight from windows", plan.Prompt);
+        Assert.DoesNotContain("recessed linear LED", plan.Prompt);
+    }
+
+    [Theory]
+    [InlineData("polished microcement floor", "floor")]
+    [InlineData("microcement surfaces", "walls")]
+    [InlineData("exposed brick walls", "walls")]
+    [InlineData("warm cognac leather", "sofa")]
+    [InlineData("3000K track lighting", "lighting")]
+    [InlineData("soft diffused light", "lighting")]
+    public void Style_terms_are_classified_by_element(string term, string slot) =>
+        Assert.Contains(slot, ArchitecturalPromptCompiler.TermSlots(term));
+
+    [Theory]
+    [InlineData("light natural oak wood")]
+    [InlineData("black steel")]
+    [InlineData("industrial loft")]
+    public void Slot_neutral_terms_are_never_stripped(string term) =>
+        Assert.Empty(ArchitecturalPromptCompiler.TermSlots(term));
+
+    [Fact]
+    public void Real_dimensions_drive_scale_cues_and_are_echoed()
+    {
+        Prompt(4.0, 3.0, 2.55, out var compact, out var compactPlan);
+        Assert.Contains("small apartment room", compact);
+        Assert.DoesNotContain("spacious", compact);
+        Assert.Equal(12, compactPlan.Brief!.AreaSqm);
+
+        Prompt(6.4, 5.0, 2.80, out var spacious, out _);
+        Assert.Contains("spacious room", spacious);
+
+        Prompt(5.0, 4.0, 3.2, out var high, out _);
+        Assert.Contains("high ceiling", high);
+
+        Prompt(5.0, 4.0, 2.3, out var low, out _);
+        Assert.Contains("low ceiling", low);
+
+        // No size given → no invented scale cue
+        var unknown = GenerationPrompt.Create(Payload(new { mode = "interiors", customPrompt = "living japandi" }));
+        Assert.False(unknown.Brief!.Scale!.AreaKnown);
+        Assert.Equal("", ArchitecturalPromptCompiler.ScaleHint(unknown.Brief.Scale, "interiors"));
+
+        var json = JsonSerializer.SerializeToElement(DesignVision.ToResponse(compactPlan.Brief));
+        Assert.Equal(12, json.GetProperty("dimensions").GetProperty("areaSqm").GetDouble());
+        Assert.Equal(30.6, json.GetProperty("dimensions").GetProperty("volumeM3").GetDouble());
+
+        static void Prompt(double length, double width, double height, out string prompt, out GenerationPlan plan)
+        {
+            plan = GenerationPrompt.Create(JsonSerializer.SerializeToElement(new
+            {
+                mode = "interiors", customPrompt = "living scandinav", dimensions = new { length, width, height },
+            }));
+            prompt = plan.Prompt;
+        }
+    }
+
+    [Theory]
+    [InlineData(null, true, 0.72)]
+    [InlineData(95, true, 0.8)]
+    [InlineData(40, true, 0.62)]
+    [InlineData(70, true, 0.7)]
+    [InlineData(50, false, 0.8)]
+    [InlineData(100, false, 0.9)]
+    public void Strength_is_calibrated_to_the_structure_mode(int? aiStrength, bool preserve, double expected)
+    {
+        var plan = GenerationPrompt.Create(Payload(new
+        {
+            mode = "interiors", customPrompt = "living modern", preserveStructure = preserve,
+            dimensions = aiStrength is null ? (object)new { } : new { aiStrength },
+        }));
+        Assert.Equal(expected, plan.PromptStrength, 3);
+        Assert.Equal(Math.Round(expected * 100), plan.TransformationStrength);
+        if (preserve) Assert.InRange(plan.PromptStrength, ArchitecturalPromptCompiler.PreserveStrengthMin, ArchitecturalPromptCompiler.PreserveStrengthMax);
+    }
+
+    [Fact]
+    public void Smart_defaults_apply_only_when_the_client_sends_no_ai_settings()
+    {
+        var defaults = GenerationPrompt.Create(Payload(new { mode = "interiors", customPrompt = "living modern" }));
+        Assert.Equal(ArchitecturalPromptCompiler.SmartGuidanceDefault, defaults.GuidanceScale);
+        Assert.Equal(ArchitecturalPromptCompiler.SmartInferenceStepsDefault, defaults.InferenceSteps);
+
+        var custom = GenerationPrompt.Create(Payload(new { mode = "interiors", customPrompt = "living modern", ai = new { guidanceScale = 6, inferenceSteps = 25 } }));
+        Assert.Equal(6, custom.GuidanceScale);
+        Assert.Equal(25, custom.InferenceSteps);
+    }
+
+    [Fact]
+    public void Negative_prompt_targets_ai_artifacts_and_keeps_custom_terms_first()
+    {
+        var stock = GenerationPrompt.Create(Payload(new { mode = "interiors", customPrompt = "living", ai = new { negativePrompt = AiLimits.DefaultNegativePrompt } }));
+        foreach (var t in new[] { "crooked perspective", "missing windows", "floating furniture", "CGI render", "plastic textures", "messy clutter", "moved walls" })
+            Assert.Contains(t, Terms(stock.NegativePrompt));
+        Assert.True(GenerationPrompt.EstimateTokens(stock.NegativePrompt) <= AiLimits.MaxPromptTokens);
+
+        var custom = GenerationPrompt.Create(Payload(new { mode = "interiors", customPrompt = "living", ai = new { negativePrompt = "red carpet" } }));
+        Assert.StartsWith("red carpet, deformed walls", custom.NegativePrompt);
+        Assert.Equal(Terms(custom.NegativePrompt).Length, Terms(custom.NegativePrompt).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+    }
+
+    [Fact]
+    public void Llm_refinement_cannot_override_locked_user_specs()
+    {
+        var plan = GenerationPrompt.Create(Payload(new { mode = "interiors", style = "industrial", customPrompt = "parchet stejar, canapea bordo" }));
+        Assert.Equal("deterministic", plan.Engine);
+
+        var enhanced = GenerationPrompt.ApplyEnhancement(plan,
+            "polished concrete floor, (cognac leather sofa:1.4), blackened steel shelving, warm Edison pendant glow, \"jute rug\"\nlinen cushions.");
+        Assert.Equal("llm", enhanced.Engine);
+        Assert.StartsWith("furnished living room interior, natural matte white oak plank flooring, deep bordeaux upholstered sofa, keep existing walls", enhanced.Prompt);
+        Assert.DoesNotContain("concrete floor", enhanced.Prompt);
+        Assert.DoesNotContain("cognac", enhanced.Prompt);
+        Assert.DoesNotContain(":1.4", enhanced.Prompt);
+        Assert.Contains("blackened steel shelving", enhanced.Prompt);
+        Assert.Contains("jute rug", enhanced.Prompt);
+        Assert.EndsWith(GenerationPrompt.PhotographyDirective("interiors"), enhanced.Prompt);
+        Assert.True(GenerationPrompt.EstimateTokens(enhanced.Prompt) <= AiLimits.MaxPromptTokens + 2);
+
+        Assert.Same(plan, GenerationPrompt.ApplyEnhancement(plan, "  "));
+        Assert.Same(plan, GenerationPrompt.ApplyEnhancement(plan, null));
+    }
+
+    [Fact]
+    public void Legacy_plans_cannot_be_enhanced()
+    {
+        var legacy = GenerationPrompt.Create(Payload(new { mode = "interiors", spaceType = "kitchen", styleId = "modern" }));
+        Assert.Null(legacy.Parts);
+        Assert.Same(legacy, GenerationPrompt.ApplyEnhancement(legacy, "walnut cabinetry, brass pendant lights"));
     }
 }

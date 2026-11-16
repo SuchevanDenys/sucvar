@@ -22,6 +22,7 @@ import {
   Printer,
   RotateCcw,
   Trash2,
+  X,
 } from 'lucide-react';
 import Navbar from '@/app/components/layout/Navbar';
 import { useEnterpriseAccess } from '@/app/lib/plan/useEnterpriseAccess';
@@ -33,8 +34,16 @@ import {
   TRADES,
   REGIONS,
   FINISH_LEVELS,
-  CATEGORIES,
   TEMPLATES,
+  SECTION_PRESETS,
+  activeItems,
+  defaultItemsFor,
+  defaultSections,
+  insertSection,
+  newSectionId,
+  normalizeSections,
+  removedDefaultSections,
+  withSectionsFor,
   round2,
   lei,
   ronInput,
@@ -47,6 +56,8 @@ import {
   type Template,
   type LineItem,
   type InvoiceLine,
+  type Category,
+  type EstimateSection,
   DEFAULT_REGION,
   DEFAULT_VAT,
 } from '@/app/lib/b2b/estimate';
@@ -67,6 +78,20 @@ import ClientStatusBadge from '@/app/components/portal/ClientStatusBadge';
 import { fetchSharing } from '@/app/lib/portal/client';
 import type { ProjectSharing } from '@/app/lib/database.types';
 import { tr } from '@/app/lib/i18n';
+import { formatLei } from '@/app/lib/format';
+
+// Șablonul de coloane al articolelor de deviz — comun antetului și rândurilor, ca titlurile să stea aliniate.
+// Mobil (< sm): descrierea pe un rând, apoi U.M. · cantitate · preț · ștergere, apoi totalul.
+const LINE_GRID = 'grid grid-cols-12 gap-2 px-5';
+const COL = {
+  desc: 'col-span-12 sm:col-span-5',
+  unit: 'col-span-3 sm:col-span-1',
+  qty: 'col-span-3 sm:col-span-2',
+  price: 'col-span-4 sm:col-span-2',
+  total: 'col-span-12 sm:col-span-1',
+  del: 'col-span-2 sm:col-span-1 sm:order-last',
+} as const;
+const COL_HEAD = 'text-[11px] font-medium uppercase tracking-wider';
 
 export default function B2BPage() {
   const { isDark, lang } = usePrefs();
@@ -98,6 +123,13 @@ export default function B2BPage() {
   const [margin, setMargin] = useState(15);
   const [vat, setVat] = useState(DEFAULT_VAT);
   const [items, setItems] = useState<LineItem[]>([]);
+  // Secțiunile devizului (ordinea cardurilor); implicitele eliminate pot fi restaurate, cele noi sunt personalizate
+  const [sections, setSections] = useState<EstimateSection[]>(defaultSections);
+  const [laborOff, setLaborOff] = useState(false); // secțiunea „Manoperă" eliminată din deviz
+  const [newSectionOpen, setNewSectionOpen] = useState(false);
+  const [newSectionDraft, setNewSectionDraft] = useState('');
+  // Liniile unei secțiuni implicite eliminate în sesiunea curentă: restaurarea le readuce (altfel: liniile implicite)
+  const removedStash = useRef<Record<string, LineItem[]>>({});
   const [seller, setSeller] = useState(loadSeller);
   const [client, setClient] = useState<ClientMeta>(EMPTY_CLIENT);
   const [invoiceNo, setInvoiceNo] = useState('');
@@ -193,7 +225,7 @@ export default function B2BPage() {
     if (!selectedId) return;
     const ws = {
       client, docNo: invoiceNo, area, region, level, crew, rateOverride, scope,
-      contingency, margin, vat, items, updatedAt: new Date().toISOString(),
+      contingency, margin, vat, items, sections, laborOff, updatedAt: new Date().toISOString(),
     };
     saveWorkspace(selectedId, ws);
     if (!canLoad) return;
@@ -206,7 +238,7 @@ export default function B2BPage() {
       });
     }, 1500);
     return () => clearTimeout(timer);
-  }, [canLoad, selectedId, client, invoiceNo, area, region, level, crew, rateOverride, scope, contingency, margin, vat, items]);
+  }, [canLoad, selectedId, client, invoiceNo, area, region, level, crew, rateOverride, scope, contingency, margin, vat, items, sections, laborOff]);
 
   // ── Calculations ────────────────────────────────────────────────────────
   const regionData = REGIONS.find((r) => r.id === region) ?? REGIONS[0];
@@ -221,14 +253,17 @@ export default function B2BPage() {
     });
   }, [area, scope, levelK, rateOverride, regionData]);
 
-  const laborTotal = labor.reduce((s, l) => s + l.cost, 0);
-  const laborHours = labor.reduce((s, l) => s + l.hours, 0);
-  const itemsTotal = items.reduce((s, i) => s + i.qty * i.price, 0);
+  // O secțiune eliminată nu mai contează nicăieri: Manopera → 0, liniile fără secțiune activă → excluse.
+  const laborTotal = laborOff ? 0 : labor.reduce((s, l) => s + l.cost, 0);
+  const laborHours = laborOff ? 0 : labor.reduce((s, l) => s + l.hours, 0);
+  const lines = useMemo(() => activeItems(items, sections), [items, sections]);
+  const itemsTotal = lines.reduce((s, i) => s + i.qty * i.price, 0);
   const totalByCat = useMemo(() => {
     const m: Record<string, number> = {};
-    for (const i of items) m[i.cat] = (m[i.cat] ?? 0) + i.qty * i.price;
+    for (const i of lines) m[i.cat] = (m[i.cat] ?? 0) + i.qty * i.price;
     return m;
-  }, [items]);
+  }, [lines]);
+  const removedDefaults = removedDefaultSections(sections);
 
   const base = laborTotal + itemsTotal;
   const contingencyAmt = base * (contingency / 100);
@@ -257,32 +292,74 @@ export default function B2BPage() {
   };
 
   // ── Invoice lines (contingency + margin spread pro-rata over every line) ──
+  // Grupate pe secțiuni, în ordinea editorului; secțiunile eliminate sau fără linii nu apar.
   const buildInvoiceLines = (): InvoiceLine[] => {
-    const lines: InvoiceLine[] = [];
-    for (const l of labor) {
-      if (l.cost <= 0 || l.hours <= 0) continue;
-      const total = round2(l.cost * uplift);
-      lines.push({ name: `${tr(lang, 'Manoperă', 'Labour')} – ${tr(lang, l.ro, l.en)}`, unit: 'h', qty: round2(l.hours), unitPrice: round2(total / l.hours), total });
+    const out: InvoiceLine[] = [];
+    const laborLabel = tr(lang, 'Manoperă', 'Labour');
+    if (!laborOff) {
+      for (const l of labor) {
+        if (l.cost <= 0 || l.hours <= 0) continue;
+        const total = round2(l.cost * uplift);
+        out.push({ name: `${laborLabel} – ${tr(lang, l.ro, l.en)}`, unit: 'h', qty: round2(l.hours), unitPrice: round2(total / l.hours), total, section: laborLabel });
+      }
     }
-    for (const i of items) {
-      const cost = i.qty * i.price;
-      if (cost <= 0 || i.qty <= 0) continue;
-      const total = round2(cost * uplift);
-      lines.push({ name: (tr(lang, i.ro, i.en)) || (tr(lang, 'Articol', 'Item')), unit: i.unit, qty: i.qty, unitPrice: round2(total / i.qty), total });
+    for (const sec of sections) {
+      const section = tr(lang, sec.ro, sec.en);
+      for (const i of lines) {
+        if (i.cat !== sec.id) continue;
+        const cost = i.qty * i.price;
+        if (cost <= 0 || i.qty <= 0) continue;
+        const total = round2(cost * uplift);
+        out.push({ name: (tr(lang, i.ro, i.en)) || (tr(lang, 'Articol', 'Item')), unit: i.unit, qty: i.qty, unitPrice: round2(total / i.qty), total, section });
+      }
     }
-    return lines;
+    return out;
   };
 
   // ── Handlers ────────────────────────────────────────────────────────────
-  const addFromTemplate = (tpl: Template) =>
-    setItems((p) => [...p, { id: uid(), cat: tpl.cat, ro: tpl.ro, en: tpl.en, unit: tpl.unit, qty: tpl.qty, price: 0 }]);
-  const addBlank = (cat: string) =>
-    setItems((p) => [...p, { id: uid(), cat, ro: '', en: '', unit: 'buc.', qty: 1, price: 0 }]);
+  const blankLine = (cat: string): LineItem => ({ id: uid(), cat, ro: '', en: '', unit: 'buc.', qty: 1, price: 0 });
+  const addFromTemplate = (tpl: Template) => {
+    const line: LineItem = { id: uid(), cat: tpl.cat, ro: tpl.ro, en: tpl.en, unit: tpl.unit, qty: tpl.qty, price: 0 };
+    setSections((p) => withSectionsFor(p, [line])); // șablon dintr-o secțiune eliminată → secțiunea revine
+    setItems((p) => [...p, line]);
+  };
+  const addBlank = (cat: string) => setItems((p) => [...p, blankLine(cat)]);
+
+  // ── Secțiuni ────────────────────────────────────────────────────────────
+  const removeSection = (sec: EstimateSection) => {
+    const rows = items.filter((i) => i.cat === sec.id);
+    // O secțiune personalizată nu are bară de restaurare: confirmăm doar dacă are conținut real.
+    if (sec.custom && rows.some((i) => i.ro.trim() || i.en.trim() || i.price > 0)
+      && !window.confirm(t(`Elimini secțiunea „${sec.ro || sec.en}" și liniile ei?`, `Remove the “${sec.en || sec.ro}” section and its lines?`, `Supprimer la section « ${sec.en || sec.ro} » et ses lignes ?`))) return;
+    if (!sec.custom && rows.length > 0) removedStash.current[sec.id] = rows;
+    setSections((p) => p.filter((s) => s.id !== sec.id));
+    setItems((p) => p.filter((i) => i.cat !== sec.id));
+  };
+  const restoreSection = (cat: Category) => {
+    const stashed = removedStash.current[cat.id];
+    delete removedStash.current[cat.id];
+    setSections((p) => insertSection(p, { id: cat.id, ro: cat.ro, en: cat.en }));
+    setItems((p) => [...p.filter((i) => i.cat !== cat.id), ...(stashed?.length ? stashed : defaultItemsFor(cat.id))]);
+  };
+  const renameSection = (id: string, title: string) =>
+    setSections((p) => p.map((s) => (s.id === id ? { ...s, ro: title, en: title } : s)));
+  const closeNewSection = () => { setNewSectionOpen(false); setNewSectionDraft(''); };
+  const createSection = (title: string, preset?: { ro: string; en: string }) => {
+    const name = title.trim();
+    if (!name) return;
+    const id = newSectionId();
+    setSections((p) => [...p, { id, ro: preset?.ro ?? name, en: preset?.en ?? name, custom: true }]);
+    setItems((p) => [...p, blankLine(id)]); // pornește cu o linie gata de completat
+    closeNewSection();
+  };
+  const sectionTitles = new Set(sections.flatMap((s) => [s.ro, s.en]).map((x) => x.trim().toLowerCase()));
+  const presets = SECTION_PRESETS.filter((p) => !sectionTitles.has(p.ro.toLowerCase()) && !sectionTitles.has(p.en.toLowerCase()));
   const updateItem = (id: string, patch: Partial<LineItem>) =>
     setItems((p) => p.map((i) => (i.id === id ? { ...i, ...patch } : i)));
   const removeItem = (id: string) => setItems((p) => p.filter((i) => i.id !== id));
   const resetAll = () => {
-    setItems([]); setProjectName(''); setRateOverride({}); setScope({});
+    setItems([]); setSections(defaultSections()); setLaborOff(false); removedStash.current = {}; closeNewSection();
+    setProjectName(''); setRateOverride({}); setScope({});
     setContingency(5); setMargin(15); setArea(68.4); setCrew(3);
     setClient(EMPTY_CLIENT); setInvoiceNo(''); setSelectedId(null);
   };
@@ -290,15 +367,19 @@ export default function B2BPage() {
   // Alege un proiect din portofoliu: reia devizul salvat sau îl pornește din cotele proiectului.
   const selectProject = (p: SavedProject) => {
     const ws = loadWorkspace(p.id);
+    removedStash.current = {};
     setSelectedId(p.id);
     setProjectName(p.title);
     if (ws) {
       setClient({ ...EMPTY_CLIENT, ...ws.client }); setInvoiceNo(ws.docNo); setArea(ws.area);
       setRegion(ws.region); setLevel(ws.level); setCrew(ws.crew); setRateOverride(ws.rateOverride);
       setScope(ws.scope); setContingency(ws.contingency); setMargin(ws.margin); setVat(ws.vat); setItems(ws.items);
+      setSections(normalizeSections(ws.sections, ws.items)); setLaborOff(!!ws.laborOff);
     } else {
+      const seed = seedMaterials(p);
       setClient(EMPTY_CLIENT); setInvoiceNo(''); setArea(+projectArea(p).toFixed(1) || 1);
-      setRateOverride({}); setScope(seedScope(p)); setItems(seedMaterials(p));
+      setRateOverride({}); setScope(seedScope(p)); setItems(seed);
+      setSections(withSectionsFor(defaultSections(), seed)); setLaborOff(false);
     }
     setSavedIds((prev) => new Set(prev).add(p.id));
   };
@@ -308,7 +389,10 @@ export default function B2BPage() {
     if (!selectedProject) return;
     setArea(+projectArea(selectedProject).toFixed(1) || 1);
     setScope(seedScope(selectedProject));
-    setItems(seedMaterials(selectedProject));
+    const seed = seedMaterials(selectedProject);
+    removedStash.current = {};
+    setItems(seed);
+    setSections((p) => withSectionsFor(p, seed)); // materialele recalculate își readuc secțiunile
   };
 
   const exportCsv = () => {
@@ -327,6 +411,9 @@ export default function B2BPage() {
   const panel = `relative border rounded-md ${sk.card}`;
   const panelHead = `flex items-center justify-between px-5 h-9 border-b ${sk.line} ${eyebrow}`;
   const lbl = (s: string) => <span className={`block mb-1 ${eyebrow}`}>{s}</span>;
+  // „Elimină secțiunea": discret, cu hover bordeaux; pastilele de restaurare din bara de jos
+  const removeBtn = `inline-flex items-center gap-1 h-7 px-2 rounded-sm font-sans text-[11px] normal-case tracking-normal cursor-pointer touch-manipulation transition-colors ${sk.dim} ${isDark ? 'hover:text-[#D65D7B] hover:bg-[#C94A6A]/10' : 'hover:text-[#5C1628] hover:bg-[#5C1628]/[0.06]'}`;
+  const restorePill = `inline-flex items-center gap-1 h-7 px-3 rounded-full border text-xs font-medium cursor-pointer touch-manipulation transition-colors ${sk.chipOn} ${isDark ? 'hover:bg-[#C94A6A]/20' : 'hover:bg-[#5C1628]/[0.09]'}`;
 
   // ═══════════════════════════════════════════════════════════════════════
   // Loading
@@ -353,7 +440,7 @@ export default function B2BPage() {
   // Enterprise dashboard
   // ═══════════════════════════════════════════════════════════════════════
   return (
-    <div className={`min-h-screen font-sans pb-28 transition-colors print:bg-white print:text-black print:pb-0 ${sk.page}`}>
+    <div className={`min-h-screen font-sans pb-28 transition-colors print:bg-white print:text-[#1B1416] print:pb-0 ${sk.page}`}>
       <Navbar />
 
       <div className="print:hidden max-w-7xl mx-auto px-4 sm:px-6 pt-10 space-y-8">
@@ -422,8 +509,8 @@ export default function B2BPage() {
                               <FolderOpen className={`w-5 h-5 ${sk.dim}`} />
                             )}
                           </div>
-                          <div className={`p-3 space-y-1 ${isDark ? 'bg-[#141416]' : 'bg-white'}`}>
-                            <p className={`text-sm font-semibold line-clamp-1 truncate ${isDark ? 'text-white' : 'text-[#111111]'}`}>{p.title}</p>
+                          <div className={`p-3 space-y-1 ${isDark ? 'bg-[#1A1416]' : 'bg-white'}`}>
+                            <p className={`text-sm font-semibold line-clamp-1 truncate ${isDark ? 'text-white' : 'text-[#1B1416]'}`}>{p.title}</p>
                             <p className={`font-mono text-[11px] ${sk.dim}`}>
                               {t(sp.labelRo, sp.labelEn)} · {calculateEngineering(p.dimensions, p.mode, p.spaceType).floorArea} m² · {p.createdAt.slice(0, 10)}
                             </p>
@@ -499,11 +586,17 @@ export default function B2BPage() {
               </div>
             </section>
 
-            {/* Labor matrix */}
+            {/* Labor matrix — secțiunea „Manoperă", eliminabilă (restaurare din bara de sub articole) */}
+            {!laborOff && (
             <section className={panel}>
               <div className={panelHead}>
                 <span>{t('Tarife de manoperă', 'Labour rates')}</span>
-                <span>{t('tarife editabile', 'editable rates')}</span>
+                <span className="flex items-center gap-2">
+                  <span className="hidden sm:inline">{t('tarife editabile', 'editable rates')}</span>
+                  <button type="button" onClick={() => setLaborOff(true)} aria-label={t('Elimină secțiunea Manoperă', 'Remove the Labour section', 'Supprimer la section Main-d’œuvre')} className={removeBtn}>
+                    <X className="w-3 h-3" /> <span className="hidden sm:inline">{t('Elimină secțiunea', 'Remove section', 'Supprimer la section')}</span>
+                  </button>
+                </span>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm min-w-[640px]">
@@ -550,12 +643,13 @@ export default function B2BPage() {
                 )}
               </p>
             </section>
+            )}
 
             {/* Itemised lines */}
             <section className={panel}>
               <div className={panelHead}>
                 <span>{t('Articole de deviz', 'Estimate lines')}</span>
-                <span>{String(items.length).padStart(2, '0')}</span>
+                <span>{String(lines.length).padStart(2, '0')}</span>
               </div>
               <div className={`p-5 border-b space-y-4 ${sk.line}`}>
                 <p className={eyebrow}>{t('Adaugă din șablon', 'Add from template')}</p>
@@ -568,42 +662,147 @@ export default function B2BPage() {
                 </div>
               </div>
 
-              {items.length === 0 ? (
+              {sections.length === 0 ? (
                 <p className={`p-10 text-center text-sm ${sk.dim}`}>
-                  {t('Apasă un șablon pentru a adăuga prima linie în deviz.', 'Press a template to add the first line to the estimate.')}
+                  {t('Nicio secțiune în deviz. Adaugă o secțiune nouă sau restaurează una implicită.', 'No sections in the estimate. Add a new section or restore a default one.', 'Aucune section dans le devis. Ajoutez une nouvelle section ou restaurez-en une par défaut.')}
                 </p>
               ) : (
-                CATEGORIES.map((cat) => {
-                  const rows = items.filter((i) => i.cat === cat.id);
-                  if (rows.length === 0) return null;
+                sections.map((sec) => {
+                  const rows = lines.filter((i) => i.cat === sec.id);
+                  const title = tr(lang, sec.ro, sec.en);
                   return (
-                    <div key={cat.id} className={`border-b last:border-b-0 ${sk.line}`}>
-                      <div className={`flex items-center justify-between px-5 h-9 ${eyebrow} ${sk.strong}`}>
-                        <span>{t(cat.ro, cat.en)}</span>
-                        <span className="font-mono normal-case tracking-normal">{lei(totalByCat[cat.id] ?? 0)}</span>
+                    <div key={sec.id} className={`border-b ${sk.line}`}>
+                      <div className={`flex items-center justify-between gap-3 px-5 min-h-9 py-1.5 ${eyebrow} ${sk.strong}`}>
+                        {sec.custom ? (
+                          <input
+                            type="text"
+                            value={title}
+                            onChange={(e) => renameSection(sec.id, e.target.value)}
+                            placeholder={t('Titlul secțiunii…', 'Section title…', 'Titre de la section…')}
+                            aria-label={t('Titlul secțiunii', 'Section title', 'Titre de la section')}
+                            className={`min-w-0 flex-1 h-7 -ml-1.5 px-1.5 rounded-sm border border-transparent bg-transparent uppercase tracking-[0.22em] font-mono text-[10px] transition-colors hover:border-current/20 focus:outline-none ${isDark ? 'focus:border-[#C94A6A]' : 'focus:border-[#5C1628]'} ${sk.strong}`}
+                          />
+                        ) : (
+                          <span className="min-w-0 truncate">{title}</span>
+                        )}
+                        <span className="flex shrink-0 items-center gap-2">
+                          <span className="font-mono normal-case tracking-normal tabular-nums">{lei(totalByCat[sec.id] ?? 0)}</span>
+                          <button type="button" onClick={() => removeSection(sec)} aria-label={`${t('Elimină secțiunea', 'Remove section', 'Supprimer la section')} ${title}`} className={removeBtn}>
+                            <Trash2 className="w-3 h-3" /> <span className="hidden sm:inline">{t('Elimină secțiunea', 'Remove section', 'Supprimer la section')}</span>
+                          </button>
+                        </span>
                       </div>
-                      <div className={`divide-y ${sk.divide}`}>
-                        {rows.map((i) => (
-                          <div key={i.id} className="grid grid-cols-12 gap-2 px-5 py-2.5 items-center">
-                            <input type="text" value={tr(lang, i.ro, i.en)} onChange={(e) => updateItem(i.id, tr(lang, { ro: e.target.value }, { en: e.target.value }))} placeholder={t('Descriere…', 'Description…')} className={`${field} col-span-12 sm:col-span-5`} />
-                            <input type="text" value={i.unit} onChange={(e) => updateItem(i.id, { unit: e.target.value })} className={`${field} col-span-3 sm:col-span-1`} aria-label="Unit" />
-                            <input type="number" min={0} step="0.5" value={i.qty} onChange={(e) => updateItem(i.id, { qty: clampNum(e.target.value) })} className={`${numField} col-span-3 sm:col-span-2`} aria-label="Quantity" />
-                            <input type="number" min={0} step="0.5" value={i.price === 0 ? '' : ronInput(i.price)} placeholder="0" onChange={(e) => updateItem(i.id, { price: eurFromRonInput(e.target.value) })} className={`${numField} col-span-4 sm:col-span-2`} aria-label="Unit price" />
-                            <span className={`hidden sm:block col-span-1 text-right font-mono text-xs tabular-nums ${sk.muted}`}>{ronInput(i.qty * i.price).toFixed(0)}</span>
-                            <button type="button" onClick={() => removeItem(i.id)} aria-label={t('Șterge linia', 'Delete line')} className={`col-span-2 sm:col-span-1 inline-flex h-9 items-center justify-center rounded-sm cursor-pointer touch-manipulation ${sk.dim} ${sk.rowHover}`}>
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                      {rows.length > 0 && (
+                        <>
+                          {/* Antet coloane: același șablon de grid ca rândurile, ca fiecare titlu să stea exact deasupra câmpului său. */}
+                          <div aria-hidden className={`hidden sm:grid ${LINE_GRID} pb-1.5 ${COL_HEAD} ${sk.muted}`}>
+                            <span className={COL.desc}>{t('Articol / Descriere', 'Item / Description')}</span>
+                            <span className={COL.unit}>{t('U.M.', 'Unit')}</span>
+                            <span className={`${COL.qty} text-right`}>{t('Cantitate', 'Quantity')}</span>
+                            <span className={`${COL.price} text-right`}>{t('Preț unitar (lei)', 'Unit price (lei)')}</span>
+                            <span className={`${COL.total} text-right`}>{t('Total', 'Total')}</span>
+                            <span className={COL.del} />
                           </div>
-                        ))}
-                      </div>
-                      <div className="px-5 pb-3">
-                        <button type="button" onClick={() => addBlank(cat.id)} className={`inline-flex items-center gap-1.5 h-8 px-2.5 rounded-sm text-xs cursor-pointer touch-manipulation ${sk.btnGhost}`}>
+                          <div className={`divide-y ${sk.divide}`}>
+                            {rows.map((i) => (
+                              <div key={i.id} className={`${LINE_GRID} py-2.5 items-end sm:items-center`}>
+                                <input type="text" value={tr(lang, i.ro, i.en)} onChange={(e) => updateItem(i.id, tr(lang, { ro: e.target.value }, { en: e.target.value }))} placeholder={t('Descriere…', 'Description…')} aria-label={t('Articol / Descriere', 'Item / Description')} className={`${field} ${COL.desc}`} />
+                                <label className={`${COL.unit} block`}>
+                                  <span className={`sm:hidden block mb-1 ${COL_HEAD} ${sk.muted}`}>{t('U.M.', 'Unit')}</span>
+                                  <input type="text" value={i.unit} onChange={(e) => updateItem(i.id, { unit: e.target.value })} className={field} aria-label={t('U.M.', 'Unit')} />
+                                </label>
+                                <label className={`${COL.qty} block`}>
+                                  <span className={`sm:hidden block mb-1 text-right ${COL_HEAD} ${sk.muted}`}>{t('Cantitate', 'Quantity')}</span>
+                                  <input type="number" min={0} step="0.5" value={i.qty} onChange={(e) => updateItem(i.id, { qty: clampNum(e.target.value) })} className={numField} aria-label={t('Cantitate', 'Quantity')} />
+                                </label>
+                                <label className={`${COL.price} block`}>
+                                  <span className={`sm:hidden block mb-1 text-right ${COL_HEAD} ${sk.muted}`}>{t('Preț / U.M.', 'Price / unit')}</span>
+                                  <input type="number" min={0} step="0.5" value={i.price === 0 ? '' : ronInput(i.price)} placeholder="0" onChange={(e) => updateItem(i.id, { price: eurFromRonInput(e.target.value) })} className={numField} aria-label={t('Preț unitar (lei)', 'Unit price (lei)')} />
+                                </label>
+                                <button type="button" onClick={() => removeItem(i.id)} aria-label={t('Șterge linia', 'Delete line')} className={`${COL.del} inline-flex h-9 items-center justify-center rounded-sm cursor-pointer touch-manipulation ${sk.dim} ${sk.rowHover}`}>
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                                <div className={`${COL.total} flex items-baseline justify-between sm:justify-end`}>
+                                  <span className={`sm:hidden ${COL_HEAD} ${sk.muted}`}>{t('Total', 'Total')}</span>
+                                  <span className={`font-mono text-xs tabular-nums whitespace-nowrap ${sk.strong}`}>{formatLei(i.qty * i.price, { maximumFractionDigits: 0 })}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                      <div className={`flex flex-wrap items-center gap-3 px-5 pb-3 ${rows.length > 0 ? 'pt-0' : 'pt-1'}`}>
+                        <button type="button" onClick={() => addBlank(sec.id)} className={`inline-flex items-center gap-1.5 h-8 px-2.5 rounded-sm text-xs cursor-pointer touch-manipulation ${sk.btnGhost}`}>
                           <Plus className="w-3 h-3" /> {t('Linie personalizată', 'Custom line')}
                         </button>
+                        {rows.length === 0 && <span className={`text-xs ${sk.dim}`}>{t('Nicio linie în această secțiune.', 'No lines in this section yet.', 'Aucune ligne dans cette section.')}</span>}
                       </div>
                     </div>
                   );
                 })
+              )}
+
+              {/* + Secțiune nouă: titlu liber sau o sugestie rapidă; pornește cu o linie goală */}
+              <div className="px-5 py-4">
+                {newSectionOpen ? (
+                  <form
+                    onSubmit={(e) => { e.preventDefault(); createSection(newSectionDraft); }}
+                    className={`space-y-3 border rounded-md p-3 ${sk.line} ${sk.soft}`}
+                  >
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input
+                        type="text"
+                        autoFocus
+                        value={newSectionDraft}
+                        onChange={(e) => setNewSectionDraft(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Escape') closeNewSection(); }}
+                        maxLength={120}
+                        placeholder={t('ex: Instalații sanitare', 'e.g. Plumbing works', 'ex. : Plomberie')}
+                        aria-label={t('Titlul secțiunii noi', 'New section title', 'Titre de la nouvelle section')}
+                        className={`${field} sm:flex-1`}
+                      />
+                      <div className="flex gap-2">
+                        <button type="submit" disabled={!newSectionDraft.trim()} className={`inline-flex flex-1 sm:flex-none items-center justify-center gap-1.5 h-9 px-4 rounded-sm text-xs font-semibold cursor-pointer touch-manipulation disabled:opacity-40 disabled:cursor-not-allowed ${sk.btn}`}>
+                          <Plus className="w-3 h-3" /> {t('Adaugă secțiunea', 'Add section', 'Ajouter la section')}
+                        </button>
+                        <button type="button" onClick={closeNewSection} aria-label={t('Anulează', 'Cancel', 'Annuler')} className={`inline-flex items-center justify-center h-9 w-9 rounded-sm cursor-pointer touch-manipulation ${sk.btnGhost}`}>
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                    {presets.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className={`mr-1 ${COL_HEAD} ${sk.muted}`}>{t('Sugestii', 'Suggestions', 'Suggestions')}</span>
+                        {presets.map((p) => (
+                          <button key={p.ro} type="button" onClick={() => createSection(t(p.ro, p.en, p.fr), p)} className={`inline-flex items-center gap-1 h-7 px-2.5 rounded-full border text-xs cursor-pointer touch-manipulation transition-colors ${sk.line} ${sk.cell} ${sk.segOff}`}>
+                            <Plus className="w-3 h-3" /> {t(p.ro, p.en, p.fr)}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </form>
+                ) : (
+                  <button type="button" onClick={() => setNewSectionOpen(true)} className={`inline-flex w-full sm:w-auto items-center justify-center gap-1.5 h-9 px-4 rounded-sm border border-dashed text-xs font-medium cursor-pointer touch-manipulation transition-colors ${isDark ? 'border-[#C94A6A]/50 text-[#D65D7B] hover:bg-[#C94A6A]/10' : 'border-[#5C1628]/35 text-[#5C1628] hover:bg-[#5C1628]/[0.04]'}`}>
+                    <Plus className="w-3.5 h-3.5" /> {t('Secțiune nouă', 'New section', 'Nouvelle section')}
+                  </button>
+                )}
+              </div>
+
+              {/* Restaurare dintr-un click a secțiunilor implicite eliminate */}
+              {(laborOff || removedDefaults.length > 0) && (
+                <div className={`flex flex-wrap items-center gap-2 px-5 py-3 border-t rounded-b-md ${sk.line} ${sk.soft}`}>
+                  <span className={`text-xs ${sk.muted}`}>{t('Secțiuni implicite eliminate:', 'Removed default sections:', 'Sections par défaut supprimées :')}</span>
+                  {laborOff && (
+                    <button type="button" onClick={() => setLaborOff(false)} className={restorePill}>
+                      <Plus className="w-3 h-3" /> {t('Manoperă', 'Labour')}
+                    </button>
+                  )}
+                  {removedDefaults.map((c) => (
+                    <button key={c.id} type="button" onClick={() => restoreSection(c)} className={restorePill}>
+                      <Plus className="w-3 h-3" /> {t(c.ro, c.en)}
+                    </button>
+                  ))}
+                </div>
               )}
             </section>
 
@@ -644,6 +843,7 @@ export default function B2BPage() {
             workDays={workDays}
             crew={crew}
             laborHours={laborHours}
+            laborOff={laborOff}
           />
         </div>
       </div>
@@ -657,8 +857,9 @@ export default function B2BPage() {
         projectName={projectName}
         seller={seller}
         client={client}
-        labor={labor.map((l) => ({ name: t(l.ro, l.en), hours: l.hours, rate: l.rate, cost: l.cost }))}
-        items={items}
+        labor={laborOff ? [] : labor.map((l) => ({ name: t(l.ro, l.en), hours: l.hours, rate: l.rate, cost: l.cost }))}
+        items={lines}
+        sections={sections}
         totals={{ labor: laborTotal, materials: itemsTotal, contingency: contingencyAmt, contingencyPct: contingency, margin: marginAmt, marginPct: margin, net, vat, vatAmt, gross }}
         schedule={{ days: workDays, crew, hours: laborHours }}
       />

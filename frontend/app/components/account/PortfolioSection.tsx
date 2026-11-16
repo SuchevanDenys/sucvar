@@ -76,7 +76,7 @@ export default function PortfolioSection({
               </div>
 
               {p.clientFeedback && (
-                <blockquote className={`border-l-2 pl-3 text-xs leading-relaxed whitespace-pre-line break-words ${isDark ? 'border-[#F5F5F5]/40' : 'border-[#111111]/40'} ${ui.muted}`}>
+                <blockquote className={`border-l-2 pl-3 text-xs leading-relaxed whitespace-pre-line break-words ${isDark ? 'border-[#F5F2EF]/40' : 'border-[#1B1416]/40'} ${ui.muted}`}>
                   {p.clientFeedback}
                   {p.clientReviewedAt && <span className="block mt-1 font-mono text-[10px]">{formatDate(p.clientReviewedAt, lang)}</span>}
                 </blockquote>
