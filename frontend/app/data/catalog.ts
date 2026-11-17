@@ -283,6 +283,24 @@ export const VISUAL_STYLES: VisualStyle[] = [
   }),
 ];
 
+// Fotografii de referință din `public/styles/` (galeria de pe pagina principală).
+// Nu fac parte din datele stilului (catalog.json / testele golden), deci stau separat.
+// Stilurile fără intrare aici afișează un card-gradient din paleta lor — nu există imagini lipsă.
+export const STYLE_IMAGES: Partial<Record<string, string>> = {
+  scandinavian: '/styles/scandinavian.jpg',
+  modern: '/styles/modern.jpg',
+  minimalist: '/styles/minimalist.jpg',
+  minimalist_obsidian: '/styles/luxury.jpg',
+  japandi: '/styles/japandi.jpg',
+  traditional: '/styles/classic.jpg',
+  coastal: '/styles/mediteranian.jpg',
+  industrial: '/styles/loft.jpg',
+  contemporary: '/styles/contemporary.jpg',
+  mid_century_modern: '/styles/mid-century-modern.jpg',
+  brutalist_concrete: '/styles/brutalist-concrete.jpg',
+  biophilic: '/styles/biophilic.jpg',
+};
+
 // Stilul cu id-ul dat; dacă id-ul e necunoscut (date vechi), se folosește primul stil.
 export function getStyle(styleId: string | null | undefined): VisualStyle {
   return VISUAL_STYLES.find((s) => s.id === styleId) ?? VISUAL_STYLES[0];

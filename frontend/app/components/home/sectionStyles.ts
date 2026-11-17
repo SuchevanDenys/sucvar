@@ -9,5 +9,6 @@
  */
 export const ANCHOR_OFFSET = 'scroll-mt-24';
 
-/** Spațierea verticală și linia de separare a unei secțiuni numerotate (§01 … §06). */
-export const sectionSpacing = (lineClass: string): string => `border-t py-24 lg:py-32 ${lineClass}`;
+/** Spațierea verticală (16 → 24 → 32), linia fină de separare și, opțional, banda alabastru (`bandClass`). */
+export const sectionSpacing = (lineClass: string, band = ''): string =>
+  `border-t py-16 sm:py-24 lg:py-32 transition-colors duration-500 ${lineClass} ${band}`;

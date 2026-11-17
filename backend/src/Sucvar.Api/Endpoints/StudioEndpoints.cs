@@ -23,7 +23,9 @@ namespace Sucvar.Api.Endpoints;
 /// </remarks>
 public static class StudioEndpoints
 {
-    public const int GenerateMaxBodyBytes = AiLimits.MaxImageLength + 100_000;
+    /// <summary>Largest accepted selection mask data URL (a binary PNG of a ≤1280 px photo is typically 20–200 KB).</summary>
+    public const int MaxMaskLength = 2_000_000;
+    public const int GenerateMaxBodyBytes = AiLimits.MaxImageLength + MaxMaskLength + 100_000;
     public const int MaterialsMaxBodyBytes = 16_000; // dimensions + up to 1000 chars of customPrompt (UTF-8)
     private const int MinImageSide = 64, MaxImageSide = 8192;
     private const long MaxImagePixels = 40_000_000;
@@ -34,7 +36,24 @@ public static class StudioEndpoints
         app.MapPost("/api/generate", Generate).WithTags("Studio").WithName("Generate").RequireActiveAccount();
         app.MapPost("/api/analyze-materials", AnalyzeMaterials).WithTags("Studio").WithName("AnalyzeMaterials").RequireActiveAccount();
         app.MapPost("/api/prompt-preview", PromptPreview).WithTags("Studio").WithName("PromptPreview").RequireActiveAccount();
+        app.MapGet("/api/ai/model", ActiveModel).WithTags("Studio").WithName("ActiveAiModel").AllowAnonymous();
         return app;
+    }
+
+    /// <summary>
+    /// <c>GET /api/ai/model</c>: the active image model and the prompt it reads, so the Studio shows only the controls
+    /// that model uses (CLIP sliders vs. natural-language instruction). No secrets: provider id, model id, format.
+    /// </summary>
+    private static IResult ActiveModel(HttpContext ctx, IImageProviderSelector providers)
+    {
+        var provider = providers.Select().Provider;
+        ctx.Response.Headers.CacheControl = "public, max-age=60";
+        return Results.Json(new
+        {
+            provider = provider.Id, model = provider.ModelId, promptFormat = FormatId(provider.PromptFormat),
+            // "Edit selected area": the model and prompt a masked request uses
+            inpaintModel = provider.ModelIdFor(masked: true), inpaintPromptFormat = FormatId(provider.PromptFormatFor(masked: true)),
+        });
     }
 
     /// <summary>^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$ without a regex over 6 MB.</summary>
@@ -115,20 +134,56 @@ public static class StudioEndpoints
             // 1c. Flexible brief: free-text customPrompt (≤ 1000 chars) and/or a style — at least one of them
             if (DesignVision.Validate(payload) is { } visionError) return JsonError(400, visionError.Code, visionError.Message);
 
-            // 2–4. Space / layout / style / AI settings / 72-token prompt (all re-validated)
-            var plan = GenerationPrompt.Create(payload);
+            // 1d. Optional "Edit selected area" mask: validated, aligned to the photo's pixels and measured
+            PreparedMask? mask = null;
+            var maskEl = Js.Prop(payload, "mask");
+            if (maskEl is { } m && m.ValueKind != JsonValueKind.Null)
+            {
+                if (m.ValueKind != JsonValueKind.String) return JsonError(400, "MASK_INVALID", "Masca selecției este invalidă.");
+                var maskUrl = m.GetString()!;
+                if (maskUrl.Length > MaxMaskLength) return JsonError(413, "MASK_TOO_LARGE", "Masca selecției este prea mare.");
+                if (!(maskUrl.StartsWith("data:image/png;base64,", StringComparison.Ordinal) || maskUrl.StartsWith("data:image/webp;base64,", StringComparison.Ordinal))
+                    || !IsAcceptedDataUrl(maskUrl))
+                    return JsonError(415, "MASK_FORMAT", "Masca selecției trebuie să fie o imagine PNG.");
+                try
+                {
+                    mask = images.PrepareMask(maskUrl, image);
+                }
+                catch (MaskRejectedException ex)
+                {
+                    return JsonError(422, ex.Code, ex.Message);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    return JsonError(415, "MASK_CORRUPT", "Masca selecției este coruptă sau nu poate fi citită.");
+                }
+            }
+            var masked = mask is not null;
+
+            // 2–4. Space / layout / style / AI settings / 72-token prompt (all re-validated); a mask → regional edit plan
+            var plan = GenerationPrompt.Create(payload, mask?.Region);
             var (provider, providerWarning) = providers.Select();
-            // 4b. Optional LLM "Prompt Architect" (free-text briefs only; skipped in demo mode — nothing would use it)
-            if (provider.Id != "demo") plan = await EnhanceAsync(plan, enhancer, ctx.RequestAborted);
+            // 4b. Optional LLM "Prompt Architect" (free-text briefs only; skipped in demo mode — nothing would use it —
+            // for instruction models: it writes CLIP tags, while they get the natural-language instruction — and for
+            // regional edits, whose prompt must not grow room-wide tags)
+            var format = provider.PromptFormatFor(masked);
+            if (provider.Id != "demo" && format == PromptFormat.Clip && !masked) plan = await EnhanceAsync(plan, enhancer, ctx.RequestAborted);
+            plan = plan.For(format);
             var request = new ImageGenerationRequest(image, plan.Prompt, plan.NegativePrompt, plan.InferenceSteps, plan.GuidanceScale,
-                plan.Seed, plan.PromptStrength, plan.TransformationStrength, plan.Mode, plan.Brief?.PreserveStructure ?? true);
+                plan.Seed, plan.PromptStrength, plan.TransformationStrength, plan.Mode, plan.Brief?.PreserveStructure ?? true,
+                mask?.DataUrl);
 
             // 5. Demo mode (no provider credentials)
             if (provider.Id == "demo")
             {
                 var demo = await provider.GenerateAsync(request, ctx.RequestAborted);
                 var demoResult = demo.ImageUrl;
-                try { demoResult = await images.ToPermanentJpegDataUrlAsync(demo.ImageUrl, ctx.RequestAborted); }
+                try
+                {
+                    demoResult = mask is not null
+                        ? await images.CompositeRegionAsync(image, demo.ImageUrl, mask.DataUrl, ctx.RequestAborted)
+                        : await images.ToPermanentJpegDataUrlAsync(demo.ImageUrl, ctx.RequestAborted);
+                }
                 catch (Exception ex) when (ex is not OperationCanceledException) { /* keep the Unsplash URL (it does not expire) */ }
                 return Results.Json(Response(demoResult, true, plan, providerWarning));
             }
@@ -154,17 +209,22 @@ public static class StudioEndpoints
             // The provider returned an image → the generation is paid for: journal it BEFORE converting
             await quota.RecordGenerationAsync(q.UserId, provider.Id, plan.Mode, ctx.RequestAborted);
 
-            // 7. Permanent JPEG data URL; on failure keep the temporary URL + warning
+            // 7. Permanent JPEG data URL; on failure keep the temporary URL + warning.
+            // 7b. Regional edit: feathered composite through the mask — every unselected pixel comes from the photo.
             var permanent = generated.ImageUrl;
             string? warning = providerWarning;
             try
             {
-                permanent = await images.ToPermanentJpegDataUrlAsync(generated.ImageUrl, ctx.RequestAborted);
+                permanent = mask is not null
+                    ? await images.CompositeRegionAsync(image, generated.ImageUrl, mask.DataUrl, ctx.RequestAborted)
+                    : await images.ToPermanentJpegDataUrlAsync(generated.ImageUrl, ctx.RequestAborted);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 logger.LogError(ex, "Permanent image conversion failed");
-                warning = "Imaginea nu a putut fi comprimată permanent; linkul este temporar și expiră în câteva ore. Salvează proiectul imediat.";
+                warning = mask is not null
+                    ? "Zona selectată nu a putut fi îmbinată cu fotografia originală; imaginea afișată este rezultatul brut al modelului, cu link temporar. Generează din nou."
+                    : "Imaginea nu a putut fi comprimată permanent; linkul este temporar și expiră în câteva ore. Salvează proiectul imediat.";
             }
             return Results.Json(Response(permanent, false, plan, warning));
         }
@@ -188,10 +248,12 @@ public static class StudioEndpoints
             ["promptUsed"] = prompt,
             ["negativePromptUsed"] = plan.NegativePrompt,
             ["promptEngine"] = plan.Engine,
+            ["promptFormat"] = FormatId(plan.Format),
             ["parameters"] = new { promptStrength = plan.PromptStrength, guidanceScale = plan.GuidanceScale, inferenceSteps = plan.InferenceSteps },
         };
         if (warning is not null) body["warning"] = warning;
         if (plan.Brief is not null) body["vision"] = DesignVision.ToResponse(plan.Brief); // resolved brief for the Studio summary
+        if (plan.Region is { } r) body["regionalEdit"] = RegionResponse(r);
         return body;
     }
 
@@ -212,8 +274,17 @@ public static class StudioEndpoints
     /// brief, without an image and without any paid call (the LLM step is not run here; <c>enhancerAvailable</c> says
     /// whether it would refine the prompt at render time).
     /// </summary>
+    private static object RegionResponse(SelectionRegion r) => new
+    {
+        bounds = new { x = r.X, y = r.Y, width = r.Width, height = r.Height },
+        coverage = r.Coverage,
+        position = r.Position,
+    };
+
+    private static string FormatId(PromptFormat format) => format == PromptFormat.Instruction ? "instruction" : "clip";
+
     private static async Task<IResult> PromptPreview(HttpContext ctx, FixedWindowRateLimitStore limiter, ServerConfig config,
-        IPromptEnhancer enhancer, ILogger<QuotaService> logger)
+        IPromptEnhancer enhancer, IImageProviderSelector providers, ILogger<QuotaService> logger)
     {
         try
         {
@@ -228,17 +299,25 @@ public static class StudioEndpoints
             if (body.ValueKind != JsonValueKind.Object) return JsonError(400, "INVALID_BODY", "Corp invalid: se așteaptă un obiect JSON.");
             if (DesignVision.Validate(body) is { } visionError) return JsonError(400, visionError.Code, visionError.Message);
 
-            var plan = GenerationPrompt.Create(body);
+            // Preview exactly what the active model would read (CLIP tags or the natural-language instruction)
+            var active = providers.Select().Provider;
+            var regional = SelectionRegion.FromPayload(body) is not null;
+            var format = active.PromptFormatFor(regional);
+            var plan = GenerationPrompt.Create(body).For(format);
+            var clip = plan.Format == PromptFormat.Clip;
             return Results.Json(new
             {
                 prompt = plan.Prompt,
                 negativePrompt = plan.NegativePrompt,
                 promptEngine = plan.Engine,
-                enhancerAvailable = enhancer.IsConfigured,
+                promptFormat = FormatId(plan.Format),
+                enhancerAvailable = enhancer.IsConfigured && clip && !regional,
                 estimatedTokens = GenerationPrompt.EstimateTokens(plan.Prompt),
-                maxTokens = AiLimits.MaxPromptTokens,
+                // Only CLIP models have a token budget; null hides the "~n/72 tok" counter in the Studio
+                maxTokens = clip ? AiLimits.MaxPromptTokens : (int?)null,
                 parameters = new { promptStrength = plan.PromptStrength, guidanceScale = plan.GuidanceScale, inferenceSteps = plan.InferenceSteps },
                 vision = plan.Brief is null ? null : DesignVision.ToResponse(plan.Brief),
+                regionalEdit = plan.Region is null ? null : RegionResponse(plan.Region),
             });
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

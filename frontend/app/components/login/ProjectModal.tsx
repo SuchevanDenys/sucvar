@@ -82,7 +82,7 @@ export default function ProjectModal({
           src={(project.generatedImage || project.originalImage) ?? ''}
           alt={project.title}
           referrerPolicy="no-referrer"
-          className="w-full max-h-[70vh] object-contain rounded-md border border-neutral-300/40 bg-neutral-500/5"
+          className="w-full max-h-[70vh] object-contain rounded-md border border-[#B5A9AC]/35 bg-[#685D60]/5"
         />
       ) : null}
 

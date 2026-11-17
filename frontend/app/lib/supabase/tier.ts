@@ -45,6 +45,8 @@ export async function fetchSubscriptionInfo(): Promise<SubscriptionInfo> {
       cancel_at_period_end?: unknown;
     } | null;
 
+    if (error) console.error('[SUCVAR] Citirea abonamentului din `profiles` a eșuat:', error.message);
+
     if (!error && profile?.subscription_tier) {
       // Expirare: current_period_end < acum => 'starter' (aceeași regulă ca pe server, din tiers.ts)
       const tier = resolveEffectiveTier(profile.subscription_tier, profile.current_period_end);
@@ -59,7 +61,8 @@ export async function fetchSubscriptionInfo(): Promise<SubscriptionInfo> {
 
     // app_metadata poate fi modificat doar server-side (spre deosebire de user_metadata)
     return { ...STARTER_INFO, tier: resolveEffectiveTier(user.app_metadata?.subscription_tier, null) };
-  } catch {
+  } catch (err) {
+    console.error('[SUCVAR] Citirea abonamentului a eșuat:', err);
     return STARTER_INFO;
   }
 }

@@ -1429,6 +1429,7 @@ export const FR: Record<string, string> = {
   "no render": "aucun rendu",
   "of": "sur",
   "open in Studio": "ouvrir dans le Studio",
+  "Try this style →": "Essayer ce style →",
   "or with email": "ou par e-mail",
   "ornamental trees 8-10 girth shrubs C5 grasses perennials turf rolls bark mulch": "arbres d’ornement 8-10 arbustes C5 graminées vivaces gazon en rouleau paillis écorce",
   "outdoor aluminium rattan lounge set olefin fabric weatherproof": "salon de jardin lounge aluminium résine tressée tissu oléfine",

@@ -16,7 +16,22 @@ public sealed class AiOptions
     /// <summary>AI_PROVIDER: stable-diffusion | replicate | demo (empty = automatic).</summary>
     public string? Provider { get; set; }
     public string? ReplicateApiToken { get; set; }
+    /// <summary>
+    /// Official Replicate model (<c>owner/name</c>), called through <c>POST v1/models/{owner}/{name}/predictions</c>
+    /// with the FLUX Kontext input schema and a natural-language instruction. Empty ⇒ the versioned
+    /// <see cref="ReplicateModelVersion"/> path (SD 1.5 CLIP prompt).
+    /// </summary>
+    public string? ReplicateModel { get; set; } = DefaultReplicateModel;
+    /// <summary>Community model version hash (adirik/interior-design), used only when <see cref="ReplicateModel"/> is empty.</summary>
     public string ReplicateModelVersion { get; set; } = "76604baddc85b1b4616e1c6475eca080da339c8875bd4996705440484a6eac38";
+    public const string DefaultReplicateModel = "black-forest-labs/flux-kontext-pro";
+    /// <summary>
+    /// Official Replicate inpainting model for "Edit selected area" requests (<c>image</c> + <c>mask</c> + <c>prompt</c>,
+    /// white = repaint). Empty ⇒ masked requests fall back to <see cref="ReplicateModel"/> (or the versioned model)
+    /// with a regional instruction; the API's feathered composite still keeps every unselected pixel original.
+    /// </summary>
+    public string? ReplicateInpaintModel { get; set; } = DefaultReplicateInpaintModel;
+    public const string DefaultReplicateInpaintModel = "black-forest-labs/flux-fill-pro";
     public string? SdApiUrl { get; set; }
     public string? SdApiKey { get; set; }
     public int SdMaxSide { get; set; } = 768;
@@ -63,18 +78,61 @@ public sealed class DemoImageProvider(IOptions<AiOptions> options) : IImageProvi
     }
 }
 
-/// <summary>Replicate (adirik/interior-design) through the HTTP predictions API.</summary>
-public sealed class ReplicateImageProvider(IHttpClientFactory http, IOptions<AiOptions> options, ILogger<ReplicateImageProvider> logger) : IImageProvider
+/// <summary>
+/// Replicate through the HTTP predictions API: an official model (default <c>black-forest-labs/flux-kontext-pro</c>,
+/// natural-language instruction) or, when <c>Ai:ReplicateModel</c> is empty, the versioned community model
+/// <c>adirik/interior-design</c> (SD 1.5 + ControlNet, CLIP prompt).
+/// </summary>
+public sealed partial class ReplicateImageProvider(IHttpClientFactory http, IOptions<AiOptions> options, ILogger<ReplicateImageProvider> logger) : IImageProvider
 {
     private string Token => AiOptions.Clean(options.Value.ReplicateApiToken);
+    /// <summary>The configured official model (<c>owner/name</c>), or null for the versioned path.</summary>
+    private string? Model => AiOptions.Clean(options.Value.ReplicateModel) is { Length: > 0 } m ? m : null;
 
     public string Id => "replicate";
     public bool IsConfigured => Token.Length > 0 && Token != "demo";
+    public Sucvar.Domain.Ai.PromptFormat PromptFormat => Model is null ? Sucvar.Domain.Ai.PromptFormat.Clip : Sucvar.Domain.Ai.PromptFormat.Instruction;
+    public const string LegacyModelId = "adirik/interior-design";
+    public string ModelId => Model ?? LegacyModelId;
+    /// <summary>The configured inpainting model (<c>owner/name</c>), or null = masked requests use the main model.</summary>
+    private string? InpaintModel => AiOptions.Clean(options.Value.ReplicateInpaintModel) is { Length: > 0 } m ? m : null;
+    public Sucvar.Domain.Ai.PromptFormat PromptFormatFor(bool masked) =>
+        masked && InpaintModel is not null ? Sucvar.Domain.Ai.PromptFormat.Instruction : PromptFormat;
+    public string ModelIdFor(bool masked) => masked && InpaintModel is { } inpaint ? inpaint : ModelId;
 
-    public async Task<ImageGenerationResult> GenerateAsync(ImageGenerationRequest request, CancellationToken ct = default)
+    /// <summary>Builds the create-prediction call: relative URL + JSON body (public for tests).</summary>
+    public (string Url, JsonObject Body) BuildCreateRequest(ImageGenerationRequest request)
     {
-        var client = http.CreateClient(HttpClientNames.Replicate);
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Token);
+        if (request.MaskDataUrl is { } mask && InpaintModel is { } inpaint)
+        {
+            if (!ModelNameRegex().IsMatch(inpaint)) throw new InvalidOperationException($"Ai:ReplicateInpaintModel invalid: expected owner/name, got '{inpaint}'.");
+            // FLUX Fill schema: white mask pixels are repainted from the prompt, black ones are kept
+            var fill = new JsonObject
+            {
+                ["image"] = request.ImageDataUrl,
+                ["mask"] = mask,
+                ["prompt"] = request.Prompt,
+                ["output_format"] = "jpg",
+            };
+            if (request.Seed is { } fillSeed) fill["seed"] = fillSeed;
+            return ($"v1/models/{inpaint}/predictions", new JsonObject { ["input"] = fill });
+        }
+
+        if (Model is { } model)
+        {
+            // Never interpolate an arbitrary string into the URL path
+            if (!ModelNameRegex().IsMatch(model)) throw new InvalidOperationException($"Ai:ReplicateModel invalid: expected owner/name, got '{model}'.");
+            // FLUX Kontext schema: the instruction says what to keep, so no negative prompt / strength / CFG / steps
+            var kontext = new JsonObject
+            {
+                ["prompt"] = request.Prompt,
+                ["input_image"] = request.ImageDataUrl,
+                ["aspect_ratio"] = "match_input_image",
+                ["output_format"] = "jpg",
+            };
+            if (request.Seed is { } kontextSeed) kontext["seed"] = kontextSeed;
+            return ($"v1/models/{model}/predictions", new JsonObject { ["input"] = kontext });
+        }
 
         var input = new JsonObject
         {
@@ -86,11 +144,16 @@ public sealed class ReplicateImageProvider(IHttpClientFactory http, IOptions<AiO
             ["prompt_strength"] = request.PromptStrength,
         };
         if (request.Seed is { } seed) input["seed"] = seed;
+        return ("v1/predictions", new JsonObject { ["version"] = AiOptions.Clean(options.Value.ReplicateModelVersion), ["input"] = input });
+    }
 
-        using var create = new HttpRequestMessage(HttpMethod.Post, "v1/predictions")
-        {
-            Content = JsonContent.Create(new JsonObject { ["version"] = options.Value.ReplicateModelVersion, ["input"] = input }),
-        };
+    public async Task<ImageGenerationResult> GenerateAsync(ImageGenerationRequest request, CancellationToken ct = default)
+    {
+        var client = http.CreateClient(HttpClientNames.Replicate);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Token);
+
+        var (createUrl, body) = BuildCreateRequest(request);
+        using var create = new HttpRequestMessage(HttpMethod.Post, createUrl) { Content = JsonContent.Create(body) };
         // One budget for the whole call (sync wait + polling), so the API always answers before the browser aborts.
         var budget = Math.Clamp(options.Value.GenerationBudgetSeconds, 20, 110);
         var deadline = DateTimeOffset.UtcNow.AddSeconds(budget);
@@ -151,6 +214,9 @@ public sealed class ReplicateImageProvider(IHttpClientFactory http, IOptions<AiO
         JsonObject o when o["url"] is JsonValue u && u.TryGetValue<string>(out var s) => s,
         _ => null,
     };
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$")]
+    private static partial System.Text.RegularExpressions.Regex ModelNameRegex();
 }
 
 /// <summary>Thrown when the model answers without an image (→ 502 AI_NO_IMAGE).</summary>
@@ -163,6 +229,8 @@ public sealed class StableDiffusionImageProvider(IHttpClientFactory http, IOptio
 
     public string Id => "stable-diffusion";
     public bool IsConfigured => BaseUrl.Length > 0;
+    /// <summary>Feather (px) AUTOMATIC1111 applies to the inpainting mask edge.</summary>
+    public const int InpaintMaskBlur = 8;
 
     private static string StripDataUrlPrefix(string dataUrl)
     {
@@ -190,6 +258,15 @@ public sealed class StableDiffusionImageProvider(IHttpClientFactory http, IOptio
             ["height"] = height,
             ["batch_size"] = 1,
         };
+        if (request.MaskDataUrl is { } mask)
+        {
+            // img2img inpainting: only the white area is denoised; "original" fill keeps the source colours as a start
+            payload["mask"] = StripDataUrlPrefix(mask);
+            payload["mask_blur"] = InpaintMaskBlur;
+            payload["inpainting_fill"] = 1;
+            payload["inpainting_mask_invert"] = 0;
+            payload["inpaint_full_res"] = false;
+        }
         if (!string.IsNullOrWhiteSpace(o.SdControlNetModel))
         {
             payload["alwayson_scripts"] = new JsonObject
@@ -303,7 +380,87 @@ public sealed class SkiaImageProcessor(IHttpClientFactory http) : IImageProcesso
         return new ImageInspection(format, codec.Info.Width, codec.Info.Height);
     }
 
-    public async Task<string> ToPermanentJpegDataUrlAsync(string source, CancellationToken ct = default)
+    public async Task<string> ToPermanentJpegDataUrlAsync(string source, CancellationToken ct = default) =>
+        EncodeJpegDataUrl(await ReadSourceAsync(source, ct));
+
+    // ── "Edit selected area" ────────────────────────────────────────────────────
+
+    public const int MinMaskSide = 16, MaxMaskSide = 8192;
+    public const long MaxMaskPixels = 40_000_000;
+    /// <summary>A selection must cover at least 0.1 % of the photo (a stray click is not a selection).</summary>
+    public const double MinMaskCoverage = 0.001;
+    /// <summary>Tolerated aspect-ratio difference between mask and photo (rounding of canvas sizes).</summary>
+    public const double MaskAspectTolerance = 0.03;
+
+    public PreparedMask PrepareMask(string maskDataUrl, string sourceDataUrl)
+    {
+        var source = DecodeDataUrl(sourceDataUrl);
+        int sourceW, sourceH;
+        using (var codec = SKCodec.Create(new MemoryStream(source)) ?? throw new InvalidDataException("unreadable source"))
+            (sourceW, sourceH) = MaskCompositor.OrientedSize(codec.EncodedOrigin, codec.Info.Width, codec.Info.Height);
+
+        // Header first: format + size before any pixel is allocated (decompression bombs)
+        var maskBytes = DecodeDataUrl(maskDataUrl);
+        var meta = Inspect(maskBytes);
+        if (meta.Format is not ("png" or "webp")) throw new InvalidDataException("mask format");
+        if (Math.Min(meta.Width, meta.Height) < MinMaskSide || Math.Max(meta.Width, meta.Height) > MaxMaskSide ||
+            (long)meta.Width * meta.Height > MaxMaskPixels)
+            throw new MaskRejectedException("MASK_DIMENSIONS", "Masca selecției are dimensiuni invalide.");
+        var sourceAspect = (double)sourceW / sourceH;
+        if (Math.Abs((double)meta.Width / meta.Height - sourceAspect) / sourceAspect > MaskAspectTolerance)
+            throw new MaskRejectedException("MASK_DIMENSIONS", "Masca selecției nu are proporțiile fotografiei. Reîncarcă fotografia și selectează din nou zona.");
+
+        // Resize / align to the exact source pixels and binarize (over black: transparent = keep)
+        using var rendered = MaskCompositor.RenderUpright(maskBytes, sourceW, sourceH, cover: false, SKColors.Black,
+            new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear));
+        var binary = MaskCompositor.Binarize(rendered);
+        var region = MaskCompositor.Measure(binary, sourceW, sourceH);
+        if (region is null || region.Coverage < MinMaskCoverage)
+            throw new MaskRejectedException("MASK_EMPTY", "Selecția este goală — pictează peste zona pe care vrei să o modifici.");
+
+        using var clean = MaskCompositor.ToBitmap(binary, sourceW, sourceH);
+        using var png = SKImage.FromBitmap(clean).Encode(SKEncodedImageFormat.Png, 100);
+        return new PreparedMask($"data:image/png;base64,{Convert.ToBase64String(png.ToArray())}", sourceW, sourceH, region);
+    }
+
+    public async Task<string> CompositeRegionAsync(string sourceDataUrl, string generatedSource, string maskDataUrl, CancellationToken ct = default)
+    {
+        var generated = await ReadSourceAsync(generatedSource, ct);
+        return CompositeJpegDataUrl(DecodeDataUrl(sourceDataUrl), generated, DecodeDataUrl(maskDataUrl));
+    }
+
+    /// <summary>
+    /// Feathered composite at the permanent-result size (≤ 1280 px wide): source and mask upright, the generated image
+    /// covered onto the same frame, then <see cref="MaskCompositor"/> — unselected pixels are the original's.
+    /// </summary>
+    public static string CompositeJpegDataUrl(byte[] source, byte[] generated, byte[] mask)
+    {
+        int srcW, srcH;
+        using (var codec = SKCodec.Create(new MemoryStream(source)) ?? throw new InvalidDataException("unreadable source"))
+            (srcW, srcH) = MaskCompositor.OrientedSize(codec.EncodedOrigin, codec.Info.Width, codec.Info.Height);
+        var scale = srcW > ResultMaxWidth ? (double)ResultMaxWidth / srcW : 1d;
+        var outW = Math.Max(1, (int)Math.Round(srcW * scale));
+        var outH = Math.Max(1, (int)Math.Round(srcH * scale));
+
+        var photo = new SKSamplingOptions(SKCubicResampler.Mitchell);
+        using var original = MaskCompositor.RenderUpright(source, outW, outH, cover: false, SKColors.White, photo);
+        using var result = MaskCompositor.RenderUpright(generated, outW, outH, cover: true, SKColors.White, photo);
+        using var maskBitmap = MaskCompositor.RenderUpright(mask, outW, outH, cover: false, SKColors.Black,
+            new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear));
+        var binary = MaskCompositor.Binarize(maskBitmap);
+        var alpha = MaskCompositor.FeatherAlpha(binary, outW, outH, MaskCompositor.FeatherRadius(outW, outH));
+        using var composite = MaskCompositor.Composite(original, result, alpha);
+        using var jpeg = SKImage.FromBitmap(composite).Encode(SKEncodedImageFormat.Jpeg, ResultJpegQuality);
+        return $"data:image/jpeg;base64,{Convert.ToBase64String(jpeg.ToArray())}";
+    }
+
+    private static byte[] DecodeDataUrl(string dataUrl) =>
+        dataUrl.StartsWith("data:image/", StringComparison.Ordinal)
+            ? Convert.FromBase64String(dataUrl[(dataUrl.IndexOf(',') + 1)..])
+            : throw new InvalidDataException("expected an image data URL");
+
+    /// <summary>A data URL's bytes, or a size-capped download of a provider URL.</summary>
+    private async Task<byte[]> ReadSourceAsync(string source, CancellationToken ct)
     {
         byte[] input;
         if (source.StartsWith("data:image/"))
@@ -327,7 +484,7 @@ public sealed class SkiaImageProcessor(IHttpClientFactory http) : IImageProcesso
             }
             input = buffer.ToArray();
         }
-        return EncodeJpegDataUrl(input);
+        return input;
     }
 
     public static string EncodeJpegDataUrl(byte[] input)
@@ -360,7 +517,7 @@ public sealed class SkiaImageProcessor(IHttpClientFactory http) : IImageProcesso
         return $"data:image/jpeg;base64,{Convert.ToBase64String(jpeg.ToArray())}";
     }
 
-    private static void ApplyOrigin(SKCanvas c, SKEncodedOrigin origin, int w, int h)
+    internal static void ApplyOrigin(SKCanvas c, SKEncodedOrigin origin, int w, int h)
     {
         switch (origin)
         {

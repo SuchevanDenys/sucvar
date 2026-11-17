@@ -5,9 +5,10 @@
 import React from 'react';
 import { ExternalLink, FileSpreadsheet } from 'lucide-react';
 import { SectionHeading } from '@/app/components/ui/Editorial';
-import Reveal from '@/app/components/ui/Reveal';
+import Reveal, { revealItem } from '@/app/components/ui/Reveal';
 import { LOOP_STEPS, SAMPLE_PARAMS, SAMPLE_QUERY, SUPPLIERS } from '@/app/data/home';
 import { tr } from '@/app/lib/i18n';
+import { TACTILE } from '@/app/lib/theme/motion';
 import { CONTAINER, EYEBROW, getSkin } from '@/app/lib/theme/skin';
 import type { Language } from '@/app/types';
 import { ANCHOR_OFFSET, sectionSpacing } from './sectionStyles';
@@ -60,14 +61,15 @@ export default function SupplierSection({ lang, isDark }: { lang: Language; isDa
             </div>
           </div>
 
-          <div className={`grid grid-cols-1 sm:grid-cols-2 gap-px border rounded-md overflow-hidden ${sk.line} ${sk.gap}`}>
+          {/* Retaileri: grilă decalată (70 ms); wrapper-ul <div> poartă dezvăluirea, linkul poartă hover-ul */}
+          <Reveal stagger className={`grid grid-cols-1 sm:grid-cols-2 gap-px border rounded-md overflow-hidden ${sk.line} ${sk.gap}`}>
             {SUPPLIERS.map((s, i) => (
-              <a
-                key={s.name}
+              <div key={s.name} {...revealItem(i, `relative hover:z-10 ${sk.cell}`)}>
+                <a
                 href={supplierHref(s.url)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className={`group p-5 flex items-start justify-between gap-4 transition-colors duration-500 touch-manipulation ${sk.cell} ${sk.rowHover}`}
+                className={`group relative h-full p-5 flex items-start justify-between gap-4 touch-manipulation ring-1 ring-inset ring-transparent hover:shadow-[0_14px_30px_-22px_rgba(27,20,22,0.45)] ${isDark ? 'hover:ring-[#C94A6A]/45' : 'hover:ring-[#5C1628]/30'} ${TACTILE} ${sk.cell} ${sk.rowHover}`}
               >
                 <div>
                   <p className={`font-mono text-[10px] uppercase tracking-[0.2em] tabular-nums ${sk.dim}`}>N° {String(i + 1).padStart(2, '0')}</p>
@@ -76,9 +78,10 @@ export default function SupplierSection({ lang, isDark }: { lang: Language; isDa
                   <p className={`mt-2 font-mono text-[10px] tracking-[0.12em] ${sk.dim}`}>{s.domain}</p>
                 </div>
                 <ExternalLink className={`w-3.5 h-3.5 mt-0.5 shrink-0 transition-colors ${sk.dim} ${groupHoverAccent}`} />
-              </a>
+                </a>
+              </div>
             ))}
-            <div className={`p-5 flex items-start gap-4 ${sk.cell}`}>
+            <div {...revealItem(SUPPLIERS.length, `p-5 flex items-start gap-4 ${sk.cell}`)}>
               <FileSpreadsheet className={`w-4 h-4 mt-0.5 shrink-0 ${sk.accent}`} />
               <div>
                 <p className={`text-sm font-medium tracking-tight ${sk.strong}`}>
@@ -92,7 +95,7 @@ export default function SupplierSection({ lang, isDark }: { lang: Language; isDa
                 </p>
               </div>
             </div>
-          </div>
+          </Reveal>
         </Reveal>
       </div>
     </section>

@@ -1,6 +1,27 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 
 namespace Sucvar.Domain.Ai;
+
+/// <summary>
+/// The compiled layers of a smart brief, in English and already conflict-stripped, for the natural-language
+/// instruction (<see cref="ArchitecturalPromptCompiler.Instruction"/>). Empty strings / nulls are simply omitted.
+/// </summary>
+public sealed record InstructionBrief(
+    string Mode,
+    string Space,
+    bool PreserveStructure,
+    IReadOnlyList<string> UserSpecs,
+    string Materials,
+    string ClientWords,
+    string? StyleName,
+    string StyleDetails,
+    string Palette,
+    string Lighting,
+    double? AreaSqm,
+    double? CeilingHeight,
+    string ScaleHint,
+    string Details);
 
 /// <summary>
 /// One explicit instruction from the user's free text, compiled into English: the room element it targets
@@ -57,6 +78,98 @@ public static partial class ArchitecturalPromptCompiler
             mode == "interiors" ? "empty room, unfurnished" : "");
         return FitTerms(merged, AiLimits.MaxPromptTokens);
     }
+
+    // ── Natural-language instruction (FLUX Kontext & other instruction-following editors) ──────────
+
+    /// <summary>
+    /// Builds one cohesive English editing instruction (no 72-token CLIP clipping): what to redesign, what to keep
+    /// (exact geometry and camera, or a full renovation), the client's explicit requirements first and marked as the
+    /// highest priority, then style, palette, lighting, real room scale, the remaining design details and the
+    /// photography direction.
+    /// </summary>
+    public static string Instruction(InstructionBrief b)
+    {
+        var sentences = new List<string>
+        {
+            $"Redesign this {b.Space} photo into a photorealistic {Subject(b.Mode, b.Space)}" +
+            (string.IsNullOrWhiteSpace(b.StyleName) ? "" : $" in {Article(b.StyleName)} {b.StyleName} style"),
+            StructureInstruction(b.Mode, b.PreserveStructure),
+        };
+
+        // The client's words lead every descriptive layer: element specs (exact), extra named items, then mood words
+        var specs = b.UserSpecs.Where(s => s.Length > 0).ToList();
+        if (specs.Count > 0) sentences.Add($"Client requirements, highest priority, follow them exactly: {string.Join("; ", specs)}");
+        if (Clean(b.Materials) is { Length: > 0 } materials) sentences.Add($"Also include {materials}");
+        if (Clean(b.ClientWords) is { Length: > 0 } words) sentences.Add($"Client brief: {words}");
+
+        // Later layers repeat nothing already said (case-insensitive, term by term)
+        var seen = new HashSet<string>(specs.SelectMany(s => s.Split(',')).Select(t => t.Trim()), StringComparer.OrdinalIgnoreCase);
+        void Layer(string label, string terms)
+        {
+            var fresh = string.Join(", ", terms.Split(',').Select(t => t.Trim()).Where(t => t.Length > 0 && seen.Add(t)));
+            if (Clean(fresh) is { Length: > 0 } text) sentences.Add($"{label}: {text}");
+        }
+        Layer("Style details", b.StyleDetails);
+        Layer("Color palette", b.Palette);
+        Layer("Lighting", b.Lighting);
+        if (SizeSentence(b) is { Length: > 0 } size) sentences.Add(size);
+        Layer("Design details", b.Details);
+        sentences.Add(PhotographyInstruction(b.Mode));
+
+        return string.Join(" ", sentences.Select(s => s.TrimEnd(' ', ',', ';', '.') + "."));
+    }
+
+    /// <summary>Instruction for legacy (style + dimensions only) requests: the historical layers as target design.</summary>
+    public static string LegacyInstruction(string mode, string space, string targetDesign) => string.Join(" ",
+        new[]
+        {
+            $"Redesign this {space} photo into a photorealistic {Subject(mode, space)}",
+            StructureInstruction(mode, preserveStructure: true),
+            Clean(targetDesign) is { Length: > 0 } design ? $"Target design: {design}" : "",
+            PhotographyInstruction(mode),
+        }.Where(s => s.Length > 0).Select(s => s.TrimEnd(' ', ',', ';', '.') + "."));
+
+    /// <summary>What the instruction asks the model to keep (or free) — the core of structure preservation.</summary>
+    public static string StructureInstruction(string mode, bool preserveStructure) => (mode, preserveStructure) switch
+    {
+        ("interiors", true) => "Preserve the exact room geometry: keep the same walls, ceiling, windows, doors, room proportions and " +
+                               "the same camera position, angle and perspective; change only finishes, furniture, decor and lighting",
+        (_, true) => "Preserve the exact architecture and site: keep the same building volumes, rooflines, windows, doors, terrain and " +
+                     "the same camera position, angle and perspective; change only materials, planting, outdoor furniture and lighting",
+        ("interiors", false) => "Perform a full architectural renovation: the layout, partitions, built-in joinery, ceiling design and openings " +
+                                "may be reworked, while keeping the same camera viewpoint for a direct before and after comparison",
+        _ => "Perform a full architectural renovation: facades, hardscape, planting and layout may be redesigned, " +
+             "while keeping the same camera viewpoint for a direct before and after comparison",
+    };
+
+    /// <summary>Photography direction in prose (the CLIP tail's natural-language twin).</summary>
+    public static string PhotographyInstruction(string mode) => mode == "interiors"
+        ? "Photograph it like an Architectural Digest interior: 24mm tilt-shift lens, straight vertical lines, soft global illumination, " +
+          "true-to-life materials and textures, realistic proportions, sharp focus, no text, logos or watermarks"
+        : "Photograph it like an Architectural Digest feature: 24mm tilt-shift lens, straight vertical lines, natural realistic daylight, " +
+          "true-to-life materials and textures, realistic proportions, sharp focus, no text, logos or watermarks";
+
+    private static string Subject(string mode, string space) => mode switch
+    {
+        "interiors" => $"fully furnished {space} interior",
+        "gardens" => $"landscaped {space}",
+        _ => space,
+    };
+
+    private static string Article(string word) => "aeiouAEIOU".Contains(word[0]) ? "an" : "a";
+
+    private static string SizeSentence(InstructionBrief b)
+    {
+        var parts = new List<string>();
+        if (b.AreaSqm is { } a) parts.Add($"about {a.ToString("0.#", CultureInfo.InvariantCulture)} m²");
+        if (b.Mode == "interiors" && b.CeilingHeight is { } h) parts.Add($"{h.ToString("0.00", CultureInfo.InvariantCulture)} m ceiling height");
+        if (parts.Count == 0 && b.ScaleHint.Length == 0) return "";
+        var label = b.Mode == "interiors" ? "Room size" : "Site size";
+        var size = parts.Count > 0 ? $"{label}: {string.Join(", ", parts)}" : label;
+        return b.ScaleHint.Length > 0 ? $"{size}; scale everything accordingly ({b.ScaleHint})" : $"{size}; scale everything accordingly";
+    }
+
+    private static string Clean(string? text) => Spaces().Replace(text ?? "", " ").Trim().Trim(',', ';', '.', ' ');
 
     /// <summary>Clamps the requested strength into the calibrated band for the structure mode.</summary>
     public static double CalibrateStrength(double requested, bool preserveStructure) => preserveStructure

@@ -112,7 +112,7 @@ export default function CheckoutPage() {
               lang={lang}
               wrapClass={ui.line}
               segOn={isDark ? "bg-[#C94A6A] text-white" : "bg-[#5C1628] text-white"}
-              segOff={`${ui.muted} hover:bg-neutral-500/10`}
+              segOff={`${ui.muted} hover:bg-[#685D60]/10`}
             />
           )}
 

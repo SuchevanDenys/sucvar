@@ -199,7 +199,12 @@ public sealed record ImageGenerationRequest(
     double TransformationStrength,
     string Mode,
     /// <summary>Structure lock: drives ControlNet weight on providers that expose it (SD); Replicate's model is always conditioned.</summary>
-    bool PreserveStructure = true);
+    bool PreserveStructure = true,
+    /// <summary>
+    /// "Edit selected area": binary PNG data URL aligned to the source pixels (white = edit, black = keep). Null = full
+    /// redesign. Providers that can inpaint use it natively; the API composites the result through it either way.
+    /// </summary>
+    string? MaskDataUrl = null);
 
 /// <summary>Inputs for the optional LLM "Prompt Architect" (all already validated by the Domain).</summary>
 public sealed record PromptEnhancementRequest(
@@ -237,6 +242,14 @@ public interface IImageProvider
     /// <summary>'stable-diffusion' | 'replicate' | 'demo'</summary>
     string Id { get; }
     bool IsConfigured { get; }
+    /// <summary>The prompt the active model reads: CLIP tags (SD 1.5) or a natural-language instruction (FLUX Kontext).</summary>
+    Sucvar.Domain.Ai.PromptFormat PromptFormat => Sucvar.Domain.Ai.PromptFormat.Clip;
+    /// <summary>The model behind the provider (e.g. <c>black-forest-labs/flux-kontext-pro</c>); defaults to <see cref="Id"/>.</summary>
+    string ModelId => Id;
+    /// <summary>The prompt format for a request with (<paramref name="masked"/>) or without a selection mask.</summary>
+    Sucvar.Domain.Ai.PromptFormat PromptFormatFor(bool masked) => PromptFormat;
+    /// <summary>The model that serves a masked request (e.g. <c>black-forest-labs/flux-fill-pro</c>).</summary>
+    string ModelIdFor(bool masked) => ModelId;
     Task<ImageGenerationResult> GenerateAsync(ImageGenerationRequest request, CancellationToken ct = default);
 }
 
@@ -256,6 +269,26 @@ public interface IImageProcessor
     ImageInspection Inspect(byte[] data);
     /// <summary>Downloads (if needed) and re-encodes into a permanent JPEG data URL (≤1280 px wide, q82, white background).</summary>
     Task<string> ToPermanentJpegDataUrlAsync(string source, CancellationToken ct = default);
+    /// <summary>
+    /// Validates an "Edit selected area" mask against the source photo and returns it as a clean binary PNG with the
+    /// source's exact (upright) pixel size, plus the selection measured from its pixels.
+    /// Throws <see cref="MaskRejectedException"/> for a mask the user must redo; any other exception = corrupt data.
+    /// </summary>
+    PreparedMask PrepareMask(string maskDataUrl, string sourceDataUrl);
+    /// <summary>
+    /// Downloads (if needed) the generated image and composites it over the source through the feathered mask, so
+    /// every pixel outside the selection comes from the original photo. Returns a permanent JPEG data URL.
+    /// </summary>
+    Task<string> CompositeRegionAsync(string sourceDataUrl, string generatedSource, string maskDataUrl, CancellationToken ct = default);
+}
+
+/// <summary>A validated selection mask: binary PNG data URL at the source size and the selection it describes.</summary>
+public sealed record PreparedMask(string DataUrl, int Width, int Height, Sucvar.Domain.Ai.SelectionRegion Region);
+
+/// <summary>A mask that cannot be used (wrong proportions, empty selection…); <see cref="Code"/> is the API error code.</summary>
+public sealed class MaskRejectedException(string code, string message) : Exception(message)
+{
+    public string Code { get; } = code;
 }
 
 // ── User profile (/api/profile) ───────────────────────────────────────────────

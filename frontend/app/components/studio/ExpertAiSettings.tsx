@@ -2,6 +2,8 @@
 // Studio · Avansat — acordeonul „Setări AI pentru experți": previzualizarea „Prompt optimizat AI" (cum a fost
 // tradusă și îmbogățită descrierea), prompt suplimentar, negative prompt, pași, CFG, seed.
 // Starea deschis/închis este locală: nimic altceva din pagină nu depinde de ea.
+// Modelele „instruction” (FLUX Kontext) nu folosesc promptul negativ, pașii sau CFG: acele controale sunt ascunse,
+// rămân promptul suplimentar, seed-ul și previzualizarea instrucțiunii complete trimise modelului.
 "use client";
 
 import React, { useState } from 'react';
@@ -9,6 +11,7 @@ import { ChevronDown, Eye, RotateCcw } from 'lucide-react';
 import { tr } from '@/app/lib/i18n';
 import { AI_LIMITS, DEFAULT_AI_SETTINGS } from '@/app/lib/studio/aiConfig';
 import { EYEBROW, getSkin } from '@/app/lib/theme/skin';
+import type { PromptFormat } from '@/app/lib/studio/aiModel';
 import type { PromptInsight } from '@/app/lib/studio/vision';
 import type { AiSettings, Language } from '@/app/types';
 
@@ -26,10 +29,15 @@ interface ExpertAiSettingsProps {
   canPreview: boolean;
   /** true = setările s-au schimbat după ce a fost compilat promptul afișat */
   stale?: boolean;
+  /** Formatul de prompt al modelului activ ('clip' implicit, până răspunde API-ul) */
+  promptFormat?: PromptFormat;
+  /** Numele lizibil al modelului activ (ex. „FLUX Kontext Pro”); null = necunoscut, fără badge */
+  modelName?: string | null;
 }
 
 export default function ExpertAiSettings({
   lang, isDark, settings, onChange, insight, onPreview, previewLoading, previewError, canPreview, stale = false,
+  promptFormat = 'clip', modelName = null,
 }: ExpertAiSettingsProps) {
   const sk = getSkin(isDark);
   const t = (ro: string, en: string, fr?: string) => tr(lang, ro, en, fr);
@@ -37,6 +45,12 @@ export default function ExpertAiSettings({
   const fieldCls = `w-full h-10 px-3 rounded-sm border text-xs font-mono outline-none transition-colors ${sk.input}`;
   const textareaCls = `w-full px-3 py-2 rounded-md border text-xs font-mono outline-none transition-colors resize-y min-h-[72px] ${sk.input}`;
   const [isOpen, setIsOpen] = useState(false);
+  const isInstruction = promptFormat === 'instruction';
+  // Promptul afișat poate proveni dintr-o configurație anterioară: se descrie după formatul lui, nu după cel curent
+  const insightIsInstruction = (insight?.promptFormat ?? promptFormat) === 'instruction';
+  const badge = modelName
+    ? `${modelName} · ${isInstruction ? t('Limbaj natural', 'Natural language', 'Langage naturel') : 'CLIP'}`
+    : null;
 
   const update = <K extends keyof AiSettings>(key: K, value: AiSettings[K]) => onChange({ ...settings, [key]: value });
 
@@ -57,7 +71,17 @@ export default function ExpertAiSettings({
         className={`w-full h-10 px-3 flex items-center justify-between cursor-pointer touch-manipulation transition-colors ${EYEBROW} ${sk.rowHover}`}
       >
         <span>{t('Setări AI pentru experți', 'Expert AI settings')}</span>
-        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <span className="inline-flex items-center gap-2 min-w-0">
+          {badge && (
+            <span
+              title={t('Modelul AI activ', 'Active AI model', 'Modèle IA actif')}
+              className={`truncate px-1.5 py-0.5 rounded-sm border font-mono normal-case tracking-normal text-[10px] ${sk.line} ${sk.muted}`}
+            >
+              {badge}
+            </span>
+          )}
+          <ChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        </span>
       </button>
 
       {isOpen && (
@@ -73,11 +97,17 @@ export default function ExpertAiSettings({
             </summary>
             <div className={`px-3 pb-3 pt-1 space-y-3 text-[11px] leading-relaxed ${sk.muted}`}>
               <p>
-                {t(
-                  'Descrierea ta este tradusă în terminologie arhitecturală engleză; elementele cerute explicit au prioritate și elimină materialele contradictorii ale stilului.',
-                  'Your description is translated into English architectural terms; elements you ask for take priority and remove conflicting style materials.',
-                  'Votre description est traduite en termes architecturaux anglais ; les éléments demandés explicitement sont prioritaires et retirent les matériaux contradictoires du style.',
-                )}
+                {insightIsInstruction
+                  ? t(
+                    'Descrierea ta devine o instrucțiune completă în engleză: cerințele tale explicite vin primele, urmate de stil, paletă, lumină și dimensiunile camerei.',
+                    'Your description becomes a complete English instruction: your explicit requirements come first, followed by style, palette, lighting and room size.',
+                    'Votre description devient une instruction complète en anglais : vos exigences explicites passent en premier, puis le style, la palette, la lumière et les dimensions de la pièce.',
+                  )
+                  : t(
+                    'Descrierea ta este tradusă în terminologie arhitecturală engleză; elementele cerute explicit au prioritate și elimină materialele contradictorii ale stilului.',
+                    'Your description is translated into English architectural terms; elements you ask for take priority and remove conflicting style materials.',
+                    'Votre description est traduite en termes architecturaux anglais ; les éléments demandés explicitement sont prioritaires et retirent les matériaux contradictoires du style.',
+                  )}
               </p>
               {insight ? (
                 <>
@@ -92,7 +122,7 @@ export default function ExpertAiSettings({
                   )}
                   <div className="space-y-1">
                     <span className={`flex justify-between ${eyebrow}`}>
-                      <span>Prompt</span>
+                      <span>{insightIsInstruction ? t('Instrucțiune trimisă modelului', 'Instruction sent to the model', 'Instruction envoyée au modèle') : 'Prompt'}</span>
                       <span className="tabular-nums">
                         {insight.engine === 'llm' ? t('rafinat LLM', 'LLM refined') : t('compilator', 'compiler')}
                         {insight.estimatedTokens != null && insight.maxTokens != null ? ` · ~${insight.estimatedTokens}/${insight.maxTokens} tok` : ''}
@@ -100,11 +130,13 @@ export default function ExpertAiSettings({
                     </span>
                     <p className={`font-mono break-words select-all ${sk.strong}`}>{insight.prompt}</p>
                   </div>
-                  <div className="space-y-1">
-                    <span className={eyebrow}>{t('Negativ', 'Negative')}</span>
-                    <p className="font-mono break-words select-all">{insight.negativePrompt}</p>
-                  </div>
-                  {insight.parameters && (
+                  {!insightIsInstruction && (
+                    <div className="space-y-1">
+                      <span className={eyebrow}>{t('Negativ', 'Negative')}</span>
+                      <p className="font-mono break-words select-all">{insight.negativePrompt}</p>
+                    </div>
+                  )}
+                  {insight.parameters && !insightIsInstruction && (
                     <p className="font-mono tabular-nums">
                       strength {insight.parameters.promptStrength.toFixed(2)} · CFG {insight.parameters.guidanceScale} · {insight.parameters.inferenceSteps} {t('pași', 'steps')}
                     </p>
@@ -137,7 +169,11 @@ export default function ExpertAiSettings({
           </details>
 
           <label className="block space-y-1.5">
-            <span className={eyebrow}>{t('Prompt suplimentar (în engleză)', 'Extra prompt')}</span>
+            <span className={eyebrow}>
+              {isInstruction
+                ? t('Instrucțiuni suplimentare (în engleză)', 'Extra instructions', 'Instructions supplémentaires')
+                : t('Prompt suplimentar (în engleză)', 'Extra prompt')}
+            </span>
             <textarea
               value={settings.extraPrompt}
               maxLength={AI_LIMITS.extraPromptMaxLength}
@@ -146,6 +182,15 @@ export default function ExpertAiSettings({
               className={textareaCls}
             />
           </label>
+          {isInstruction ? (
+            <p className={`text-[11px] leading-relaxed ${sk.dim}`}>
+              {t(
+                'Modelul activ urmează instrucțiuni în limbaj natural: promptul negativ, pașii, CFG și intensitatea nu se aplică.',
+                'The active model follows natural-language instructions: negative prompt, steps, CFG and strength do not apply.',
+                'Le modèle actif suit des instructions en langage naturel : prompt négatif, étapes, CFG et intensité ne s’appliquent pas.',
+              )}
+            </p>
+          ) : (<>
           <label className="block space-y-1.5">
             <span className={eyebrow}>{t('De evitat în randare', 'Negative prompt')}</span>
             <textarea value={settings.negativePrompt} maxLength={AI_LIMITS.negativePromptMaxLength} onChange={(e) => update('negativePrompt', e.target.value)} className={textareaCls} />
@@ -164,6 +209,7 @@ export default function ExpertAiSettings({
             </span>
             <input type="range" min={AI_LIMITS.guidanceScale.min} max={AI_LIMITS.guidanceScale.max} step={AI_LIMITS.guidanceScale.step} value={settings.guidanceScale} onChange={(e) => update('guidanceScale', Number(e.target.value))} className="w-full accent-[var(--foreground)] touch-manipulation touch-pan-y" />
           </label>
+          </>)}
           <label className="block space-y-1.5">
             <span className={eyebrow}>Seed ({t('gol = aleatoriu', 'empty = random')})</span>
             <input type="number" inputMode="numeric" min={0} step={1} value={settings.seed ?? ''} onChange={handleSeedChange} className={fieldCls} />

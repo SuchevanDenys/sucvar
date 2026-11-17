@@ -75,7 +75,7 @@ export default function AccountDashboard({
             src={avatarUrl}
             alt={loggedUser}
             referrerPolicy="no-referrer"
-            className="w-12 h-12 rounded-sm object-cover border border-neutral-300/40"
+            className="w-12 h-12 rounded-sm object-cover border border-[#B5A9AC]/35"
           />
         ) : (
           <div

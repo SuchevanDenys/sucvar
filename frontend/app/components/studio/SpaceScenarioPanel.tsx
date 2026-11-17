@@ -13,7 +13,7 @@ import {
   getScope,
   getSpace,
 } from '@/app/data/catalog';
-import { MODE_IDS, PROJECT_NAME_MAX } from '@/app/lib/studio/constants';
+import { MODE_IDS } from '@/app/lib/studio/constants';
 import { EYEBROW, getSkin } from '@/app/lib/theme/skin';
 import type { DesignMode, Language, ScopeLevel } from '@/app/types';
 import { tr } from '@/app/lib/i18n';
@@ -21,14 +21,11 @@ import { tr } from '@/app/lib/i18n';
 interface SpaceScenarioPanelProps {
   lang: Language;
   isDark: boolean;
-  projectName: string;
-  defaultProjectName: string;
   mode: DesignMode;
   spaceId: string;
   layoutId: string;
   focusIds: string[];
   scope: ScopeLevel;
-  onProjectNameChange: (value: string) => void;
   onModeChange: (mode: DesignMode) => void;
   onSpaceChange: (spaceId: string) => void;
   onLayoutChange: (layoutId: string) => void;
@@ -43,14 +40,11 @@ interface SpaceScenarioPanelProps {
 export default function SpaceScenarioPanel({
   lang,
   isDark,
-  projectName,
-  defaultProjectName,
   mode,
   spaceId,
   layoutId,
   focusIds,
   scope,
-  onProjectNameChange,
   onModeChange,
   onSpaceChange,
   onLayoutChange,
@@ -80,18 +74,6 @@ export default function SpaceScenarioPanel({
       </div>
       )}
       <div className={framed ? 'p-4 space-y-4' : 'space-y-4'}>
-        <label className="block space-y-1.5">
-          <span className={eyebrow}>{t('Nume proiect', 'Project name')}</span>
-          <input
-            type="text"
-            value={projectName}
-            maxLength={PROJECT_NAME_MAX}
-            onChange={(e) => onProjectNameChange(e.target.value)}
-            placeholder={defaultProjectName}
-            className={fieldCls}
-          />
-        </label>
-
         {/* Categorie → tip de spațiu → configurație */}
         <div className="space-y-3">
           {showSpacePicker && (<>

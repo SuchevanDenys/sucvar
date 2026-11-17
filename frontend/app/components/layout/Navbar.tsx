@@ -27,6 +27,9 @@ import { PRICING_ANCHOR, PRICING_HREF, scrollToAnchor } from '@/app/lib/scroll';
 import type { Language, PlanTier, ThemeMode } from '@/app/types';
 import { LANGUAGES, LANGUAGE_LABELS, tr } from '@/app/lib/i18n';
 
+/** Derulare (px) după care bara devine suprafață mată cu linie fină. */
+const SCROLL_FROST_PX = 24;
+
 export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
@@ -100,16 +103,18 @@ export default function Navbar() {
     };
   }, [menuOpen]);
 
-  // Bara transparentă peste fotografia hero: urmărim (rAF, pasiv) dacă bara încă stă deasupra secțiunii #hero.
+  // Sticlă adaptivă (rAF, listener pasiv): `scrolled` pe toate rutele (pragul SCROLL_FROST_PX), iar pe landing
+  // și dacă bara încă stă deasupra secțiunii #hero. Starea inițială (false/false) e identică la SSR.
   useEffect(() => {
     const hero = pathname === '/' ? document.getElementById('hero') : null;
-    if (!hero) return; // în afara landing-ului `glass` e oricum false (derivat din pathname)
     let frame = 0;
     const measure = () => {
       frame = 0;
-      const barH = headerRef.current?.getBoundingClientRect().height ?? 64;
-      setOverHero(hero.getBoundingClientRect().bottom > barH);
-      setScrolled(window.scrollY > 8);
+      if (hero) {
+        const barH = headerRef.current?.getBoundingClientRect().height ?? 64;
+        setOverHero(hero.getBoundingClientRect().bottom > barH);
+      }
+      setScrolled(window.scrollY > SCROLL_FROST_PX);
     };
     const onScroll = () => {
       if (!frame) frame = requestAnimationFrame(measure);
@@ -143,11 +148,19 @@ export default function Navbar() {
   const glass = pathname === '/' && overHero && !menuOpen;
   const chromeDark = isDark || glass;
   const hk = glass ? getSkin(true) : sk;
+  // Sus pe hero: complet transparentă (gradientul fotografiei asigură contrastul). După SCROLL_FROST_PX:
+  // suprafață mată (backdrop-blur-md) cu linie fină — obsidian peste fotografie, altfel cromatica temei.
   const headerSurface = glass
-    ? `${scrolled ? 'bg-[#110D0F]/55' : 'bg-[#110D0F]/30'} border-white/10 text-[#F5F2EF] shadow-none`
+    ? scrolled
+      ? 'bg-[#110D0F]/55 border-[#2E2427]/80 backdrop-blur-md backdrop-saturate-150 text-[#F5F2EF] shadow-[0_10px_30px_-24px_rgba(0,0,0,0.8)]'
+      : 'bg-transparent border-transparent backdrop-blur-none text-[#F5F2EF] shadow-none'
     : isDark
-      ? 'bg-[#110D0F]/95 border-[#2E2427] text-[#F5F2EF] shadow-[0_1px_0_rgba(0,0,0,0.2)]'
-      : 'bg-white/95 border-[#E8E2E0] text-[#1B1416] shadow-[0_8px_24px_-20px_rgba(27,20,22,0.35)]';
+      ? scrolled
+        ? 'bg-[#110D0F]/80 border-[#2E2427] backdrop-blur-md backdrop-saturate-150 text-[#F5F2EF] shadow-[0_10px_30px_-24px_rgba(0,0,0,0.9)]'
+        : 'bg-[#110D0F] border-[#2E2427] backdrop-blur-none text-[#F5F2EF] shadow-none'
+      : scrolled
+        ? 'bg-white/80 border-[#E8E2E0] backdrop-blur-md backdrop-saturate-150 text-[#1B1416] shadow-[0_8px_24px_-20px_rgba(27,20,22,0.35)]'
+        : 'bg-white border-[#E8E2E0] backdrop-blur-none text-[#1B1416] shadow-none';
 
   const isHome = pathname === '/' && !pricingVisible;
   const isPricing = (pathname === '/' && pricingVisible) || pathname === '/checkout';
@@ -214,7 +227,7 @@ export default function Navbar() {
       <header
         ref={headerRef}
         data-sticky-header
-        className={`sticky top-0 z-40 border-b pt-[env(safe-area-inset-top)] backdrop-blur-md transition-[background-color,border-color,color,box-shadow] duration-500 ease-out print:hidden ${headerSurface}`}
+        className={`sticky top-0 z-40 border-b pt-[env(safe-area-inset-top)] transition-[background-color,border-color,color,box-shadow,backdrop-filter] duration-500 ease-out motion-reduce:transition-none print:hidden ${headerSurface}`}
       >
         <div className={`${CONTAINER} h-16 grid grid-cols-[1fr_auto] md:grid-cols-[1fr_auto_1fr] items-center gap-6`}>
           <div className="flex items-center gap-5">
@@ -361,7 +374,7 @@ export default function Navbar() {
 
       {/* ── MOBILE BOTTOM TAB BAR ───────────────────────────────────────── */}
       <nav
-        className={`md:hidden fixed bottom-0 left-0 right-0 z-50 border-t backdrop-blur-xl pb-[env(safe-area-inset-bottom)] print:hidden ${sk.header}`}
+        className={`md:hidden fixed bottom-0 left-0 right-0 z-50 border-t backdrop-blur-xl backdrop-saturate-150 pb-[env(safe-area-inset-bottom)] print:hidden ${sk.header} ${isDark ? 'shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_-12px_32px_-20px_rgba(0,0,0,0.9)]' : 'shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_-12px_32px_-22px_rgba(27,20,22,0.3)]'}`}
       >
         <div className="grid grid-cols-5 h-14">
           <Link href="/" onClick={handleHomeClick} className={mobileTab(isHome)}>

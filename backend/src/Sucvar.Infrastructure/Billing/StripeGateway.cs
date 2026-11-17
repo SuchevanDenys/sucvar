@@ -125,7 +125,10 @@ public sealed class StripeGateway(IOptions<StripeOptions> options) : IStripeGate
             s.Status,
             s.Metadata ?? new Dictionary<string, string>(),
             s.CustomerId ?? s.Customer?.Id,
-            items.Select(i => new DateTimeOffset(DateTime.SpecifyKind(i.CurrentPeriodEnd, DateTimeKind.Utc))).ToList(),
+            // A missing item period deserialises as default(DateTime) (year 1 / Unix epoch): drop it instead of
+            // persisting a bogus date that would instantly expire the plan.
+            items.Where(i => i.CurrentPeriodEnd > DateTime.UnixEpoch)
+                .Select(i => new DateTimeOffset(DateTime.SpecifyKind(i.CurrentPeriodEnd, DateTimeKind.Utc))).ToList(),
             items.FirstOrDefault()?.Price?.Recurring?.Interval,
             s.CancelAtPeriodEnd);
     }

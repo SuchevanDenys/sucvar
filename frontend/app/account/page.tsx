@@ -77,7 +77,7 @@ export default function AccountPage() {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-12 space-y-6">
         <div className="space-y-1">
           <p className={`text-[11px] uppercase tracking-[0.28em] ${ui.muted}`}>{t('Cont', 'Account')}</p>
-          <h1 className="text-2xl font-semibold tracking-tight">{t('Profilul tău', 'Your profile')}</h1>
+          <h1 className="text-3xl sm:text-[2.4rem] font-semibold leading-[1.08] tracking-tight">{t('Profilul tău', 'Your profile')}</h1>
         </div>
 
         {state.kind === 'loading' && (

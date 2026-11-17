@@ -19,7 +19,7 @@ export default function CaseCard({ c, lang, isDark }: { c: CaseStudy; lang: Lang
   return (
     <article className="group flex flex-col">
       <Frame isDark={isDark} label={t(c.codeRo, c.codeEn)} meta={showAfter ? afterLabel : beforeLabel}>
-        <div className={`relative aspect-[16/10] overflow-hidden ${isDark ? 'bg-[#1A1416]' : 'bg-[#F5F2EF]'}`}>
+        <div className={`relative aspect-[16/10] overflow-hidden rounded-sm ${isDark ? 'bg-[#1A1416]' : 'bg-[#F5F2EF]'}`}>
           {[c.before, c.after].map((src, i) => (
             <Image
               key={src}
@@ -27,7 +27,7 @@ export default function CaseCard({ c, lang, isDark }: { c: CaseStudy; lang: Lang
               alt={`${title} — ${i === 0 ? beforeLabel : afterLabel}`}
               fill
               sizes="(min-width: 1024px) 560px, 100vw"
-              className={`object-cover transition-[opacity,transform] duration-[1200ms] ease-out group-hover:scale-[1.02] ${
+              className={`object-cover transition-[opacity,scale] duration-[1200ms] ease-[cubic-bezier(.16,1,.3,1)] group-hover:scale-[1.02] motion-reduce:group-hover:scale-100 ${
                 (i === 1) === showAfter ? 'opacity-100' : 'opacity-0'
               }`}
             />
@@ -35,8 +35,10 @@ export default function CaseCard({ c, lang, isDark }: { c: CaseStudy; lang: Lang
           <div
             role="group"
             aria-label={t('Înainte / După', 'Before / After')}
-            className={`absolute right-3 top-3 z-10 flex rounded-sm border p-0.5 backdrop-blur-md ${EYEBROW} ${
-              isDark ? 'bg-[#110D0F]/70 border-[#2E2427]' : 'bg-white/85 border-[#E8E2E0]'
+            className={`absolute right-3 top-3 z-10 flex rounded-full border p-0.5 backdrop-blur-md ${EYEBROW} ${
+              isDark
+                ? 'bg-[#110D0F]/70 border-[#2E2427] border-t-white/10 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.7)]'
+                : 'bg-white/85 border-[#E8E2E0] border-t-white/60 shadow-[0_8px_24px_-14px_rgba(27,20,22,0.35)]'
             }`}
           >
             {[false, true].map((after) => (
@@ -75,7 +77,7 @@ export default function CaseCard({ c, lang, isDark }: { c: CaseStudy; lang: Lang
       </dl>
 
       {/* Calculated materials (kept from v4.0) */}
-      <div className={`mt-4 border ${sk.line} ${sk.card}`}>
+      <div className={`mt-4 border rounded-md overflow-hidden ${sk.line} ${sk.card}`}>
         <div className={`px-4 h-9 flex items-center justify-between border-b ${sk.line} ${EYEBROW} ${sk.dim}`}>
           <span>{t(c.listTitleRo, c.listTitleEn)}</span>
           <span className="tabular-nums">{t(c.outputRo, c.outputEn)}</span>

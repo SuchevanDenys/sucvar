@@ -22,7 +22,7 @@ export default function VisionSummary({ lang, isDark, vision, costTotal }: Visio
   const sk = getSkin(isDark);
   const t = (ro: string, en: string, fr?: string) => tr(lang, ro, en, fr);
   const eyebrow = `${EYEBROW} ${sk.dim}`;
-  const chip = `inline-flex items-center h-7 px-2.5 rounded-sm border text-[11px] ${sk.line} ${sk.muted}`;
+  const chip = `inline-flex items-center h-7 px-2.5 rounded-sm border text-[11px] tabular-nums ${sk.line} ${sk.muted}`;
 
   const style = vision.styleId ? getStyle(vision.styleId) : null;
   const palette = PALETTES.find((p) => p.id === vision.palette);

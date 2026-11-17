@@ -12,6 +12,7 @@ import { SPACE_MODES, VISUAL_STYLES, getStyle } from '@/app/data/catalog';
 import StyleSpecCard from '@/app/components/studio/StyleSpecCard';
 import { MODE_IDS } from '@/app/lib/studio/constants';
 import { AUTO } from '@/app/lib/studio/vision';
+import { PRESS, TACTILE } from '@/app/lib/theme/motion';
 import { getSkin } from '@/app/lib/theme/skin';
 import type { DesignMode, Language } from '@/app/types';
 import { tr } from '@/app/lib/i18n';
@@ -60,7 +61,9 @@ export default function RoomStylePicker({
   const activeRing = isDark
     ? 'border-[#C94A6A] ring-1 ring-[#C94A6A] bg-[#C94A6A]/[0.08]'
     : 'border-[#5C1628] ring-1 ring-[#5C1628] bg-[rgba(92,22,40,0.05)]';
-  const idleCard = `${sk.line} ${isDark ? 'hover:border-[#C94A6A]/50' : 'hover:border-[#5C1628]/35'}`;
+  // Bordura inactivă alunecă spre bordo la hover (cartonașe de stil și pastile de cameră)
+  const idleHoverBorder = isDark ? 'hover:border-[#C94A6A]/50' : 'hover:border-[#5C1628]/35';
+  const idleCard = `${sk.line} ${idleHoverBorder}`;
 
   return (
     <StudioCard isDark={isDark} step="02" title={t('Cameră & stil', 'Room & style')}>
@@ -74,7 +77,7 @@ export default function RoomStylePicker({
             aria-checked={mode === m}
             disabled={disabled}
             onClick={() => onModeChange(m)}
-            className={`h-9 rounded-md text-[13px] font-medium cursor-pointer touch-manipulation transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+            className={`h-9 rounded-md text-[13px] font-medium cursor-pointer touch-manipulation ${PRESS} disabled:opacity-50 disabled:cursor-not-allowed ${
               mode === m ? `${isDark ? 'bg-[#2E2427] text-[#E07F98] shadow-[inset_0_0_0_1px_rgba(201,74,106,0.4)]' : 'bg-white text-[#5C1628] shadow-[0_1px_2px_rgba(27,20,22,0.08),inset_0_0_0_1px_rgba(92,22,40,0.2)]'}` : `${sk.muted} ${isDark ? 'hover:text-[#F5F2EF]' : 'hover:text-[#1B1416]'}`
             }`}
           >
@@ -101,8 +104,8 @@ export default function RoomStylePicker({
                 aria-checked={active}
                 disabled={disabled}
                 onClick={() => onSpaceChange(s.id)}
-                className={`inline-flex items-center gap-2 h-9 pl-2.5 pr-3.5 rounded-full border text-[13px] cursor-pointer touch-manipulation transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                  active ? `${sk.chipOn}` : `${sk.line} ${sk.segOff}`
+                className={`inline-flex items-center gap-2 h-9 pl-2.5 pr-3.5 rounded-full border text-[13px] cursor-pointer touch-manipulation ${TACTILE} disabled:opacity-50 disabled:cursor-not-allowed ${
+                  active ? `${sk.chipOn}` : `${sk.line} ${sk.segOff} ${idleHoverBorder}`
                 }`}
               >
                 <Icon className="w-4 h-4 shrink-0" aria-hidden />
@@ -123,7 +126,7 @@ export default function RoomStylePicker({
             aria-checked={styleChoice === AUTO}
             disabled={disabled}
             onClick={() => onStyleChange(AUTO)}
-            className={`relative text-left rounded-lg border p-2.5 cursor-pointer touch-manipulation transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${styleChoice === AUTO ? activeRing : idleCard}`}
+            className={`relative text-left rounded-lg border p-2.5 cursor-pointer touch-manipulation ${TACTILE} disabled:opacity-50 disabled:cursor-not-allowed ${styleChoice === AUTO ? activeRing : idleCard}`}
           >
             <span className={`flex h-6 items-center gap-1.5 ${sk.muted}`}>
               <Sparkles className="w-4 h-4" aria-hidden />
@@ -144,7 +147,7 @@ export default function RoomStylePicker({
                 aria-checked={active}
                 disabled={disabled}
                 onClick={() => onStyleChange(v.id)}
-                className={`relative text-left rounded-lg border p-2.5 cursor-pointer touch-manipulation transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${active ? activeRing : idleCard}`}
+                className={`relative text-left rounded-lg border p-2.5 cursor-pointer touch-manipulation ${TACTILE} disabled:opacity-50 disabled:cursor-not-allowed ${active ? activeRing : idleCard}`}
               >
                 <span className="flex h-6 overflow-hidden rounded-md" aria-hidden>
                   {v.palette.slice(0, 4).map((sw) => (

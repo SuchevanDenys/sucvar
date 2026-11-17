@@ -20,7 +20,10 @@ interface StudioCardProps {
 export function StudioCard({ isDark, step, title, hint, aside, children, className = '' }: StudioCardProps) {
   const sk = getSkin(isDark);
   return (
-    <section className={`border rounded-xl ${sk.card} ${className}`}>
+    // Linia fină se încălzește spre bordo cât timp un control din card are focus (tastatură sau tap)
+    <section
+      className={`border rounded-xl transition-[border-color] duration-300 ${isDark ? 'focus-within:border-[#C94A6A]/40' : 'focus-within:border-[#5C1628]/25'} ${sk.card} ${className}`}
+    >
       <header className="flex items-start justify-between gap-3 px-5 pt-4">
         <div className="min-w-0">
           <h2 className={`flex items-center gap-2 text-[15px] font-semibold tracking-tight ${sk.strong}`}>

@@ -13,7 +13,8 @@ public sealed record TokenIdentity(string? FullName, string? AvatarUrl);
 
 public sealed record ProfileAccount(string UserId, string Email, string? FullName, string? AvatarUrl, string Initials, string? CreatedAt);
 
-public sealed record ProfileSubscription(string Tier, string? Interval, string? CurrentPeriodEnd, bool CancelAtPeriodEnd, bool CanManageBilling);
+public sealed record ProfileSubscription(string Tier, string? Interval, string? CurrentPeriodEnd, bool CancelAtPeriodEnd, bool CanManageBilling,
+    int? DaysRemaining = null);
 
 /// <summary>`GenerationsLimit` null = unlimited (pro / agency by default); it already includes `BonusGenerations`.</summary>
 public sealed record ProfileUsage(int GenerationsUsed, int? GenerationsLimit, string PeriodStart, int ProjectsTotal, int ProjectsPublic, int EstimatesTotal,
@@ -71,7 +72,8 @@ public sealed class ProfileService(
             company,
             PlanTiers.HasB2bAccess(sub.Tier),
             row?.Defaults ?? ProfileDefaults.Initial,
-            new ProfileSubscription(sub.Tier, sub.Interval, IsoTime.Format(sub.CurrentPeriodEnd), sub.CancelAtPeriodEnd, !string.IsNullOrEmpty(sub.StripeCustomerId)),
+            new ProfileSubscription(sub.Tier, sub.Interval, IsoTime.Format(sub.CurrentPeriodEnd), sub.CancelAtPeriodEnd, !string.IsNullOrEmpty(sub.StripeCustomerId),
+                PlanTiers.DaysRemaining(sub.CurrentPeriodEnd, clock.GetUtcNow())),
             new ProfileUsage(used, QuotaPolicy.Limit(sub.Tier, platform, account), IsoTime.Format(since),
                 stats.ProjectsTotal, stats.ProjectsPublic, stats.EstimatesTotal, account.BonusGenerations),
             projects,

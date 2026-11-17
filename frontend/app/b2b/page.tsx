@@ -448,7 +448,7 @@ export default function B2BPage() {
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
           <div className="space-y-3">
             <LiveDot label={t('Enterprise activ', 'Enterprise active')} className={sk.accent} />
-            <h1 className={`text-3xl font-semibold tracking-tight ${sk.strong}`}>
+            <h1 className={`text-3xl sm:text-[2.4rem] font-semibold leading-[1.08] tracking-tight ${sk.strong}`}>
               {t('Spațiu de lucru pentru antreprenori', 'Contractor workspace')}
             </h1>
             {email && <p className={`font-mono text-xs ${sk.dim}`}>{email}</p>}

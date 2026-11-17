@@ -31,7 +31,7 @@ export default function StatusPage({
       <Navbar />
       <main className="max-w-xl mx-auto px-4 sm:px-6 pt-24 space-y-5 text-center">
         <p className={`text-[11px] font-mono uppercase tracking-[0.28em] ${ui.muted}`}>{code}</p>
-        <h1 className="text-2xl font-semibold tracking-tight">{t(titleRo, titleEn)}</h1>
+        <h1 className="text-3xl font-semibold leading-[1.1] tracking-tight">{t(titleRo, titleEn)}</h1>
         <p className={`text-sm ${ui.muted}`}>{t(textRo, textEn)}</p>
         <div className="flex flex-wrap justify-center gap-3 pt-2">
           {action && (

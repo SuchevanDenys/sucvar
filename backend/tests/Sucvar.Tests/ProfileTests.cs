@@ -78,6 +78,43 @@ public class ProfileServiceTests
     }
 
     [Fact]
+    public async Task Days_remaining_counts_down_from_the_stored_period_end_and_never_resets_on_read()
+    {
+        // Activated 2 days ago on a 30-day period => the stored end is activation + 30 days.
+        var activatedAt = Now.AddDays(-2);
+        _subs.SetTier(_id, "pro", activatedAt.AddDays(30), "sub_1", "month");
+        var clock = new FakeClock(Now);
+        var subscriptions = new SubscriptionService(_subs, new FakeStripeGateway(), clock, NullLogger<SubscriptionService>.Instance);
+        var service = new ProfileService(_profiles, _companies, _usage, subscriptions, _accounts, SettingsFactory.Create(_settings, clock), clock);
+
+        var first = await service.GetAsync(User, new TokenIdentity(null, null));
+        Assert.Equal(28, first.Subscription.DaysRemaining);
+
+        clock.Now = Now.AddDays(1); // next day, same stored row
+        var second = await service.GetAsync(User, new TokenIdentity(null, null));
+        Assert.Equal(27, second.Subscription.DaysRemaining);
+        Assert.Equal(first.Subscription.CurrentPeriodEnd, second.Subscription.CurrentPeriodEnd); // reads never rewrite the date
+        Assert.Empty(_subs.Activations);
+
+        clock.Now = activatedAt.AddDays(30).AddSeconds(1); // past the end => expired
+        var expired = await service.GetAsync(User, new TokenIdentity(null, null));
+        Assert.Equal("starter", expired.Subscription.Tier);
+        Assert.Null(expired.Subscription.DaysRemaining);
+    }
+
+    [Theory]
+    [InlineData(28.0, 28)]
+    [InlineData(27.2, 28)] // rounded up, same as daysRemaining() in tiers.ts
+    [InlineData(0.0, 0)]
+    [InlineData(-3.0, 0)]
+    public void DaysRemaining_matches_the_frontend_rule(double daysUntilEnd, int expected) =>
+        Assert.Equal(expected, Sucvar.Domain.Plans.PlanTiers.DaysRemaining(Now.AddDays(daysUntilEnd), Now));
+
+    [Fact]
+    public void DaysRemaining_is_null_without_a_stored_end() =>
+        Assert.Null(Sucvar.Domain.Plans.PlanTiers.DaysRemaining(null, Now));
+
+    [Fact]
     public async Task Update_changes_only_sent_fields_and_gates_company_on_agency()
     {
         var service = Create();

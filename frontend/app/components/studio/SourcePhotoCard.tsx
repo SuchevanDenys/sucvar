@@ -30,10 +30,12 @@ interface SourcePhotoCardProps {
   onFile: (file: File) => void;
   onDemoPhoto: () => void;
   onStrengthChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  /** false = modelul activ nu folosește intensitatea (FLUX Kontext urmează instrucțiunea, fără prompt_strength). */
+  showStrength?: boolean;
 }
 
 export default function SourcePhotoCard({
-  lang, isDark, originalImage, isPhotoLoading, isLoading, aiStrength, onFile, onDemoPhoto, onStrengthChange,
+  lang, isDark, originalImage, isPhotoLoading, isLoading, aiStrength, onFile, onDemoPhoto, onStrengthChange, showStrength = true,
 }: SourcePhotoCardProps) {
   const sk = getSkin(isDark);
   const t = (ro: string, en: string, fr?: string) => tr(lang, ro, en, fr);
@@ -142,6 +144,7 @@ export default function SourcePhotoCard({
         </button>
       )}
 
+      {showStrength && (
       <label className="block space-y-2">
         <span className="flex items-center justify-between text-[13px]">
           <span className={`font-medium ${sk.strong}`}>{t('Intensitate transformare', 'Transformation strength')}</span>
@@ -177,6 +180,7 @@ export default function SourcePhotoCard({
           )}
         </span>
       </label>
+      )}
     </StudioCard>
   );
 }

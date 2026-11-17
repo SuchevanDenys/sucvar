@@ -45,7 +45,11 @@ public sealed class SubscriptionRepository(SucvarDbContext db, ILogger<Subscript
             if (!string.IsNullOrEmpty(patch.SubscriptionId)) profile.StripeSubscriptionId = patch.SubscriptionId;
             if (patch.Period is { } period)
             {
-                profile.CurrentPeriodEnd = period.CurrentPeriodEnd?.ToUniversalTime();
+                // Written only from Stripe's own period end; a sync without one keeps the stored date
+                // (overwriting with null would make the paid plan never expire).
+                if (period.CurrentPeriodEnd is { } end) profile.CurrentPeriodEnd = end.ToUniversalTime();
+                else logger.LogWarning("[SUCVAR] Sincronizare fără current_period_end pentru {UserId}; se păstrează data existentă ({End}).",
+                    userId, profile.CurrentPeriodEnd);
                 profile.BillingInterval = period.Interval;
                 profile.CancelAtPeriodEnd = period.CancelAtPeriodEnd;
             }

@@ -49,9 +49,9 @@ const GRID_LIGHT =
 export function getSkin(isDark: boolean): Skin {
   if (isDark) {
     return {
-      page: 'bg-[#110D0F] text-[#F5F2EF] selection:bg-[#C94A6A]/35',
+      page: 'page-ambient bg-[#110D0F] text-[#F5F2EF] selection:bg-[#C94A6A]/30 selection:text-[#F5F2EF]',
       header: 'bg-[#110D0F]/90 backdrop-blur-md border-[#2E2427]',
-      card: 'bg-[#1A1416] border-[#2E2427]',
+      card: 'bg-[#1A1416] border-[#2E2427] shadow-[0_1px_2px_rgba(0,0,0,0.25)]',
       cell: 'bg-[#1A1416]',
       gap: 'bg-[#2E2427]',
       popover: 'bg-[#1A1416] border-[#2E2427] text-[#F5F2EF] shadow-[0_16px_40px_-16px_rgba(0,0,0,0.7)]',
@@ -62,10 +62,10 @@ export function getSkin(isDark: boolean): Skin {
       dim: 'text-[#B5A9AC]/80',
       accent: 'text-[#D65D7B]',
       input:
-        'bg-[#110D0F] border-[#2E2427] text-[#F5F2EF] placeholder:text-[#8A7D80] hover:border-[#4A3A3F] focus:border-[#C94A6A] focus:outline-none focus:ring-0',
-      btn: 'bg-[#C94A6A] text-white hover:bg-[#D65D7B] active:scale-[0.98] active:bg-[#B63F5D] border border-transparent shadow-[0_8px_24px_-12px_rgba(201,74,106,0.55)] transition-[background-color,transform,box-shadow]',
+        'bg-[#110D0F] border-[#2E2427] text-[#F5F2EF] placeholder:text-[#8A7D80] hover:border-[#4A3A3F] focus:border-[#C94A6A] focus:outline-none focus:ring-[3px] focus:ring-[#C94A6A]/20 transition-[border-color,box-shadow] duration-200',
+      btn: 'bg-[#C94A6A] text-white hover:bg-[#D65D7B] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] motion-reduce:hover:translate-y-0 motion-reduce:active:scale-100 disabled:hover:translate-y-0 disabled:active:scale-100 active:bg-[#B63F5D] border border-transparent shadow-[0_8px_24px_-12px_rgba(201,74,106,0.55)] transition-[background-color,box-shadow,translate,scale] duration-200',
       btnGhost:
-        'border border-[#2E2427] text-[#F5F2EF] hover:bg-[#231B1E] hover:border-[#C94A6A]/60 active:scale-[0.98] transition-[background-color,border-color,color,transform]',
+        'border border-[#2E2427] text-[#F5F2EF] hover:bg-[#231B1E] hover:border-[#C94A6A]/60 active:scale-[0.99] motion-reduce:active:scale-100 transition-[background-color,border-color,color,scale] duration-200',
       segOn: 'bg-[#C94A6A]/[0.14] text-[#E07F98] shadow-[inset_0_0_0_1px_rgba(201,74,106,0.4)]',
       segOff: 'text-[#B5A9AC] hover:text-[#F5F2EF] hover:bg-[#231B1E]',
       option: 'bg-[#1A1416] text-[#F5F2EF]',
@@ -81,9 +81,9 @@ export function getSkin(isDark: boolean): Skin {
     };
   }
   return {
-    page: 'bg-white text-[#1B1416] selection:bg-[#5C1628]/15',
+    page: 'page-ambient bg-white text-[#1B1416] selection:bg-[#5C1628]/15 selection:text-[#5C1628]',
     header: 'bg-white/90 backdrop-blur-md border-[#E8E2E0]',
-    card: 'bg-white border-[#E8E2E0]',
+    card: 'bg-white border-[#E8E2E0] shadow-[0_1px_2px_rgba(27,20,22,0.04),0_8px_24px_-20px_rgba(27,20,22,0.12)]',
     cell: 'bg-white',
     gap: 'bg-[#E8E2E0]',
     popover: 'bg-white border-[#E8E2E0] text-[#1B1416] shadow-[0_16px_40px_-20px_rgba(27,20,22,0.28)]',
@@ -94,10 +94,10 @@ export function getSkin(isDark: boolean): Skin {
     dim: 'text-[#685D60]/85',
     accent: 'text-[#5C1628]',
     input:
-      'bg-white border-[#E8E2E0] text-[#1B1416] placeholder:text-[#A99EA1] hover:border-[#CEC4C1] focus:border-[#5C1628] focus:outline-none focus:ring-0',
-    btn: 'bg-[#5C1628] text-white hover:bg-[#450E1D] active:scale-[0.98] active:bg-[#360A16] border border-transparent shadow-[0_8px_24px_-14px_rgba(92,22,40,0.6)] transition-[background-color,transform,box-shadow]',
+      'bg-white border-[#E8E2E0] text-[#1B1416] placeholder:text-[#A99EA1] hover:border-[#CEC4C1] focus:border-[#5C1628] focus:outline-none focus:ring-[3px] focus:ring-[#5C1628]/10 transition-[border-color,box-shadow] duration-200',
+    btn: 'bg-[#5C1628] text-white hover:bg-[#450E1D] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] motion-reduce:hover:translate-y-0 motion-reduce:active:scale-100 disabled:hover:translate-y-0 disabled:active:scale-100 active:bg-[#360A16] border border-transparent shadow-[0_8px_24px_-14px_rgba(92,22,40,0.6)] transition-[background-color,box-shadow,translate,scale] duration-200',
     btnGhost:
-      'border border-[#E8E2E0] text-[#1B1416] hover:bg-[#FAF8F6] hover:border-[#5C1628]/40 hover:text-[#5C1628] active:scale-[0.98] transition-[background-color,border-color,color,transform]',
+      'border border-[#E8E2E0] text-[#1B1416] hover:bg-[#FAF8F6] hover:border-[#5C1628]/40 hover:text-[#5C1628] active:scale-[0.99] motion-reduce:active:scale-100 transition-[background-color,border-color,color,scale] duration-200',
     segOn: 'bg-[rgba(92,22,40,0.05)] text-[#5C1628] shadow-[inset_0_0_0_1px_rgba(92,22,40,0.2)]',
     segOff: 'text-[#685D60] hover:text-[#1B1416] hover:bg-[#FAF8F6]',
     option: 'bg-white text-[#1B1416]',
@@ -118,6 +118,14 @@ export const EYEBROW = 'text-[10px] tracking-[0.22em] uppercase font-mono';
 
 /** Editorial container (Lovable `container-editorial`): 1240px, 24px → 40px gutters. */
 export const CONTAINER = 'w-full max-w-[1240px] mx-auto px-6 lg:px-10';
+
+/**
+ * Bandă de secțiune alternativă (ritm alb ↔ alabastru): light #FAF8F6, dark un obsidian ușor ridicat
+ * (#140F11, între pagină #110D0F și carduri #1A1416, ca toate cardurile să rămână vizibile pe ea).
+ */
+export function bandClass(isDark: boolean): string {
+  return isDark ? 'bg-[#140F11]' : 'bg-[#FAF8F6]';
+}
 
 /** 1px horizontal rule used next to eyebrows (Lovable `h-px w-8 bg-border-strong`). */
 export function ruleClass(isDark: boolean): string {

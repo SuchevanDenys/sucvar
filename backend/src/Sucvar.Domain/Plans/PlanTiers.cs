@@ -41,6 +41,13 @@ public static class PlanTiers
 
     public static bool IsPeriodExpired(DateTimeOffset? periodEnd, DateTimeOffset now) => periodEnd is { } end && end < now;
 
+    /// <summary>
+    /// Whole days left until the STORED period end (rounded up); 0 once it has passed; null when no end is stored.
+    /// Always derived from the persisted date — never from "now + N days". Mirrors <c>daysRemaining()</c> in tiers.ts.
+    /// </summary>
+    public static int? DaysRemaining(DateTimeOffset? periodEnd, DateTimeOffset now) =>
+        periodEnd is { } end ? Math.Max(0, (int)Math.Ceiling((end - now).TotalDays)) : null;
+
     /// <summary>A paid plan whose period has ended is treated as 'starter'. Missing date keeps the plan.</summary>
     public static string ResolveEffectiveTier(object? rawTier, DateTimeOffset? periodEnd, DateTimeOffset now)
     {

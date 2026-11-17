@@ -174,6 +174,34 @@ export async function saveProjectToDb(project: SavedProject): Promise<SaveProjec
   }
 }
 
+// Redenumește un proiect deja salvat (Studio, după randare). Actualizare îngustă — doar `title` —
+// ca să nu retrimitem imaginile Base64 de câțiva MB la fiecare tastă. Copia locală se actualizează
+// mereu; Cloud-ul doar dacă rândul există acolo (RLS `projects_update_own`). Arhiva și devizul B2B
+// citesc `projects.title`, deci noul nume apare în ambele fără alți pași.
+export async function renameProjectInDb(projectId: string, rawTitle: string): Promise<SaveProjectResult> {
+  const title = rawTitle.trim() || 'Proiect SUCVAR';
+  const local = readLocalProjects();
+  const savedLocally = local.some((p) => p.id === projectId)
+    ? writeLocalProjects(local.map((p) => (p.id === projectId ? { ...p, title } : p)), projectId)
+    : false;
+
+  if (!supabase) return { savedToCloud: false, savedLocally };
+
+  try {
+    const { data, error } = await supabase.from('projects').update({ title }).eq('id', projectId).select('id');
+    if (error) {
+      console.error('[SUCVAR] Supabase rename error:', error);
+      const sessionEmail = await getSessionEmail();
+      return { savedToCloud: false, savedLocally, errorMessage: explainDbError(error.message, sessionEmail !== null) };
+    }
+    // 0 rânduri = proiectul există doar local (salvarea în cloud a eșuat anterior)
+    return { savedToCloud: (data?.length ?? 0) > 0, savedLocally };
+  } catch (err) {
+    console.error('[SUCVAR] Supabase rename exception:', err);
+    return { savedToCloud: false, savedLocally, errorMessage: getErrorMessage(err) };
+  }
+}
+
 // Șterge proiectul. Întâi din Cloud: dacă acolo ștergerea eșuează, proiectul rămâne
 // și local, ca să nu „reapară" la următoarea sincronizare fără ca utilizatorul să știe.
 export async function deleteProjectFromDb(projectId: string): Promise<DeleteProjectResult> {

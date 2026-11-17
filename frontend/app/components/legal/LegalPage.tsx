@@ -42,7 +42,7 @@ export default function LegalPage({
       <article className="max-w-3xl mx-auto px-4 sm:px-6 pt-12 space-y-8">
         <header className="space-y-2">
           <p className={`text-[11px] uppercase tracking-[0.28em] ${ui.muted}`}>{t('Informații legale', 'Legal')}</p>
-          <h1 className="text-2xl font-semibold tracking-tight">{t(titleRo, titleEn)}</h1>
+          <h1 className="text-3xl sm:text-[2.4rem] font-semibold leading-[1.08] tracking-tight">{t(titleRo, titleEn)}</h1>
           <p className={`text-xs font-mono ${ui.muted}`}>
             {t('Ultima actualizare', 'Last updated')}: {LEGAL_LAST_UPDATED} · {t('Contact', 'Contact')}: {contact}
           </p>

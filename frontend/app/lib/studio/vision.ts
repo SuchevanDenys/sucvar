@@ -180,6 +180,8 @@ export interface PromptInsight {
   estimatedTokens?: number;
   maxTokens?: number;
   enhancerAvailable?: boolean;
+  /** 'clip' = taguri SD 1.5 (72 de tokeni); 'instruction' = instrucțiune în limbaj natural (FLUX Kontext) */
+  promptFormat?: 'clip' | 'instruction';
   /** 'preview' = calculat înainte de randare; 'render' = folosit efectiv la ultima randare */
   source: 'preview' | 'render';
 }

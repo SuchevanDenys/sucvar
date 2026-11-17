@@ -51,12 +51,12 @@ export default function ImageLightbox({ open, onClose, src, beforeSrc, alt = '',
       role="dialog"
       aria-modal="true"
       aria-label={alt || labels.after}
-      className="fixed inset-0 z-[100] flex flex-col bg-[#110D0F]/92 backdrop-blur-sm print:hidden"
+      className="fixed inset-0 z-[100] flex flex-col bg-[#110D0F]/90 backdrop-blur-md print:hidden"
       onClick={onClose}
     >
       <div className="flex items-center justify-between gap-3 px-4 sm:px-6 h-16 shrink-0" onClick={(e) => e.stopPropagation()}>
         {beforeSrc ? (
-          <div role="group" className="inline-flex rounded-full bg-white/10 p-1">
+          <div role="group" className="inline-flex rounded-full border border-white/10 border-t-white/20 bg-white/[0.06] p-1 backdrop-blur-md shadow-[0_12px_32px_-16px_rgba(0,0,0,0.8)]">
             <button type="button" aria-pressed={showBefore} onClick={() => setShowBefore(true)} className={`${chip} h-7 ${showBefore ? 'bg-[#C94A6A] text-white' : 'text-white/75 hover:text-white'}`}>
               {labels.before}
             </button>
@@ -66,7 +66,7 @@ export default function ImageLightbox({ open, onClose, src, beforeSrc, alt = '',
           </div>
         ) : <span />}
         <div className="flex items-center gap-2">
-          <a href={current} download={downloadName} className={`${chip} bg-white/10 text-white hover:bg-white/20`}>
+          <a href={current} download={downloadName} className={`${chip} border border-white/10 border-t-white/20 bg-white/[0.06] text-white backdrop-blur-md hover:bg-white/15 hover:border-[#C94A6A]/50`}>
             <Download className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">{labels.download}</span>
           </a>
@@ -81,7 +81,7 @@ export default function ImageLightbox({ open, onClose, src, beforeSrc, alt = '',
           src={current}
           alt={alt}
           onClick={(e) => e.stopPropagation()}
-          className="max-h-full max-w-full object-contain rounded-md shadow-[0_24px_80px_-24px_rgba(0,0,0,0.8)] select-none"
+          className="max-h-full max-w-full object-contain rounded-md ring-1 ring-white/10 shadow-[0_24px_80px_-24px_rgba(0,0,0,0.8)] select-none"
           draggable={false}
         />
       </div>

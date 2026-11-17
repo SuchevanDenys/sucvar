@@ -1,8 +1,9 @@
 // app/components/ui/BeforeAfterSlider.tsx
 "use client";
 
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Maximize2, MoveHorizontal } from 'lucide-react';
+import { useRevealOnScroll } from '@/app/lib/useRevealOnScroll';
 
 /** Props of {@link BeforeAfterSlider}. Images may be data URLs, so they are plain `<img>`, not `next/image`. */
 interface Props {
@@ -19,6 +20,24 @@ interface Props {
 
 /** Ratio used until the "before" image has loaded (most phone photos are 4:3). */
 const FALLBACK_RATIO = 4 / 3;
+
+/** One-time "this is draggable" hint: 50 % → 62 % → 40 % → 50 % over 1.4 s, after a short settle pause. */
+const HINT_DURATION_MS = 1400;
+const HINT_START_DELAY_MS = 500;
+/** [position %, time fraction at which it is reached] — each leg weighted by its travel distance. */
+const HINT_KEYS: ReadonlyArray<readonly [number, number]> = [[50, 0], [62, 0.3], [40, 0.78], [50, 1]];
+
+const easeInOutSine = (x: number) => -(Math.cos(Math.PI * x) - 1) / 2;
+
+/** Divider position at progress `t` ∈ [0, 1] of the hint sweep (eased per leg, so every turn is soft). */
+function hintPosition(t: number): number {
+  for (let i = 1; i < HINT_KEYS.length; i++) {
+    const [to, end] = HINT_KEYS[i];
+    const [from, start] = HINT_KEYS[i - 1];
+    if (t <= end) return from + (to - from) * easeInOutSine((t - start) / (end - start));
+  }
+  return HINT_KEYS[HINT_KEYS.length - 1][0];
+}
 
 /**
  * Before/after comparison. The frame takes the natural aspect ratio of the "before" photo, and both images use
@@ -45,6 +64,51 @@ export default function BeforeAfterSlider({
   const [ratio, setRatio] = useState<{ src: string; value: number } | null>(null);
   const aspect = ratio?.src === beforeImg ? ratio.value : FALLBACK_RATIO;
 
+  // ---- One-time interactive hint ----
+  // Starts the first time ≥ 60 % of the frame is visible, unless the user already touched the slider or prefers
+  // reduced motion. Any pointer / touch / key interaction cancels it on the spot (the divider stays where it is,
+  // the user takes over). State only changes inside rAF / timeout callbacks, so SSR and hydration are unaffected.
+  const { ref: frameRef, revealed } = useRevealOnScroll<HTMLDivElement>({ threshold: 0.6, rootMargin: '0px' });
+  const interactedRef = useRef(false);
+  const hintRef = useRef<{ timer: number; frame: number }>({ timer: 0, frame: 0 });
+
+  const stopHint = useCallback(() => {
+    interactedRef.current = true;
+    const h = hintRef.current;
+    window.clearTimeout(h.timer);
+    cancelAnimationFrame(h.frame);
+    h.timer = 0;
+    h.frame = 0;
+  }, []);
+
+  useEffect(() => {
+    if (!revealed || interactedRef.current) return;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    const h = hintRef.current;
+    let start = 0;
+    const tick = (now: number) => {
+      if (!start) start = now;
+      const t = Math.min(1, (now - start) / HINT_DURATION_MS);
+      setPos(hintPosition(t));
+      if (t < 1) {
+        h.frame = requestAnimationFrame(tick);
+      } else {
+        h.frame = 0;
+        interactedRef.current = true; // played once: never again for this instance
+      }
+    };
+    h.timer = window.setTimeout(() => {
+      h.timer = 0;
+      h.frame = requestAnimationFrame(tick);
+    }, HINT_START_DELAY_MS);
+    return () => {
+      window.clearTimeout(h.timer);
+      cancelAnimationFrame(h.frame);
+      h.timer = 0;
+      h.frame = 0;
+    };
+  }, [revealed]);
+
   const onBeforeLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const { naturalWidth: w, naturalHeight: h } = e.currentTarget;
     if (w > 0 && h > 0) setRatio({ src: beforeImg, value: w / h });
@@ -52,6 +116,10 @@ export default function BeforeAfterSlider({
 
   return (
     <div
+      ref={frameRef}
+      onPointerDownCapture={stopHint}
+      onTouchStartCapture={stopHint}
+      onKeyDownCapture={stopHint}
       style={{ aspectRatio: aspect }}
       className={`relative w-full mx-auto rounded-lg overflow-hidden select-none bg-[#FAF8F6] dark:bg-[#1A1416] border border-[#E8E2E0] dark:border-[#2E2427] z-10 [&:has(input:focus-visible)]:ring-2 [&:has(input:focus-visible)]:ring-[#5C1628] dark:[&:has(input:focus-visible)]:ring-[#C94A6A] ${className}`}
     >
@@ -100,7 +168,10 @@ export default function BeforeAfterSlider({
         max={100}
         step={0.5}
         value={pos}
-        onChange={(e) => setPos(Number(e.target.value))}
+        onChange={(e) => {
+          stopHint();
+          setPos(Number(e.target.value));
+        }}
         aria-label="Before / after comparison"
         className="absolute inset-0 w-full h-full opacity-0 cursor-ew-resize z-30 touch-manipulation touch-pan-y"
       />

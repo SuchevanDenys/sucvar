@@ -221,7 +221,7 @@ export default function ShareControl({ projectId, isDark, lang, initial, onChang
       <div
         role="status"
         aria-live="polite"
-        className={`fixed left-1/2 bottom-[max(1.5rem,env(safe-area-inset-bottom))] z-[100] -translate-x-1/2 transition-[opacity,transform] duration-200 pointer-events-none ${
+        className={`fixed left-1/2 bottom-[max(1.5rem,env(safe-area-inset-bottom))] z-[100] -translate-x-1/2 transition-[opacity,translate] duration-200 pointer-events-none ${
           toast ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
         }`}
       >

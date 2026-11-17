@@ -504,7 +504,7 @@ export default function LoginAndAccountPage() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
             {/* COLOANA STÂNGĂ: Google OAuth + Email/Parolă */}
             <div className={`lg:col-span-7 p-8 rounded-md border space-y-6 ${ui.card}`}>
-              <div className="flex items-center justify-between border-b pb-4 border-neutral-300/40">
+              <div className="flex items-center justify-between border-b pb-4 border-[#B5A9AC]/35">
                 <SucvarLogo size={28} withWordmark isDark={isDark} />
                 <div className="flex gap-1">
                   <button

@@ -11,7 +11,7 @@ import Link from 'next/link';
 import { Check, Minus } from 'lucide-react';
 import BillingToggle from '@/app/components/ui/BillingToggle';
 import { SectionHeading } from '@/app/components/ui/Editorial';
-import Reveal from '@/app/components/ui/Reveal';
+import Reveal, { revealItem } from '@/app/components/ui/Reveal';
 import { PRICING_PLANS } from '@/app/data/catalog';
 import { CAPABILITY_MATRIX, TIER_WORKFLOWS } from '@/app/data/home';
 import { tr, trList } from '@/app/lib/i18n';
@@ -20,6 +20,7 @@ import { canPurchase, normalizeInterval } from '@/app/lib/plan/tiers';
 import { usePlan } from '@/app/lib/plan/usePlan';
 import { PRICING_ANCHOR } from '@/app/lib/scroll';
 import { STORAGE_KEYS, writeStorage } from '@/app/lib/storage';
+import { TACTILE } from '@/app/lib/theme/motion';
 import { CONTAINER, EYEBROW, getSkin } from '@/app/lib/theme/skin';
 import { useStoredValue } from '@/app/lib/useStoredValue';
 import type { Language } from '@/app/types';
@@ -84,7 +85,8 @@ export default function PricingSection({ lang, isDark }: { lang: Language; isDar
               segOff={sk.segOff}
             />
           </div>
-          <div className={`mt-6 grid grid-cols-1 lg:grid-cols-3 gap-px border rounded-md overflow-hidden ${sk.line} ${sk.gap}`}>
+          {/* Planuri: dezvăluire decalată (70 ms); wrapper-ul poartă dezvăluirea, cardul poartă ridicarea la hover */}
+          <Reveal stagger className={`mt-6 grid grid-cols-1 lg:grid-cols-3 gap-px border rounded-md overflow-hidden ${sk.line} ${sk.gap}`}>
             {PRICING_PLANS.map((plan, idx) => {
               const isSelected = selectedPlan === plan.id;
               const isFeatured = Boolean(plan.popular);
@@ -115,17 +117,17 @@ export default function PricingSection({ lang, isDark }: { lang: Language; isDar
         `Choisir ${plan.id === 'starter' ? 'Studio' : planName}`);
 
               return (
+                <div key={plan.id} {...revealItem(idx, `relative flex hover:z-10 ${sk.cell}`)}>
                 <div
-                  key={plan.id}
                   role="button"
                   tabIndex={0}
                   onClick={() => handleSelectPlan(plan.id)}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' || event.key === ' ') handleSelectPlan(plan.id);
                   }}
-                  className={`relative flex flex-col justify-between p-8 lg:p-10 cursor-pointer transition-colors duration-500 touch-manipulation ${
+                  className={`relative flex w-full flex-col justify-between p-8 lg:p-10 cursor-pointer touch-manipulation ring-1 ring-inset hover:ring-[#A67C52]/50 hover:shadow-[0_18px_40px_-28px_rgba(27,20,22,0.5)] ${TACTILE} ${
                     isSelected ? selectedCell : `${sk.cell} ${sk.rowHover}`
-                  } ${isFeatured ? featuredFrame : ''}`}
+                  } ${isFeatured ? featuredFrame : 'ring-transparent'}`}
                 >
                   {(isSelected || isFeatured) && (
                     <span
@@ -211,16 +213,17 @@ export default function PricingSection({ lang, isDark }: { lang: Language; isDar
                     </ul>
                   </div>
                 </div>
+                </div>
               );
             })}
-          </div>
+          </Reveal>
         </Reveal>
 
         {/* Matrice de capabilități: fapte, fără superlative. Oglindește regulile din lib/plan/tiers.ts */}
         <Reveal delay={120}>
           <div className="mt-16">
             <p className={`${EYEBROW} ${sk.dim}`}>{t('Ce include fiecare plan', 'What each plan includes')}</p>
-            <div className={`mt-5 grid grid-cols-1 md:grid-cols-3 gap-px border rounded-md overflow-hidden ${sk.line} ${sk.gap}`}>
+            <div className={`mt-5 grid grid-cols-1 md:grid-cols-3 gap-px border rounded-t-md overflow-hidden ${sk.line} ${sk.gap}`}>
               {(['starter', 'pro', 'agency'] as const).map((id) => {
                 const plan = PRICING_PLANS.find((p) => p.id === id);
                 return (
@@ -231,7 +234,7 @@ export default function PricingSection({ lang, isDark }: { lang: Language; isDar
                 );
               })}
             </div>
-            <div className={`mt-px border border-t-0 overflow-x-auto ${sk.line}`}>
+            <div className={`border border-t-0 rounded-b-md overflow-x-auto ${sk.line} ${sk.cell}`}>
               <table className="w-full min-w-[40rem] text-left text-sm">
                 <thead>
                   <tr className={`border-b ${sk.line} ${EYEBROW} ${sk.dim}`}>

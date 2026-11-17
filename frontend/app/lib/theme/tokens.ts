@@ -8,9 +8,9 @@
 // Classes are spelled out in full because Tailwind cannot detect class names assembled by interpolation.
 
 const lightUi = {
-  page: 'bg-white text-[#1B1416]',
+  page: 'page-ambient bg-white text-[#1B1416]',
   header: 'bg-white/90 backdrop-blur-md border-[#E8E2E0] text-[#1B1416]',
-  card: 'bg-white border-[#E8E2E0] text-[#1B1416]',
+  card: 'bg-white border-[#E8E2E0] text-[#1B1416] shadow-[0_1px_2px_rgba(27,20,22,0.04),0_8px_24px_-20px_rgba(27,20,22,0.12)]',
   soft: 'bg-[#FAF8F6]',
   line: 'border-[#E8E2E0]',
   muted: 'text-[#685D60]',
@@ -22,9 +22,9 @@ const lightUi = {
 };
 
 const darkUi = {
-  page: 'bg-[#110D0F] text-[#F5F2EF]',
+  page: 'page-ambient bg-[#110D0F] text-[#F5F2EF]',
   header: 'bg-[#110D0F]/90 backdrop-blur-md border-[#2E2427] text-[#F5F2EF]',
-  card: 'bg-[#1A1416] border-[#2E2427] text-[#F5F2EF]',
+  card: 'bg-[#1A1416] border-[#2E2427] text-[#F5F2EF] shadow-[0_1px_2px_rgba(0,0,0,0.25)]',
   soft: 'bg-[#231B1E]',
   line: 'border-[#2E2427]',
   muted: 'text-[#B5A9AC]',

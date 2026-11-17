@@ -37,7 +37,7 @@ export interface ProfileView {
   company: Required<Party> | null;
   canEditCompany: boolean;
   defaults: ProfileDefaults;
-  subscription: { tier: PlanTier; interval: 'month' | 'year' | null; currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean; canManageBilling: boolean };
+  subscription: { tier: PlanTier; interval: 'month' | 'year' | null; currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean; canManageBilling: boolean; daysRemaining: number | null };
   /** `generationsLimit` null = nelimitat; include deja creditele bonus acordate de un administrator. */
   usage: {
     generationsUsed: number;

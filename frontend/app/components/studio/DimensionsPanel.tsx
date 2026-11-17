@@ -55,7 +55,7 @@ export default function DimensionsPanel({
       {OPENING_FIELDS.map(({ field, code, labelRo, labelEn }) => (
         <label
           key={field}
-          className={`block p-3 cursor-text transition-colors focus-within:bg-neutral-500/[0.05] ${sk.cell}`}
+          className={`block p-3 cursor-text transition-colors focus-within:bg-[#685D60]/[0.05] ${sk.cell}`}
         >
           <span className={`flex items-center justify-between ${eyebrow}`}>
             <span>{t(labelRo, labelEn)}</span>

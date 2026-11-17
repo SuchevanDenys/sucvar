@@ -1,12 +1,15 @@
 // app/components/studio/StudioViewport.tsx
 // Canvasul Studio-ului: fotografia sursă sau comparația înainte / după, ÎNTREAGĂ (object-contain, cadru adaptat
 // raportului real al imaginii), starea de randare (voal + etapă + bară de progres), previzualizare pe tot ecranul.
+// Comutatorul „Redesign complet” / „Editează o zonă”: în modul zonă, fotografia devine un canvas de mască (MaskEditor).
 "use client";
 
 import React, { useState } from 'react';
-import { ImagePlus, Maximize2 } from 'lucide-react';
+import { ImagePlus, Maximize2, PenLine, Repeat2, Sparkles } from 'lucide-react';
 import BeforeAfterSlider from '@/app/components/ui/BeforeAfterSlider';
 import ImageLightbox from '@/app/components/ui/ImageLightbox';
+import MaskEditor from '@/app/components/studio/MaskEditor';
+import type { MaskStroke } from '@/app/lib/studio/mask';
 import { getSkin } from '@/app/lib/theme/skin';
 import type { Language } from '@/app/types';
 import { tr } from '@/app/lib/i18n';
@@ -27,17 +30,35 @@ interface StudioViewportProps {
   /** Drag-and-drop direct pe canvas (același flux ca încărcarea din panoul de control). */
   onFile?: (file: File) => void;
   onPickFile?: () => void;
+  /** „Editează o zonă” (inpainting) activ: fotografia se poate picta cu masca selecției. */
+  editArea?: boolean;
+  onEditAreaChange?: (value: boolean) => void;
+  maskStrokes?: MaskStroke[];
+  onMaskStrokesChange?: (strokes: MaskStroke[]) => void;
+  onImageSize?: (size: { width: number; height: number }) => void;
+  /** Rezumatul ultimei editări de zonă (ex. „prim-plan, centru · 14 % din cadru”). */
+  regionalNote?: string | null;
+  /** Continuă editarea pe rezultat (randarea devine noua fotografie sursă). */
+  onUseResultAsSource?: () => void;
 }
 
 export default function StudioViewport({
   lang, isDark, originalImage, generatedImage, issueDate, isDemoResult, providerNote, isLoading, loadingLabel,
   loadingStep, loadingSteps, onFile, onPickFile,
+  editArea = false, onEditAreaChange, maskStrokes = [], onMaskStrokesChange, onImageSize, regionalNote, onUseResultAsSource,
 }: StudioViewportProps) {
   const sk = getSkin(isDark);
   const t = (ro: string, en: string, fr?: string) => tr(lang, ro, en, fr);
   const [lightbox, setLightbox] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const hasResult = Boolean(originalImage && generatedImage);
+  // După o randare, „Ajustează selecția” redeschide editorul pentru ACEST rezultat (o randare nouă îl închide singură)
+  const [editorFor, setEditorFor] = useState<string | null>(null);
+  const showEditor = Boolean(editArea && originalImage && onMaskStrokesChange && !isLoading && (!hasResult || editorFor === generatedImage));
+  const seg = (on: boolean) =>
+    `inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-[12px] font-medium cursor-pointer touch-manipulation transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+      on ? (isDark ? 'bg-[#C94A6A] text-white' : 'bg-[#5C1628] text-white') : sk.segOff
+    }`;
   const backdrop = isDark ? 'bg-[#110D0F]' : 'bg-[#F5F2EF]';
 
   const dropProps = onFile && !isLoading
@@ -78,7 +99,51 @@ export default function StudioViewport({
         </span>
       </div>
 
-      {hasResult && !isLoading ? (
+      {originalImage && onEditAreaChange && (
+        <div className="flex flex-wrap items-center justify-between gap-2 px-1 pb-2.5">
+          <div
+            role="radiogroup"
+            aria-label={t('Tip de editare', 'Edit type', 'Type de modification')}
+            className={`inline-flex rounded-full border p-0.5 ${sk.line} ${isDark ? 'bg-[#110D0F]' : 'bg-[#FAF8F6]'}`}
+          >
+            <button type="button" role="radio" aria-checked={!editArea} disabled={isLoading} onClick={() => onEditAreaChange(false)} className={seg(!editArea)}>
+              <Sparkles className="w-3.5 h-3.5" aria-hidden />
+              {t('Redesign complet', 'Full redesign', 'Refonte complète')}
+            </button>
+            <button type="button" role="radio" aria-checked={editArea} disabled={isLoading} onClick={() => onEditAreaChange(true)} className={seg(editArea)}>
+              <PenLine className="w-3.5 h-3.5" aria-hidden />
+              {t('Editează o zonă', 'Edit selected area', 'Modifier une zone')}
+            </button>
+          </div>
+          {editArea && hasResult && !isLoading && (
+            <span className="flex flex-wrap gap-1.5">
+              {!showEditor && (
+                <button type="button" onClick={() => setEditorFor(generatedImage)} className={`inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-[12px] font-medium cursor-pointer touch-manipulation ${sk.btnGhost}`}>
+                  <PenLine className="w-3.5 h-3.5" aria-hidden />
+                  {t('Ajustează selecția', 'Adjust selection', 'Ajuster la sélection')}
+                </button>
+              )}
+              {onUseResultAsSource && (
+                <button type="button" onClick={onUseResultAsSource} className={`inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-[12px] font-medium cursor-pointer touch-manipulation ${sk.btnGhost}`}>
+                  <Repeat2 className="w-3.5 h-3.5" aria-hidden />
+                  {t('Continuă pe rezultat', 'Continue on result', 'Continuer sur le résultat')}
+                </button>
+              )}
+            </span>
+          )}
+        </div>
+      )}
+
+      {showEditor ? (
+        <MaskEditor
+          lang={lang}
+          isDark={isDark}
+          src={originalImage as string}
+          strokes={maskStrokes}
+          onStrokesChange={onMaskStrokesChange as (s: MaskStroke[]) => void}
+          onImageSize={onImageSize}
+        />
+      ) : hasResult && !isLoading ? (
         <BeforeAfterSlider
           beforeImg={originalImage as string}
           afterImg={generatedImage as string}
@@ -100,7 +165,7 @@ export default function StudioViewport({
             <>
               <div aria-hidden className="scan-line z-10" />
               <div className="absolute inset-0 z-20 flex items-center justify-center p-4" role="status" aria-live="polite">
-                <div className="w-full max-w-xs rounded-xl bg-[#110D0F]/75 backdrop-blur-md px-5 py-4 text-white shadow-2xl">
+                <div className="w-full max-w-xs rounded-xl border border-white/10 border-t-white/20 bg-[#110D0F]/70 backdrop-blur-md backdrop-saturate-150 px-5 py-4 text-white shadow-[0_2px_8px_-2px_rgba(0,0,0,0.4),0_28px_60px_-24px_rgba(17,13,15,0.85)]">
                   <p className="text-[13px] font-medium">{loadingLabel}</p>
                   <div className="mt-3 h-1 w-full overflow-hidden rounded-full bg-white/15">
                     <div className="studio-progress h-full w-1/3 rounded-full bg-[#C94A6A]" />
@@ -140,8 +205,14 @@ export default function StudioViewport({
         </button>
       )}
 
-      {(isDemoResult || providerNote) && !isLoading && (
+      {(isDemoResult || providerNote || (regionalNote && hasResult)) && !isLoading && (
         <div className="px-1.5 pt-2.5 space-y-1">
+          {regionalNote && hasResult && (
+            <p className={`flex items-center gap-1.5 text-xs ${sk.muted}`}>
+              <PenLine className="w-3 h-3" aria-hidden />
+              {regionalNote}
+            </p>
+          )}
           {isDemoResult && (
             <p className={`text-xs ${sk.muted}`}>
               {t('Mod demonstrativ: imagine de test (furnizor AI neconfigurat).', 'Demo mode: sample image (no AI provider configured).')}

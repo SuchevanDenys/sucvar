@@ -52,10 +52,34 @@ export function Frame({
           <span className="tabular-nums">{meta}</span>
         </figcaption>
       )}
-      <div className={`relative border p-2 sm:p-3 ${sk.line} ${isDark ? 'bg-[#1A1416]' : 'bg-[#F5F2EF]'}`}>
+      <div
+        className={`relative rounded-md border p-2 sm:p-3 ${sk.line} ${
+          isDark
+            ? 'bg-[#1A1416] shadow-[0_24px_48px_-32px_rgba(0,0,0,0.8)]'
+            : 'bg-[#F5F2EF] shadow-[0_24px_48px_-36px_rgba(92,22,40,0.35)]'
+        }`}
+      >
         {children}
+        <CornerTicks isDark={isDark} />
       </div>
     </figure>
+  );
+}
+
+/**
+ * Repere de colț ca pe o planșă de arhitectură: patru unghiuri drepte de 1px, în șampanie, așezate
+ * peste linia fină a ramei. Pur decorative (aria-hidden), fără mișcare.
+ */
+export function CornerTicks({ isDark, className = '' }: { isDark: boolean; className?: string }) {
+  const tone = isDark ? 'border-[#C49A6C]/55' : 'border-[#A67C52]/60';
+  const tick = `pointer-events-none absolute h-3 w-3 ${tone}`;
+  return (
+    <span aria-hidden className={className}>
+      <span className={`${tick} -left-px -top-px rounded-tl-md border-l border-t`} />
+      <span className={`${tick} -right-px -top-px rounded-tr-md border-r border-t`} />
+      <span className={`${tick} -bottom-px -left-px rounded-bl-md border-b border-l`} />
+      <span className={`${tick} -bottom-px -right-px rounded-br-md border-b border-r`} />
+    </span>
   );
 }
 

@@ -326,6 +326,11 @@ public sealed class OfflineImageProcessor : IImageProcessor
     public Task<string> ToPermanentJpegDataUrlAsync(string source, CancellationToken ct = default) =>
         source.StartsWith("data:") ? _real.ToPermanentJpegDataUrlAsync(source, ct) : throw new HttpRequestException("offline");
 
+    public PreparedMask PrepareMask(string maskDataUrl, string sourceDataUrl) => _real.PrepareMask(maskDataUrl, sourceDataUrl);
+
+    public Task<string> CompositeRegionAsync(string sourceDataUrl, string generatedSource, string maskDataUrl, CancellationToken ct = default) =>
+        generatedSource.StartsWith("data:") ? _real.CompositeRegionAsync(sourceDataUrl, generatedSource, maskDataUrl, ct) : throw new HttpRequestException("offline");
+
     private sealed class NoHttp : IHttpClientFactory
     {
         public HttpClient CreateClient(string name) => throw new HttpRequestException("offline");

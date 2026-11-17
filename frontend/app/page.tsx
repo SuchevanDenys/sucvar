@@ -24,8 +24,12 @@ import { VISUAL_STYLES } from '@/app/data/catalog';
 import { CASES, FORMULAS, HERO_STATS, STEPS } from '@/app/data/home';
 import { tr } from '@/app/lib/i18n';
 import { scrollToAnchor } from '@/app/lib/scroll';
-import { CONTAINER, EYEBROW, getSkin } from '@/app/lib/theme/skin';
+import { CONTAINER, EYEBROW, bandClass, getSkin } from '@/app/lib/theme/skin';
 import { usePrefs } from '@/app/lib/theme/usePrefs';
+
+/** Intrarea decalată a textului din hero: 200 ms după pornirea fotografiei, apoi 120 ms între elemente. */
+const heroRise = (step: number): React.CSSProperties =>
+  ({ '--rise-delay': `${200 + step * 120}ms` }) as React.CSSProperties;
 
 export default function HomePage() {
   // ---------- State ----------
@@ -37,6 +41,8 @@ export default function HomePage() {
   // Full class strings (Tailwind can't see classes built by interpolation)
   const groupHoverStrong = isDark ? 'hover:text-[#D65D7B] group-hover:text-[#D65D7B]' : 'hover:text-[#5C1628] group-hover:text-[#5C1628]';
   const sectionY = sectionSpacing(sk.line);
+  // Ritm alb ↔ alabastru: §01, §03, §05 și footer-ul stau pe bandă caldă; intro, §02, §04, §06 pe alb
+  const sectionBand = sectionSpacing(sk.line, bandClass(isDark));
   const btnBase = 'inline-flex items-center justify-center gap-2 h-12 sm:h-11 px-6 rounded-sm text-[13px] font-medium touch-manipulation select-none';
 
   // Sosire din altă rută (ex. /generate → /#planuri): după montare, realiniem ancora
@@ -85,29 +91,26 @@ export default function HomePage() {
           </div>
 
           <div className={`${CONTAINER} flex flex-1 flex-col justify-center pt-[calc(4rem+env(safe-area-inset-top)+3.5rem)] pb-16 lg:pb-20`}>
+            {/* Intrare la încărcare (CSS pur, fără IO): eyebrow → titlu → subtitlu → CTA, decalat */}
             <div className="max-w-2xl">
-              <Reveal>
-                <p className="flex items-center gap-4 text-[11px] font-medium uppercase tracking-[0.3em] text-[#E9DCCB]">
-                  <span aria-hidden className="h-px w-10 bg-[#C49A6C]" />
-                  {t('Studio de arhitectură interioară asistată de AI', 'AI-assisted interior architecture studio')}
-                </p>
-              </Reveal>
+              <p style={heroRise(0)} className="hero-rise flex items-center gap-4 text-[11px] font-medium uppercase tracking-[0.3em] text-[#E9DCCB]">
+                <span aria-hidden className="h-px w-10 bg-[#C49A6C]" />
+                {t('Studio de arhitectură interioară asistată de AI', 'AI-assisted interior architecture studio')}
+              </p>
 
-              <Reveal delay={80}>
-                <h1 className="mt-8 text-[2.75rem] font-bold leading-[1.02] tracking-tight text-[#FAF8F6] sm:text-6xl lg:text-[4.75rem]">
-                  {t('Din fotografie,', 'From a photograph')}{' '}
-                  <span className="font-light text-[#F5F2EF]/75">{t('un interior gata de construit.', 'to an interior ready to build.')}</span>
-                </h1>
-              </Reveal>
+              <h1 style={heroRise(1)} className="hero-rise mt-8 text-[2.75rem] font-bold leading-[1.02] tracking-tight text-[#FAF8F6] sm:text-6xl lg:text-[4.75rem]">
+                {t('Din fotografie,', 'From a photograph')}{' '}
+                <span className="font-light text-[#F5F2EF]/75">{t('un interior gata de construit.', 'to an interior ready to build.')}</span>
+              </h1>
 
-              <Reveal delay={160}>
-                <p className="mt-8 max-w-lg text-[15px] leading-[1.8] text-[#F5F2EF]/80">
+              <div>
+                <p style={heroRise(2)} className="hero-rise mt-8 max-w-lg text-[15px] leading-[1.8] text-[#F5F2EF]/80">
                   {t(
                     'Încarci o fotografie a camerei, iar în câteva minute SUCVAR îți livrează o randare fotorealistă, o listă de cantități cu prețuri și linkuri către magazine și o ofertă elegantă, gata de trimis clientului.',
                     'Upload a photo of the room and, within minutes, SUCVAR delivers a photorealistic design, an itemised bill of quantities with prices and retailer links, and a polished quote ready to send to your client.',
                   )}
                 </p>
-                <div className="mt-10 flex flex-wrap items-center gap-3">
+                <div style={heroRise(3)} className="hero-rise mt-10 flex flex-wrap items-center gap-3">
                   <Link href="/generate" className={`group ${btnBase} ${sk.btn} ring-1 ring-inset ring-white/10`}>
                     <span>{t('Începe un proiect', 'Start a project')}</span>
                     <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-0.5" strokeWidth={1.5} />
@@ -126,7 +129,7 @@ export default function HomePage() {
                     {t('Pentru firme (B2B)', 'For firms (B2B)')}
                   </Link>
                 </div>
-              </Reveal>
+              </div>
             </div>
           </div>
 
@@ -140,8 +143,17 @@ export default function HomePage() {
         </section>
 
         {/* ================= INTRO (telemetry + slider) ================= */}
-        <section className="relative">
-          <div id="intro" className={`${CONTAINER} relative pt-16 pb-24 lg:pt-20 lg:pb-32 ${ANCHOR_OFFSET}`}>
+        <section className="relative isolate">
+          {/* Punte de lumină din hero: halou bordo foarte slab sub marginea fotografiei */}
+          <div
+            aria-hidden
+            className={`pointer-events-none absolute inset-x-0 top-0 -z-10 h-[28rem] ${
+              isDark
+                ? 'bg-[radial-gradient(60%_100%_at_20%_0%,rgba(201,74,106,0.07),transparent_70%)]'
+                : 'bg-[radial-gradient(60%_100%_at_20%_0%,rgba(92,22,40,0.05),transparent_70%)]'
+            }`}
+          />
+          <div id="intro" className={`${CONTAINER} relative pt-14 pb-16 sm:pt-16 sm:pb-24 lg:pt-20 lg:pb-32 ${ANCHOR_OFFSET}`}>
 
             {/* Telemetry — hairline grid */}
             <Reveal delay={240}>
@@ -176,7 +188,7 @@ export default function HomePage() {
         </section>
 
         {/* ================= §01 PROCESS ================= */}
-        <section className={sectionY}>
+        <section className={sectionBand}>
           <div id="proces" className={`${CONTAINER} ${ANCHOR_OFFSET}`}>
             <Reveal>
               <SectionHeading
@@ -237,7 +249,7 @@ export default function HomePage() {
         </section>
 
         {/* ================= §03 ENGINEERING FORMULAS ================= */}
-        <section className={sectionY}>
+        <section className={sectionBand}>
           <div id="metodologie" className={`${CONTAINER} ${ANCHOR_OFFSET} grid grid-cols-1 lg:grid-cols-12 gap-12`}>
             <Reveal className="lg:col-span-5 space-y-6">
               <SectionHeading

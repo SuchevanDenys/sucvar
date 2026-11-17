@@ -3,10 +3,12 @@
 // (pereți, pardoseală, mobilier…), paletă, lumină și comutatorul „Păstrează structura camerei (pereți, ferestre)”
 // (activ implicit: geometria fotografiei rămâne blocată, se transformă finisajele, mobilierul și lumina).
 // Totul se scrie în `customPrompt` (contractul existent al /api/generate) — fără câmpuri noi în API.
+// În modul „Editează o zonă” panoul se concentrează pe zona selectată: alt îndemn, sugestii de obiecte / suprafețe,
+// fără comutatorul de structură, lumină și inspirații pentru toată camera (restul fotografiei rămâne neatins).
 "use client";
 
 import React, { useId, useRef, useState } from 'react';
-import { Check, CornerDownLeft, Plus, Sparkles } from 'lucide-react';
+import { Check, CornerDownLeft, PenLine, Plus, Sparkles } from 'lucide-react';
 import { getSkin } from '@/app/lib/theme/skin';
 import {
   CUSTOM_PROMPT_MAX,
@@ -33,6 +35,20 @@ const MATERIAL_CHIPS: { ro: string; en: string }[] = [
   { ro: 'Canapea din in', en: 'Linen sofa' },
   { ro: 'Travertin', en: 'Travertine' },
   { ro: 'Plante naturale', en: 'Natural plants' },
+];
+
+/** Sugestii pentru zona selectată: ce poate deveni obiectul / suprafața pictată. */
+const REGION_CHIPS: { ro: string; en: string; fr: string }[] = [
+  { ro: 'Canapea din catifea bordo', en: 'Bordeaux velvet sofa', fr: 'Canapé en velours bordeaux' },
+  { ro: 'Parchet în spic din stejar', en: 'Oak herringbone parquet', fr: 'Parquet chevron en chêne' },
+  { ro: 'Insulă cu blat din marmură', en: 'Marble-top kitchen island', fr: 'Îlot avec plan en marbre' },
+  { ro: 'Fotoliu din bouclé crem', en: 'Cream bouclé armchair', fr: 'Fauteuil en bouclette crème' },
+  { ro: 'Perete cu riflaje din lemn', en: 'Wood slat wall panelling', fr: 'Mur en tasseaux de bois' },
+  { ro: 'Covor din lână', en: 'Wool rug', fr: 'Tapis en laine' },
+  { ro: 'Blat din cuarț alb', en: 'White quartz countertop', fr: 'Plan en quartz blanc' },
+  { ro: 'Lustră suspendată din alamă', en: 'Brass pendant light', fr: 'Suspension en laiton' },
+  { ro: 'Microciment', en: 'Microcement', fr: 'Microciment' },
+  { ro: 'Plante naturale', en: 'Natural plants', fr: 'Plantes naturelles' },
 ];
 
 /** Elemente ale camerei care pot fi rafinate separat (se scriu ca „pardoseală: …” în descriere). */
@@ -74,12 +90,16 @@ interface VisionPanelProps {
   lighting: LightingId | null;
   onLightingChange: (id: LightingId | null) => void;
   disabled?: boolean;
+  /** „Editează o zonă” activ: textul descrie DOAR ce se schimbă în selecție. */
+  regionalEdit?: boolean;
+  /** Poziția selecției curente, tradusă (ex. „prim-plan, centru”), sau null dacă nu s-a pictat nimic. */
+  selectionLabel?: string | null;
 }
 
 export default function VisionPanel(props: VisionPanelProps) {
   const {
     lang, isDark, customPrompt, onCustomPromptChange, preserveStructure, onPreserveStructureChange,
-    palette, onPaletteChange, lighting, onLightingChange, disabled,
+    palette, onPaletteChange, lighting, onLightingChange, disabled, regionalEdit = false, selectionLabel = null,
   } = props;
   const sk = getSkin(isDark);
   const t = (ro: string, en: string, fr?: string) => tr(lang, ro, en, fr);
@@ -115,13 +135,28 @@ export default function VisionPanel(props: VisionPanelProps) {
     <StudioCard
       isDark={isDark}
       step="03"
-      title={t('Personalizare', 'Customise')}
-      hint={t('Descrie rezultatul dorit sau compune-l din materiale și elemente.', 'Describe the result you want, or build it from materials and elements.')}
+      title={regionalEdit ? t('Zona selectată', 'Selected area', 'Zone sélectionnée') : t('Personalizare', 'Customise')}
+      hint={regionalEdit
+        ? t('Descrie doar ce se schimbă în zona pictată — restul fotografiei rămâne neatins.', 'Describe only what changes in the painted area — the rest of the photo stays untouched.', 'Décrivez seulement ce qui change dans la zone peinte — le reste de la photo reste intact.')
+        : t('Descrie rezultatul dorit sau compune-l din materiale și elemente.', 'Describe the result you want, or build it from materials and elements.')}
     >
+      {regionalEdit && (
+        <div className={`flex items-start gap-2.5 rounded-lg border p-3 text-[12px] leading-relaxed ${isDark ? 'border-[#C94A6A]/35 bg-[#C94A6A]/[0.08]' : 'border-[#5C1628]/20 bg-[#FAF8F6]'}`}>
+          <PenLine className={`mt-0.5 w-3.5 h-3.5 shrink-0 ${isDark ? 'text-[#E07F98]' : 'text-[#5C1628]'}`} aria-hidden />
+          <span className={sk.muted}>
+            {selectionLabel
+              ? <>{t('Selecție', 'Selection', 'Sélection')}: <span className={`font-medium ${sk.strong}`}>{selectionLabel}</span>. {t('Lumina, umbrele și perspectiva camerei se păstrează.', 'The room’s lighting, shadows and perspective are kept.', 'La lumière, les ombres et la perspective de la pièce sont conservées.')}</>
+              : t('Pictează pe fotografie zona pe care vrei să o schimbi (ex. doar canapeaua sau pardoseala).', 'Paint the area you want to change on the photo (e.g. only the sofa or the floor).', 'Peignez sur la photo la zone à modifier (ex. seulement le canapé ou le sol).')}
+          </span>
+        </div>
+      )}
+
       {/* Descriere liberă */}
       <div className="space-y-2">
         <label htmlFor={promptId} className="flex items-center justify-between">
-          <span className={label}>{t('Ce îți dorești?', 'What do you want?')}</span>
+          <span className={label}>
+            {regionalEdit ? t('Ce vrei să schimbi în zona selectată?', 'What should change in the selected area?', 'Que voulez-vous changer dans la zone sélectionnée ?') : t('Ce îți dorești?', 'What do you want?')}
+          </span>
           <span className={`font-mono text-[11px] tabular-nums ${remaining < 100 ? sk.strong : sk.muted}`} aria-live="polite">
             {customPrompt.length}/{CUSTOM_PROMPT_MAX}
           </span>
@@ -133,10 +168,16 @@ export default function VisionPanel(props: VisionPanelProps) {
           disabled={disabled}
           rows={4}
           onChange={(e) => onCustomPromptChange(e.target.value)}
-          placeholder={t(
-            'ex: Living minimalist cald, cu parchet de stejar, canapea din in crem, lumină naturală și accente negre mate',
-            'e.g. A warm minimalist living room with oak flooring, a cream linen sofa, natural light and matte black accents',
-          )}
+          placeholder={regionalEdit
+            ? t(
+                'Ce vrei să schimbi în zona selectată? Ex: înlocuiește cu o canapea din catifea bordo cu picioare din alamă',
+                'What should change in the selected area? E.g. replace it with a bordeaux velvet sofa with brass legs',
+                'Que voulez-vous changer dans la zone sélectionnée ? Ex : remplacez-la par un canapé en velours bordeaux aux pieds en laiton',
+              )
+            : t(
+                'ex: Living minimalist cald, cu parchet de stejar, canapea din in crem, lumină naturală și accente negre mate',
+                'e.g. A warm minimalist living room with oak flooring, a cream linen sofa, natural light and matte black accents',
+              )}
           className={`w-full px-3.5 py-3 rounded-lg border text-sm leading-relaxed outline-none transition-colors resize-y min-h-[112px] ${sk.input}`}
         />
         <p className={`text-[11px] leading-relaxed ${sk.muted}`}>
@@ -149,10 +190,10 @@ export default function VisionPanel(props: VisionPanelProps) {
 
       {/* Materiale dintr-un click */}
       <div className="space-y-2">
-        <p className={label}>{t('Materiale & finisaje', 'Materials & finishes')}</p>
-        <div className="flex flex-wrap gap-2" role="group" aria-label={t('Materiale & finisaje', 'Materials & finishes')}>
-          {MATERIAL_CHIPS.map((m) => {
-            const phrase = t(m.ro, m.en);
+        <p className={label}>{regionalEdit ? t('Sugestii pentru zonă', 'Ideas for the area', 'Idées pour la zone') : t('Materiale & finisaje', 'Materials & finishes')}</p>
+        <div className="flex flex-wrap gap-2" role="group" aria-label={regionalEdit ? t('Sugestii pentru zonă', 'Ideas for the area', 'Idées pour la zone') : t('Materiale & finisaje', 'Materials & finishes')}>
+          {(regionalEdit ? REGION_CHIPS : MATERIAL_CHIPS).map((m: { ro: string; en: string; fr?: string }) => {
+            const phrase = t(m.ro, m.en, m.fr);
             const active = norm(customPrompt).includes(norm(phrase));
             return (
               <button key={m.ro} type="button" disabled={disabled} aria-pressed={active} onClick={() => toggleMaterial(phrase)} className={pill(active)}>
@@ -164,7 +205,8 @@ export default function VisionPanel(props: VisionPanelProps) {
         </div>
       </div>
 
-      {/* Rafinare pe element */}
+      {/* Rafinare pe element (toată camera) */}
+      {!regionalEdit && (
       <div className="space-y-2">
         <p className={label}>{t('Rafinează un element', 'Refine an element')}</p>
         <div className="flex flex-wrap gap-2" role="radiogroup" aria-label={t('Element', 'Element')}>
@@ -215,6 +257,7 @@ export default function VisionPanel(props: VisionPanelProps) {
           </div>
         )}
       </div>
+      )}
 
       {/* Paletă & lumină */}
       <div className="space-y-2">
@@ -230,6 +273,7 @@ export default function VisionPanel(props: VisionPanelProps) {
           ))}
         </div>
       </div>
+      {!regionalEdit && (<>
       <div className="space-y-2">
         <p className={label}>{t('Lumină', 'Lighting')}</p>
         <div className="flex flex-wrap gap-2">
@@ -297,6 +341,7 @@ export default function VisionPanel(props: VisionPanelProps) {
           ))}
         </div>
       </div>
+      </>)}
     </StudioCard>
   );
 }

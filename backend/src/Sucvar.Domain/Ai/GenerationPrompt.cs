@@ -19,7 +19,19 @@ public static class AiLimits
     public const int MaxPromptTokens = 72;
 }
 
+/// <summary>What kind of prompt the active image model reads.</summary>
+public enum PromptFormat
+{
+    /// <summary>SD 1.5-style comma-separated tags fitted to the 72-token CLIP budget (adirik/interior-design, AUTOMATIC1111).</summary>
+    Clip,
+    /// <summary>Natural-language editing instruction, no CLIP clipping (FLUX Kontext and other instruction-following models).</summary>
+    Instruction,
+}
+
 /// <summary>Validated generation request (everything from the browser re-checked).</summary>
+/// <param name="Instruction">The same brief as a natural-language editing instruction (used by <see cref="PromptFormat.Instruction"/> models).</param>
+/// <param name="Format">Which prompt <see cref="Prompt"/> currently holds (see <see cref="For"/>).</param>
+/// <param name="Region">Non-null for an "Edit selected area" request: the prompt targets only the masked region.</param>
 public sealed record GenerationPlan(
     string Mode,
     string Prompt,
@@ -31,7 +43,19 @@ public sealed record GenerationPlan(
     double TransformationStrength,
     DesignBrief? Brief = null,
     SmartPromptParts? Parts = null,
-    string Engine = "deterministic");
+    string Engine = "deterministic",
+    string Instruction = "",
+    PromptFormat Format = PromptFormat.Clip,
+    SelectionRegion? Region = null)
+{
+    /// <summary>
+    /// The plan as the target model reads it. Instruction models get the natural-language instruction as
+    /// <see cref="Prompt"/> and no negative prompt (they do not accept one; the instruction states what to keep).
+    /// </summary>
+    public GenerationPlan For(PromptFormat format) => format == PromptFormat.Instruction && Instruction.Length > 0
+        ? this with { Prompt = Instruction, NegativePrompt = "", Format = PromptFormat.Instruction }
+        : this;
+}
 
 /// <summary>
 /// The pieces of a compiled smart prompt that an optional LLM refinement must keep: the scene, the user's locked
@@ -149,7 +173,82 @@ public static partial class GenerationPrompt
     }
 
     /// <summary>Builds the full generation plan from the (untrusted) JSON body.</summary>
-    public static GenerationPlan Create(JsonElement payload)
+    /// <param name="region">
+    /// The selection measured from a validated mask (<c>/api/generate</c>). When null, a <c>selectionBounds</c> object in
+    /// the body (prompt preview, no mask) still switches the plan to a regional edit.
+    /// </param>
+    public static GenerationPlan Create(JsonElement payload, SelectionRegion? region = null)
+    {
+        var plan = CreateFullRoom(payload);
+        return (region ?? SelectionRegion.FromPayload(payload)) is { } selection ? Regional(plan, payload, selection) : plan;
+    }
+
+    /// <summary>
+    /// Regional (inpainting) plan: the same brief, recompiled as an edit of the masked area only. Room-wide layers
+    /// (scene, structure cue, layout, budget, room lighting, scale) are dropped — the photo outside the mask is kept.
+    /// </summary>
+    private static GenerationPlan Regional(GenerationPlan plan, JsonElement payload, SelectionRegion region)
+    {
+        var mode = plan.Mode;
+        DesignBrief? brief = plan.Brief;
+        var styleId = brief?.StyleId ?? (brief is null ? Js.AsString(Js.Prop(payload, "styleId")) ?? Js.AsString(Js.Prop(payload, "style")) : null);
+        var style = styleId is null ? null : SucvarCatalog.GetStyle(styleId);
+        var spaceId = brief?.SpaceType ?? SucvarCatalog.GetSpace(mode, Js.AsString(Js.Prop(payload, "spaceType"))).Id;
+
+        (IReadOnlyList<string> Specs, HashSet<string> UserSlots, string UserWords, string Materials, IReadOnlyList<UserSpec> Compiled)? layers =
+            brief is null ? null : UserLayers(brief);
+        string Strip(string seg) => layers is null ? seg : ArchitecturalPromptCompiler.StripConflicts(seg, layers.Value.UserSlots);
+        var palette = brief is null ? "" : DesignVision.GetPalette(brief.Palette)?.Prompt ?? "";
+        var english = brief is { HasCustomPrompt: true } && DesignVision.LooksEnglish(brief.CustomPrompt);
+
+        var regional = new RegionalBrief(
+            Mode: mode,
+            Space: spaceId,
+            Region: region,
+            UserSpecs: layers?.Specs ?? [],
+            Materials: layers?.Materials ?? "",
+            ClientWords: brief is not { HasCustomPrompt: true } ? "" : english ? brief.CustomPrompt : layers!.Value.UserWords,
+            StyleName: style?.NameEn,
+            StyleDetails: style is null ? "" : Strip(StyleSpecPrompt(style, mode)),
+            Palette: Strip(palette));
+
+        // The user's own negative (if any) leads; geometry cues stay (nothing outside the mask may move)
+        var userNegative = Js.IsRecord(Js.Prop(payload, "ai")) && Js.AsString(Js.Prop(Js.Prop(payload, "ai"), "negativePrompt")) is { } neg
+            ? Js.Slice(neg.Trim(), AiLimits.NegativePromptMaxLength) : null;
+        return plan with
+        {
+            Prompt = ArchitecturalPromptCompiler.RegionalPrompt(regional),
+            Instruction = ArchitecturalPromptCompiler.RegionalInstruction(regional),
+            NegativePrompt = ArchitecturalPromptCompiler.NegativePrompt(mode, true, userNegative),
+            PromptStrength = ArchitecturalPromptCompiler.InpaintStrength,
+            TransformationStrength = Math.Round(ArchitecturalPromptCompiler.InpaintStrength * 100),
+            Parts = null, // no LLM refinement: it writes room-wide tags
+            Region = region,
+        };
+    }
+
+    /// <summary>What the user owns in a smart brief: element specs, the slots they cover, their other words, extra materials.</summary>
+    private static (IReadOnlyList<string> Specs, HashSet<string> UserSlots, string UserWords, string Materials, IReadOnlyList<UserSpec> Compiled) UserLayers(DesignBrief brief)
+    {
+        var english = brief.HasCustomPrompt && DesignVision.LooksEnglish(brief.CustomPrompt);
+        var specs = brief.HasCustomPrompt && !english ? ArchitecturalPromptCompiler.CompileUserSpecs(brief.CustomPrompt) : [];
+        var userSlots = new HashSet<string>(ArchitecturalPromptCompiler.ExplicitSlots(brief.CustomPrompt), StringComparer.Ordinal);
+        foreach (var s in specs) userSlots.Add(s.Slot);
+        if (brief.Lighting is not null) userSlots.Add("lighting"); // an explicit lighting pill is a user choice too
+
+        var userWords = !brief.HasCustomPrompt ? ""
+            : english ? brief.CustomPrompt.Replace('.', ',').Replace(';', ',')
+            : DesignVision.TranslateDescriptors(ArchitecturalPromptCompiler.FreeClauses(brief.CustomPrompt));
+
+        // Lexicon materials (LED strip, plants, matte black…) unless a spec already describes the same element
+        var specSlots = specs.Select(s => s.Slot).ToHashSet();
+        var materials = string.Join(", ", brief.Materials
+            .Where(m => SpecSlotOf(m) is not { } slot || !specSlots.Contains(slot))
+            .Select(m => m.PromptEn));
+        return (specs.Select(s => s.PromptEn).ToList(), userSlots, userWords, materials, specs);
+    }
+
+    private static GenerationPlan CreateFullRoom(JsonElement payload)
     {
         var modeRaw = Js.AsString(Js.Prop(payload, "mode"));
         var mode = SucvarCatalog.IsMode(modeRaw) ? modeRaw! : "interiors";
@@ -191,7 +290,7 @@ public static partial class GenerationPrompt
             var smartScenario = SucvarCatalog.BuildScenarioPrompt(smartSpace, SucvarCatalog.SanitizeFocusIds(smartSpace, Js.Prop(dimensionsEl, "focusIds")));
             // Compact scene noun: the catalog's long scene prompt would use half of the 72-token budget
             var scene = mode == "interiors" ? $"furnished {smartSpace.Id} interior" : smartSpace.Id;
-            var (smartPrompt, parts) = Compile(brief, mode, scene, smartScenario, scopePrompt, smartLayout.Prompt,
+            var (smartPrompt, instruction, parts) = Compile(brief, mode, scene, smartScenario, scopePrompt, smartLayout.Prompt,
                 budget, windowsCount, extraPrompt);
             var smartNegative = ArchitecturalPromptCompiler.NegativePrompt(mode, brief.PreserveStructure,
                 Js.AsString(Js.Prop(aiEl, "negativePrompt")) is { } rawNeg ? userNegative : null);
@@ -205,7 +304,7 @@ public static partial class GenerationPrompt
             var smartGuidance = ReadNumber(Js.Prop(aiEl, "guidanceScale"), AiLimits.GuidanceMin, AiLimits.GuidanceMax,
                 ArchitecturalPromptCompiler.SmartGuidanceDefault);
             return new GenerationPlan(mode, smartPrompt, smartNegative, smartSteps, smartGuidance, seed, smartStrength,
-                Math.Round(smartStrength * 100), brief, parts);
+                Math.Round(smartStrength * 100), brief, parts, Instruction: instruction);
         }
 
         var prompt = BuildPrompt(
@@ -222,8 +321,11 @@ public static partial class GenerationPrompt
             "architectural magazine photo, straight vertical lines, photorealistic, sharp focus",
         ], AiLimits.MaxPromptTokens);
         var negative = MergeTerms(userNegative, MandatoryNegatives(mode));
+        var legacyInstruction = ArchitecturalPromptCompiler.LegacyInstruction(mode, space.Id,
+            MergeTerms(space.ScenePrompt, scenarioPrompt, scopePrompt, StyleSpecPrompt(style, mode), CleanStylePrompt(style.Prompt, mode),
+                extraPrompt, layout.Prompt, BudgetDetails(budget, mode), Lighting(mode, windowsCount)));
 
-        return new GenerationPlan(mode, prompt, negative, steps, guidance, seed, promptStrength, strength);
+        return new GenerationPlan(mode, prompt, negative, steps, guidance, seed, promptStrength, strength, Instruction: legacyInstruction);
     }
 
     public const string StructurePreserveCue = "keep existing walls, windows and doors";
@@ -235,6 +337,12 @@ public static partial class GenerationPrompt
     public static string SynthesizePrompt(DesignBrief brief, string mode, string scenePrompt, string scenarioPrompt, string scopePrompt,
         string layoutPrompt, string budget, double windowsCount, string extraPrompt) =>
         Compile(brief, mode, scenePrompt, scenarioPrompt, scopePrompt, layoutPrompt, budget, windowsCount, extraPrompt).Prompt;
+
+    /// <summary>The space noun of a scene ("furnished kitchen interior" → "kitchen") for the natural-language instruction.</summary>
+    private static string SpaceNoun(string scenePrompt, string mode) =>
+        mode == "interiors" && scenePrompt.StartsWith("furnished ", StringComparison.Ordinal) && scenePrompt.EndsWith(" interior", StringComparison.Ordinal)
+            ? scenePrompt["furnished ".Length..^" interior".Length]
+            : scenePrompt;
 
     /// <summary>
     /// Compiles the user's vision and the optional modifiers into one CLIP-sized prompt. Priority order (later
@@ -251,28 +359,19 @@ public static partial class GenerationPrompt
     /// Every non-user layer is passed through <see cref="ArchitecturalPromptCompiler.StripConflicts"/>: a style's
     /// default floor / walls / sofa / lighting never contradicts what the user asked for. Terms are de-duplicated.
     /// </summary>
-    public static (string Prompt, SmartPromptParts Parts) Compile(DesignBrief brief, string mode, string scenePrompt, string scenarioPrompt,
+    /// <remarks>
+    /// The same layers (same conflict stripping) are also composed into a natural-language instruction, without the
+    /// CLIP budget, for <see cref="PromptFormat.Instruction"/> models such as FLUX Kontext.
+    /// </remarks>
+    public static (string Prompt, string Instruction, SmartPromptParts Parts) Compile(DesignBrief brief, string mode, string scenePrompt, string scenarioPrompt,
         string scopePrompt, string layoutPrompt, string budget, double windowsCount, string extraPrompt)
     {
         var style = brief.StyleId is null ? null : SucvarCatalog.GetStyle(brief.StyleId);
         var english = brief.HasCustomPrompt && DesignVision.LooksEnglish(brief.CustomPrompt);
 
         // 1. What the user owns: element specs + the slots they cover (English text: slots only, words kept verbatim)
-        var specs = brief.HasCustomPrompt && !english ? ArchitecturalPromptCompiler.CompileUserSpecs(brief.CustomPrompt) : [];
-        var userSlots = new HashSet<string>(ArchitecturalPromptCompiler.ExplicitSlots(brief.CustomPrompt), StringComparer.Ordinal);
-        foreach (var s in specs) userSlots.Add(s.Slot);
-        if (brief.Lighting is not null) userSlots.Add("lighting"); // an explicit lighting pill is a user choice too
+        var (_, userSlots, userWords, materials, specs) = UserLayers(brief);
         string Strip(string seg) => ArchitecturalPromptCompiler.StripConflicts(seg, userSlots);
-
-        var userWords = !brief.HasCustomPrompt ? ""
-            : english ? brief.CustomPrompt.Replace('.', ',').Replace(';', ',')
-            : DesignVision.TranslateDescriptors(ArchitecturalPromptCompiler.FreeClauses(brief.CustomPrompt));
-
-        // Lexicon materials (LED strip, plants, matte black…) unless a spec already describes the same element
-        var specSlots = specs.Select(s => s.Slot).ToHashSet();
-        var materials = string.Join(", ", brief.Materials
-            .Where(m => SpecSlotOf(m) is not { } slot || !specSlots.Contains(slot))
-            .Select(m => m.PromptEn));
 
         var palette = DesignVision.GetPalette(brief.Palette)?.Prompt ?? "";
         var lighting = DesignVision.GetLighting(brief.Lighting)?.Prompt
@@ -306,7 +405,25 @@ public static partial class GenerationPrompt
         };
 
         var prompt = Assemble(segments);
-        return (prompt, new SmartPromptParts(scenePrompt, lockedSpecs, structureCue, PhotographyDirective(mode), userSlots));
+
+        var scale = brief.Scale;
+        var instruction = ArchitecturalPromptCompiler.Instruction(new InstructionBrief(
+            Mode: mode,
+            Space: SpaceNoun(scenePrompt, mode),
+            PreserveStructure: brief.PreserveStructure,
+            UserSpecs: lockedSpecs,
+            Materials: materials,
+            ClientWords: !brief.HasCustomPrompt ? "" : english ? brief.CustomPrompt : userWords,
+            StyleName: style?.NameEn,
+            StyleDetails: style is null ? Strip(preset) : MergeTerms(Strip(preset), Strip(StyleSpecPrompt(style, mode)), Strip(CleanStylePrompt(style.Prompt, mode))),
+            Palette: Strip(palette),
+            Lighting: brief.Lighting is not null ? lighting : Strip(lighting),
+            AreaSqm: scale is { AreaKnown: true } ? scale.AreaSqm : null,
+            CeilingHeight: scale?.Height,
+            ScaleHint: ArchitecturalPromptCompiler.ScaleHint(scale, mode),
+            Details: MergeTerms(Strip(scenarioPrompt), scopePrompt, extraPrompt, brief.PreserveStructure ? Strip(layoutPrompt) : "", Strip(budgetDetails))));
+
+        return (prompt, instruction, new SmartPromptParts(scenePrompt, lockedSpecs, structureCue, PhotographyDirective(mode), userSlots));
     }
 
     /// <summary>
