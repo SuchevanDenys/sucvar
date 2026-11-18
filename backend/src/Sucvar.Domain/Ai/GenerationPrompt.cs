@@ -29,6 +29,17 @@ public enum PromptFormat
 }
 
 /// <summary>Validated generation request (everything from the browser re-checked).</summary>
+/// <param name="Mode">Space mode (<c>interiors</c> / <c>exteriors</c>).</param>
+/// <param name="Prompt">The prompt sent to the model, in the current <paramref name="Format"/>.</param>
+/// <param name="NegativePrompt">What the model should avoid (CLIP models only).</param>
+/// <param name="InferenceSteps">Diffusion steps.</param>
+/// <param name="GuidanceScale">Classifier-free guidance scale.</param>
+/// <param name="Seed">Fixed seed for reproducible renders; null = random.</param>
+/// <param name="PromptStrength">How far the model may move away from the source photo.</param>
+/// <param name="TransformationStrength">The user's transformation slider, normalised.</param>
+/// <param name="Brief">The resolved design brief (smart / free-text requests).</param>
+/// <param name="Parts">The smart prompt's building blocks (used by the optional LLM enhancer).</param>
+/// <param name="Engine">Which engine produced <paramref name="Prompt"/> (e.g. <c>deterministic</c>).</param>
 /// <param name="Instruction">The same brief as a natural-language editing instruction (used by <see cref="PromptFormat.Instruction"/> models).</param>
 /// <param name="Format">Which prompt <see cref="Prompt"/> currently holds (see <see cref="For"/>).</param>
 /// <param name="Region">Non-null for an "Edit selected area" request: the prompt targets only the masked region.</param>
@@ -173,6 +184,7 @@ public static partial class GenerationPrompt
     }
 
     /// <summary>Builds the full generation plan from the (untrusted) JSON body.</summary>
+    /// <param name="payload">The request body (untrusted; every field is re-validated).</param>
     /// <param name="region">
     /// The selection measured from a validated mask (<c>/api/generate</c>). When null, a <c>selectionBounds</c> object in
     /// the body (prompt preview, no mask) still switches the plan to a regional edit.

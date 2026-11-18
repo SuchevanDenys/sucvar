@@ -5,6 +5,7 @@ import SucvarLogo from '@/app/components/layout/SucvarLogo';
 import { CONTAINER, EYEBROW, bandClass, getSkin } from '@/app/lib/theme/skin';
 import type { Language } from '@/app/types';
 import { tr } from '@/app/lib/i18n';
+import { FAQ_HREF } from '@/app/lib/scroll';
 
 // Fixed year (no new Date() during render, it breaks Next.js 16 prerendering)
 const COPYRIGHT_YEAR = 2026;
@@ -26,6 +27,9 @@ export default function Footer({ lang, isDark }: { lang: Language; isDark: boole
           <span className={`text-xs ${sk.dim}`}>{t('Arhitectură interioară, randare AI și devize precise', 'Interior architecture, AI rendering and precise estimates')}</span>
         </div>
         <div className={`flex flex-wrap items-center gap-x-6 gap-y-2 ${EYEBROW} ${sk.muted}`}>
+          <Link href={FAQ_HREF} className={`underline-offset-4 decoration-1 hover:underline ${sk.strong} ${isDark ? 'hover:text-[#D65D7B]' : 'hover:text-[#5C1628]'}`}>
+            {t('Întrebări frecvente', 'FAQ')}
+          </Link>
           <Link href="/termeni" className={`underline-offset-4 decoration-1 hover:underline ${sk.strong} ${isDark ? 'hover:text-[#D65D7B]' : 'hover:text-[#5C1628]'}`}>
             {t('Termeni', 'Terms')}
           </Link>

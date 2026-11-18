@@ -183,7 +183,9 @@ public static class MaskCompositor
         using (var canvas = new SKCanvas(converted))
         {
             canvas.Clear(SKColors.Black);
-            canvas.DrawBitmap(bitmap, 0, 0);
+            // 1:1 copy at the origin: nearest sampling is pixel-identical to the former DrawBitmap(bitmap, 0, 0)
+            using var image = SKImage.FromBitmap(bitmap);
+            canvas.DrawImage(image, 0, 0, new SKSamplingOptions(SKFilterMode.Nearest));
         }
         return converted.Bytes;
     }

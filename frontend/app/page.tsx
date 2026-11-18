@@ -1,6 +1,6 @@
 // app/page.tsx — landing page (Bordeaux + Warm Alabaster & Champagne).
 // Ordinea secțiunilor: hero → intro (telemetrie + slider) → §01 proces → §02 studii de caz → §03 formule →
-// §04 furnizori → §05 stiluri → §06 planuri → footer. Secțiunile §04–§06 au stare/logică proprie și trăiesc
+// §04 furnizori → §05 stiluri → §06 planuri → §07 întrebări frecvente → footer. Secțiunile §04–§07 au stare/logică proprie și trăiesc
 // în `components/home/*`; aici rămân secțiunile pur prezentaționale.
 // SSR: nicio citire Date / Math.random / window în timpul randării; accesul la storage se face doar în efecte.
 "use client";
@@ -10,6 +10,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowRight, ArrowUpRight } from 'lucide-react';
 import CaseCard from '@/app/components/home/CaseCard';
+import FaqSection from '@/app/components/home/FaqSection';
 import { ANCHOR_OFFSET, sectionSpacing } from '@/app/components/home/sectionStyles';
 import PricingSection from '@/app/components/home/PricingSection';
 import StyleGallerySection from '@/app/components/home/StyleGallerySection';
@@ -308,6 +309,9 @@ export default function HomePage() {
 
         {/* §06 */}
         <PricingSection lang={lang} isDark={isDark} />
+
+        {/* §07 */}
+        <FaqSection lang={lang} isDark={isDark} />
       </main>
 
       <Footer lang={lang} isDark={isDark} />

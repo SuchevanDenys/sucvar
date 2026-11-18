@@ -161,17 +161,26 @@ public sealed partial class ReplicateImageProvider(IHttpClientFactory http, IOpt
         using var response = await client.SendAsync(create, ct);
         var prediction = await ReadPrediction(response, ct);
 
-        while (prediction["status"]?.GetValue<string>() is "starting" or "processing")
+        try
         {
-            if (DateTimeOffset.UtcNow >= deadline)
+            while (prediction["status"]?.GetValue<string>() is "starting" or "processing")
             {
-                await CancelAsync(client, prediction);
-                throw new TimeoutException($"Replicate nu a terminat în {budget}s.");
+                if (DateTimeOffset.UtcNow >= deadline)
+                {
+                    await CancelAsync(client, prediction);
+                    throw new TimeoutException($"Replicate nu a terminat în {budget}s.");
+                }
+                await Task.Delay(1000, ct);
+                var getUrl = prediction["urls"]?["get"]?.GetValue<string>() ?? $"v1/predictions/{prediction["id"]?.GetValue<string>()}";
+                using var poll = await client.GetAsync(getUrl, ct);
+                prediction = await ReadPrediction(poll, ct);
             }
-            await Task.Delay(1000, ct);
-            var getUrl = prediction["urls"]?["get"]?.GetValue<string>() ?? $"v1/predictions/{prediction["id"]?.GetValue<string>()}";
-            using var poll = await client.GetAsync(getUrl, ct);
-            prediction = await ReadPrediction(poll, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // The browser went away: stop the still-running prediction instead of letting it run (and bill) unseen.
+            await CancelAsync(client, prediction);
+            throw;
         }
 
         var status = prediction["status"]?.GetValue<string>();
@@ -419,8 +428,9 @@ public sealed class SkiaImageProcessor(IHttpClientFactory http) : IImageProcesso
             throw new MaskRejectedException("MASK_EMPTY", "Selecția este goală — pictează peste zona pe care vrei să o modifici.");
 
         using var clean = MaskCompositor.ToBitmap(binary, sourceW, sourceH);
-        using var png = SKImage.FromBitmap(clean).Encode(SKEncodedImageFormat.Png, 100);
-        return new PreparedMask($"data:image/png;base64,{Convert.ToBase64String(png.ToArray())}", sourceW, sourceH, region);
+        using var cleanImage = SKImage.FromBitmap(clean);
+        using var png = cleanImage.Encode(SKEncodedImageFormat.Png, 100);
+        return new PreparedMask($"data:image/png;base64,{Convert.ToBase64String(png.AsSpan())}", sourceW, sourceH, region);
     }
 
     public async Task<string> CompositeRegionAsync(string sourceDataUrl, string generatedSource, string maskDataUrl, CancellationToken ct = default)
@@ -450,8 +460,9 @@ public sealed class SkiaImageProcessor(IHttpClientFactory http) : IImageProcesso
         var binary = MaskCompositor.Binarize(maskBitmap);
         var alpha = MaskCompositor.FeatherAlpha(binary, outW, outH, MaskCompositor.FeatherRadius(outW, outH));
         using var composite = MaskCompositor.Composite(original, result, alpha);
-        using var jpeg = SKImage.FromBitmap(composite).Encode(SKEncodedImageFormat.Jpeg, ResultJpegQuality);
-        return $"data:image/jpeg;base64,{Convert.ToBase64String(jpeg.ToArray())}";
+        using var compositeImage = SKImage.FromBitmap(composite);
+        using var jpeg = compositeImage.Encode(SKEncodedImageFormat.Jpeg, ResultJpegQuality);
+        return $"data:image/jpeg;base64,{Convert.ToBase64String(jpeg.AsSpan())}";
     }
 
     private static byte[] DecodeDataUrl(string dataUrl) =>
@@ -514,7 +525,7 @@ public sealed class SkiaImageProcessor(IHttpClientFactory http) : IImageProcesso
 
         using var snapshot = surface.Snapshot();
         using var jpeg = snapshot.Encode(SKEncodedImageFormat.Jpeg, ResultJpegQuality);
-        return $"data:image/jpeg;base64,{Convert.ToBase64String(jpeg.ToArray())}";
+        return $"data:image/jpeg;base64,{Convert.ToBase64String(jpeg.AsSpan())}";
     }
 
     internal static void ApplyOrigin(SKCanvas c, SKEncodedOrigin origin, int w, int h)

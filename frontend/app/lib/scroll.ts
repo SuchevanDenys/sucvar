@@ -11,6 +11,10 @@
 export const PRICING_ANCHOR = 'planuri';
 export const PRICING_HREF = `/#${PRICING_ANCHOR}`;
 
+/** Ancre de la section FAQ (§07) ; utilisée par le lien « Întrebări frecvente » du Footer. */
+export const FAQ_ANCHOR = 'faq';
+export const FAQ_HREF = `/#${FAQ_ANCHOR}`;
+
 /** Espace entre le bas de la barre collante et le haut du contenu ciblé. */
 export const ANCHOR_GAP_PX = 32;
 

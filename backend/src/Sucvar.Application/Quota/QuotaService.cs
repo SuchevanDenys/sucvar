@@ -17,7 +17,10 @@ public sealed record QuotaResult(
     string? Error = null,
     string? Code = null,
     int? Used = null,
-    int? Limit = null)
+    int? Limit = null,
+    // True when the caller's plan has a monthly limit: concurrent generations of that user must be serialised and the
+    // usage re-counted, otherwise parallel requests (double-click, two tabs) could all pass the same check.
+    bool Metered = false)
 {
     public static QuotaResult Fail(int status, string code, string error, int? used = null, int? limit = null) =>
         new(false, Status: status, Code: code, Error: error, Used: used, Limit: limit);
@@ -105,7 +108,7 @@ public sealed class QuotaService(
                 ? $"Ai atins limita de {limit} generări din această lună a planului tău."
                 : $"Ai folosit cele {limit} generări gratuite din această lună. Treci la planul Professional.", used, limit);
         }
-        return unlimited;
+        return unlimited with { Metered = true };
     }
 
     /// <summary>Called AFTER a successful generation. Never throws.</summary>

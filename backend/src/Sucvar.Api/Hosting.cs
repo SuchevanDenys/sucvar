@@ -109,6 +109,9 @@ public static class HealthResponse
 {
     public static Task WriteAsync(HttpContext ctx, HealthReport report)
     {
+        // A failing check's description is usually the exception message (e.g. Npgsql: host/port of the database):
+        // useful on a developer machine, but not something an anonymous endpoint should reveal in Production.
+        var hideErrors = ctx.RequestServices.GetService<IHostEnvironment>()?.IsProduction() ?? true;
         ctx.Response.ContentType = "application/json";
         ctx.Response.Headers.CacheControl = "no-store";
         return ctx.Response.WriteAsync(JsonSerializer.Serialize(new
@@ -118,7 +121,7 @@ public static class HealthResponse
             checks = report.Entries.ToDictionary(e => e.Key, e => new
             {
                 status = e.Value.Status.ToString(),
-                description = e.Value.Description,
+                description = hideErrors && e.Value.Exception is not null ? "Unavailable." : e.Value.Description,
                 data = e.Value.Data,
             }),
         }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));

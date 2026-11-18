@@ -198,12 +198,10 @@ public sealed record ImageGenerationRequest(
     double PromptStrength,
     double TransformationStrength,
     string Mode,
-    /// <summary>Structure lock: drives ControlNet weight on providers that expose it (SD); Replicate's model is always conditioned.</summary>
+    // Structure lock: drives ControlNet weight on providers that expose it (SD); Replicate's model is always conditioned.
     bool PreserveStructure = true,
-    /// <summary>
-    /// "Edit selected area": binary PNG data URL aligned to the source pixels (white = edit, black = keep). Null = full
-    /// redesign. Providers that can inpaint use it natively; the API composites the result through it either way.
-    /// </summary>
+    // "Edit selected area": binary PNG data URL aligned to the source pixels (white = edit, black = keep). Null = full
+    // redesign. Providers that can inpaint use it natively; the API composites the result through it either way.
     string? MaskDataUrl = null);
 
 /// <summary>Inputs for the optional LLM "Prompt Architect" (all already validated by the Domain).</summary>

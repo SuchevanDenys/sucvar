@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using Sucvar.Api.Auth;
@@ -80,9 +79,7 @@ public static class BillingEndpoints
                 return JsonError(400, "TERMS_REQUIRED", "Bifează acceptarea Termenilor și a începerii imediate a serviciului. / Please accept the Terms.");
 
             // 3–4. Double-billing guard + Stripe Checkout session
-            var siteUrl = (config.SiteUrl is { Length: > 0 } s ? s
-                : ctx.Request.Headers.Origin.ToString() is { Length: > 0 } origin ? origin
-                : $"{ctx.Request.Scheme}://{ctx.Request.Host}").TrimEnd('/');
+            var siteUrl = RedirectBase(ctx, config);
             var (conflict, url) = await checkout.CreateAsync(user, plan!, interval, siteUrl, key => configuration[key], ctx.RequestAborted,
                 DateTimeOffset.UtcNow);
             if (conflict is not null)
@@ -165,9 +162,7 @@ public static class BillingEndpoints
             if (string.IsNullOrEmpty(sub.StripeCustomerId))
                 return JsonError(404, "NO_CUSTOMER", "Nu există încă un abonament plătit pentru acest cont.");
 
-            var siteUrl = (config.SiteUrl is { Length: > 0 } s ? s
-                : ctx.Request.Headers.Origin.ToString() is { Length: > 0 } origin ? origin
-                : $"{ctx.Request.Scheme}://{ctx.Request.Host}").TrimEnd('/');
+            var siteUrl = RedirectBase(ctx, config);
             var url = await stripe.CreatePortalSessionAsync(sub.StripeCustomerId, $"{siteUrl}/account", ctx.RequestAborted);
             return Results.Json(new { url });
         }
@@ -201,14 +196,10 @@ public static class BillingEndpoints
         var signature = ctx.Request.Headers["Stripe-Signature"].ToString();
         if (signature.Length == 0) return Results.Json(new { error = "Lipsește semnătura Stripe." }, statusCode: 400);
 
-        ctx.Request.EnableBuffering();
-        string rawBody;
-        using (var reader = new StreamReader(ctx.Request.Body, Encoding.UTF8, detectEncodingFromByteOrderMarks: false, leaveOpen: true))
-        {
-            rawBody = await reader.ReadToEndAsync(ctx.RequestAborted);
-        }
-        ctx.Request.Body.Position = 0;
-        if (rawBody.Length > WebhookMaxBodyBytes) return PayloadTooLarge();
+        // Bounded read (anonymous endpoint): stops at the cap instead of buffering whatever the caller sends.
+        var (rawText, tooLarge) = await ReadBodyTextAsync(ctx, WebhookMaxBodyBytes);
+        if (tooLarge is not null) return tooLarge;
+        var rawBody = rawText!;
 
         WebhookEvent evt;
         try
@@ -232,4 +223,23 @@ public static class BillingEndpoints
         }
         return Results.Json(new { received = true });
     }
+
+    /// <summary>
+    /// Base URL for Stripe's success / cancel / return redirects: <c>App:SiteUrl</c>, else the request's Origin, else this
+    /// host. The Origin header is trusted only when it is a configured CORS origin, so a scripted caller cannot point
+    /// the redirects of a checkout or portal session at an arbitrary site.
+    /// </summary>
+    private static string RedirectBase(HttpContext ctx, ServerConfig config)
+    {
+        if (config.SiteUrl is { Length: > 0 } site) return site.TrimEnd('/');
+        var origin = ctx.Request.Headers.Origin.ToString();
+        var configuration = ctx.RequestServices.GetRequiredService<IConfiguration>();
+        return (origin.Length > 0 && IsAllowedOrigin(origin, configuration) ? origin : $"{ctx.Request.Scheme}://{ctx.Request.Host}").TrimEnd('/');
+    }
+
+    /// <summary>True when <paramref name="origin"/> is listed in <c>Cors:AllowedOrigins</c> (same default as Program.cs).</summary>
+    private static bool IsAllowedOrigin(string origin, IConfiguration configuration) =>
+        (configuration["Cors:AllowedOrigins"] ?? "http://localhost:3000")
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Any(allowed => string.Equals(allowed.TrimEnd('/'), origin.TrimEnd('/'), StringComparison.OrdinalIgnoreCase));
 }

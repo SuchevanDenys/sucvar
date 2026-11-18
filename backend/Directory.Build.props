@@ -20,4 +20,16 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
+
+  <!--
+    Disk footprint: SkiaSharp's NuGet package ships native *debug symbols* (runtimes/win-*/native/libSkiaSharp.pdb,
+    ~95 MB each) that were copied into every bin/ folder (~300 MB per project per configuration). They are only used
+    to debug Skia's C++ code on Windows and play no part at runtime; the native libraries themselves are still copied.
+  -->
+  <Target Name="SucvarDropNativeSymbols" AfterTargets="ResolvePackageAssets">
+    <ItemGroup>
+      <RuntimeTargetsCopyLocalItems Remove="@(RuntimeTargetsCopyLocalItems)" Condition="'%(Extension)' == '.pdb'" />
+      <NativeCopyLocalItems Remove="@(NativeCopyLocalItems)" Condition="'%(Extension)' == '.pdb'" />
+    </ItemGroup>
+  </Target>
 </Project>

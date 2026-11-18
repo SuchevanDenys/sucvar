@@ -22,3 +22,10 @@ obj/
 # IDE
 .idea/
 .vs/
+
+# Test / tooling output
+TestResults/
+coverage/
+*.tsbuildinfo
+*.log
+Thumbs.db

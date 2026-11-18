@@ -30,6 +30,8 @@ public static class StudioEndpoints
     private const int MinImageSide = 64, MaxImageSide = 8192;
     private const long MaxImagePixels = 40_000_000;
     private static readonly string[] ImagePrefixes = ["data:image/jpeg;base64,", "data:image/png;base64,", "data:image/webp;base64,"];
+    /// <summary>Stand-in for a non-object body (cloned once, so no pooled JsonDocument is left undisposed per request).</summary>
+    private static readonly JsonElement EmptyObject = JsonDocument.Parse("{}").RootElement.Clone();
 
     public static IEndpointRouteBuilder MapStudioEndpoints(this IEndpointRouteBuilder app)
     {
@@ -77,8 +79,10 @@ public static class StudioEndpoints
         IImageProviderSelector providers,
         IImageProcessor images,
         IPromptEnhancer enhancer,
+        GenerationGate gate,
         ILogger<QuotaService> logger)
     {
+        IDisposable? lease = null;
         try
         {
             // 0a. IP limit before any database work
@@ -88,23 +92,25 @@ public static class StudioEndpoints
             // 0b. Session + plan + monthly limit BEFORE reading a multi-MB body
             var (state, user) = RequestAuth.Resolve(ctx);
             var configured = config.DatabaseConfigured && config.JwtConfigured;
-            var q = await quota.CheckAsync(state, user, config.AllowAnonGeneration, configured,
-                string.Join(", ", config.MissingSupabase()), config.IsProduction, ctx.RequestAborted);
-            if (!q.Ok)
-            {
-                var body = new Dictionary<string, object?> { ["error"] = q.Error, ["code"] = q.Code };
-                if (q.Used is not null) body["used"] = q.Used;
-                if (q.Limit is not null) body["limit"] = q.Limit;
-                return Results.Json(body, statusCode: q.Status);
-            }
+            var missing = string.Join(", ", config.MissingSupabase());
+            var q = await quota.CheckAsync(state, user, config.AllowAnonGeneration, configured, missing, config.IsProduction, ctx.RequestAborted);
+            if (!q.Ok) return QuotaError(q);
 
             // 0c. Per-user limit (anonymous dev callers stay on IP)
             if (limiter.Check(Rules.GenerateUser, q.UserId ?? ip) is { } userWait) return TooManyRequests(ctx, userWait);
 
+            // 0d. Metered plan: one generation at a time per user, and usage re-counted once earlier ones are journaled
+            if (q.Metered && q.UserId is { } meteredUser)
+            {
+                lease = await gate.EnterAsync(meteredUser, ctx.RequestAborted);
+                q = await quota.CheckAsync(state, user, config.AllowAnonGeneration, configured, missing, config.IsProduction, ctx.RequestAborted);
+                if (!q.Ok) return QuotaError(q);
+            }
+
             var (text, tooLarge) = await ReadBodyTextAsync(ctx, GenerateMaxBodyBytes);
             if (tooLarge is not null) return tooLarge;
             if (!TryParseJson(text!, out var parsed)) return InvalidJson();
-            var payload = parsed.ValueKind == JsonValueKind.Object ? parsed : JsonDocument.Parse("{}").RootElement;
+            var payload = parsed.ValueKind == JsonValueKind.Object ? parsed : EmptyObject;
 
             // 1. Photo
             var image = Js.AsString(Js.Prop(payload, "image"));
@@ -234,6 +240,19 @@ public static class StudioEndpoints
             logger.LogError(ex, "[SUCVAR] Eroare /api/generate");
             return JsonError(500, "GENERATION_FAILED", "Generarea a eșuat. Încearcă din nou în câteva momente.");
         }
+        finally
+        {
+            lease?.Dispose();
+        }
+    }
+
+    /// <summary>The quota refusal in its original shape: <c>{ error, code, used?, limit? }</c>.</summary>
+    private static IResult QuotaError(QuotaResult q)
+    {
+        var body = new Dictionary<string, object?> { ["error"] = q.Error, ["code"] = q.Code };
+        if (q.Used is not null) body["used"] = q.Used;
+        if (q.Limit is not null) body["limit"] = q.Limit;
+        return Results.Json(body, statusCode: q.Status);
     }
 
     private static Dictionary<string, object?> Response(string result, bool isDemo, GenerationPlan plan, string? warning)

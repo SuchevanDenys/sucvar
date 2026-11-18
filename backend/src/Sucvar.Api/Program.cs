@@ -32,6 +32,7 @@ builder.Services.AddAdminAuthorization();
 builder.Services.AddSingleton<ServerConfig>();
 builder.Services.Configure<ProxyOptions>(builder.Configuration.GetSection("Proxy"));
 builder.Services.AddSingleton<FixedWindowRateLimitStore>();
+builder.Services.AddSingleton<GenerationGate>();
 builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
 
