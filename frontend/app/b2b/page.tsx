@@ -14,6 +14,7 @@
 
 import { fetchProfile } from '@/app/lib/profile/client';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import {
   FileCode,
   FileSpreadsheet,
@@ -21,6 +22,7 @@ import {
   Plus,
   Printer,
   RotateCcw,
+  ScanLine,
   Trash2,
   X,
 } from 'lucide-react';
@@ -79,6 +81,11 @@ import { fetchSharing } from '@/app/lib/portal/client';
 import type { ProjectSharing } from '@/app/lib/database.types';
 import { tr } from '@/app/lib/i18n';
 import { formatLei } from '@/app/lib/format';
+import { sanitizeDimensions } from '@/app/lib/studio/validation';
+import type { RoomMeasurement } from '@/app/lib/studio/lidarParser';
+
+// „Scanare LiDAR & Măsurare Cameră” (aceeași fereastră ca în Studio), încărcată la prima deschidere
+const LidarScanModal = dynamic(() => import('@/app/components/studio/LidarScanModal'), { ssr: false });
 
 // Șablonul de coloane al articolelor de deviz — comun antetului și rândurilor, ca titlurile să stea aliniate.
 // Mobil (< sm): descrierea pe un rând, apoi U.M. · cantitate · preț · ștergere, apoi totalul.
@@ -127,6 +134,8 @@ export default function B2BPage() {
   const [sections, setSections] = useState<EstimateSection[]>(defaultSections);
   const [laborOff, setLaborOff] = useState(false); // secțiunea „Manoperă" eliminată din deviz
   const [newSectionOpen, setNewSectionOpen] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
+  const [scanNote, setScanNote] = useState<string | null>(null);
   const [newSectionDraft, setNewSectionDraft] = useState('');
   // Liniile unei secțiuni implicite eliminate în sesiunea curentă: restaurarea le readuce (altfel: liniile implicite)
   const removedStash = useRef<Record<string, LineItem[]>>({});
@@ -384,6 +393,44 @@ export default function B2BPage() {
     setSavedIds((prev) => new Set(prev).add(p.id));
   };
 
+  // „Scanare LiDAR & Măsurare Cameră”: cu un proiect selectat, cotele lui se actualizează (și se salvează), iar
+  // suprafața, ariile pe meserie și materialele se recalculează exact ca la „Recalculează materialele din proiect”.
+  // Fără proiect: doar suprafața devizului = suprafața utilă măsurată.
+  const applyMeasurement = (m: RoomMeasurement) => {
+    const dims = `${m.lengthM.toFixed(2)} × ${m.widthM.toFixed(2)} × ${m.heightM.toFixed(2)} m`;
+    if (!selectedProject) {
+      setArea(+m.areaSqm.toFixed(1) || 1);
+      setScanNote(t(`Suprafață din măsurare: ${m.areaSqm.toFixed(2)} m² (${dims}).`, `Area from measurement: ${m.areaSqm.toFixed(2)} m² (${dims}).`, `Surface mesurée : ${m.areaSqm.toFixed(2)} m² (${dims}).`));
+      return;
+    }
+    const p = selectedProject;
+    const updated: SavedProject = {
+      ...p,
+      dimensions: sanitizeDimensions(
+        {
+          ...p.dimensions,
+          length: m.lengthM,
+          width: m.widthM,
+          height: m.heightM,
+          doorsCount: m.doors ?? p.dimensions.doorsCount,
+          windowsCount: m.windows ?? p.dimensions.windowsCount,
+        },
+        p.mode,
+        p.spaceType,
+      ),
+    };
+    setProjects((prev) => prev.map((x) => (x.id === updated.id ? updated : x)));
+    setArea(+projectArea(updated).toFixed(1) || 1);
+    setScope(seedScope(updated));
+    const seed = seedMaterials(updated);
+    removedStash.current = {};
+    setItems(seed);
+    setSections((prev) => withSectionsFor(prev, seed));
+    setScanNote(t(`Cote aplicate: ${dims} · materialele și manopera au fost recalculate.`, `Dimensions applied: ${dims} · materials and labour recalculated.`, `Cotes appliquées : ${dims} · matériaux et main-d’œuvre recalculés.`));
+    // Cotele noi ajung și în proiect (Arhivă / Studio); eșecul cloud lasă copia locală
+    void saveProjectToDb(updated);
+  };
+
   // Recalculează materialele din cotele proiectului (suprascrie liniile curente).
   const reseedFromProject = () => {
     if (!selectedProject) return;
@@ -557,7 +604,18 @@ export default function B2BPage() {
 
             {/* Project parameters */}
             <section className={panel}>
-              <div className={panelHead}><span>{t('Parametrii proiectului', 'Project parameters')}</span></div>
+              <div className={panelHead}>
+                <span>{t('Parametrii proiectului', 'Project parameters')}</span>
+                <button
+                  type="button"
+                  onClick={() => setScanOpen(true)}
+                  className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full normal-case tracking-normal text-[12px] font-medium cursor-pointer touch-manipulation ${isDark ? 'bg-[#C94A6A] text-white hover:bg-[#D65D7B]' : 'bg-[#5C1628] text-white hover:bg-[#450E1D]'}`}
+                >
+                  <ScanLine className="w-3.5 h-3.5" aria-hidden />
+                  {t('Scanează cu LiDAR / Măsoară', 'Scan with LiDAR / Measure', 'Scanner en LiDAR / Mesurer')}
+                </button>
+              </div>
+              {scanNote && <p role="status" className={`px-5 pt-3 text-[12px] ${sk.muted}`}>{scanNote}</p>}
               <div className="p-5 grid grid-cols-2 md:grid-cols-4 gap-4">
                 <label className="col-span-2">
                   {lbl(t('Proiect', 'Project'))}
@@ -828,6 +886,32 @@ export default function B2BPage() {
               </div>
             </section>
           </div>
+
+          {scanOpen && (
+            <LidarScanModal
+              open
+              onClose={() => setScanOpen(false)}
+              lang={lang}
+              isDark={isDark}
+              current={selectedProject?.dimensions ?? {
+                // Fără proiect: o cameră pătrată echivalentă suprafeței devizului (doar pentru comparație)
+                length: +Math.sqrt(Math.max(area, 1)).toFixed(2),
+                width: +Math.sqrt(Math.max(area, 1)).toFixed(2),
+                height: 2.65,
+                doorsCount: 1,
+                windowsCount: 2,
+              }}
+              studioPhoto={selectedProject?.originalImage ?? null}
+              onApply={applyMeasurement}
+              applyNote={selectedProject
+                ? t(
+                    `Actualizează cotele proiectului „${selectedProject.title || '—'}”, suprafața devizului, ariile pe meserie și recalculează materialele (ca „Recalculează materialele din proiect”).`,
+                    `Updates the dimensions of “${selectedProject.title || '—'}”, the quote area and trade scopes, and recalculates materials (like “Recompute materials from project”).`,
+                    `Met à jour les cotes de « ${selectedProject.title || '—'} », la surface, les métrés et recalcule les matériaux.`,
+                  )
+                : t('Fără proiect selectat: actualizează doar suprafața devizului (m²).', 'No project selected: only the quote area (m²) is updated.', 'Aucun projet : seule la surface du devis est mise à jour.')}
+            />
+          )}
 
           {/* ── RIGHT: sticky pricing console ───────────────────────────── */}
           <PricingConsole

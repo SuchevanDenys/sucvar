@@ -5,7 +5,7 @@
 "use client";
 
 import React from 'react';
-import { Ruler } from 'lucide-react';
+import { Ruler, ScanLine } from 'lucide-react';
 import { tr } from '@/app/lib/i18n';
 import { getSkin } from '@/app/lib/theme/skin';
 import type { NumberField } from '@/app/lib/studio/constants';
@@ -53,10 +53,12 @@ interface RoomSizeCardProps {
   onToggle?: () => void;
   /** Conținut suplimentar sub cote (ex. „Analiză ergonomică”). */
   children?: React.ReactNode;
+  /** Deschide „Scanare LiDAR & Măsurare Cameră” (butonul apare doar când e furnizat). */
+  onScan?: () => void;
 }
 
 export default function RoomSizeCard({
-  lang, isDark, roomDimensions, presets, onPresetSelect, onNumberChange, issues, disabled, step, open, onToggle, children,
+  lang, isDark, roomDimensions, presets, onPresetSelect, onNumberChange, issues, disabled, step, open, onToggle, children, onScan,
 }: RoomSizeCardProps) {
   const sk = getSkin(isDark);
   const t = (ro: string, en: string, fr?: string) => tr(lang, ro, en, fr);
@@ -116,6 +118,31 @@ export default function RoomSizeCard({
           </button>
         ))}
       </div>
+
+      {/* Scanare LiDAR / calibrare foto → aceleași cote (o singură sursă) */}
+      {onScan && (
+        <button
+          type="button"
+          onClick={onScan}
+          disabled={disabled}
+          className={`group w-full flex items-center gap-3 rounded-lg border px-3 py-2.5 text-left cursor-pointer touch-manipulation transition-[background-color,border-color] disabled:opacity-40 disabled:cursor-not-allowed ${
+            isDark ? 'border-[#C94A6A]/35 hover:bg-[#C94A6A]/10 hover:border-[#C94A6A]/60' : 'border-[#5C1628]/25 hover:bg-[#5C1628]/[0.04] hover:border-[#5C1628]/50'
+          }`}
+        >
+          <span className={`shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-full ${isDark ? 'bg-[#C94A6A] text-white' : 'bg-[#5C1628] text-white'}`}>
+            <ScanLine className="w-4 h-4" aria-hidden />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className={`block text-[13px] font-medium ${isDark ? 'text-[#F2D7DE]' : 'text-[#5C1628]'}`}>
+              {t('Scanează cu LiDAR / Măsoară', 'Scan with LiDAR / Measure', 'Scanner en LiDAR / Mesurer')}
+            </span>
+            <span className={`block text-[11px] truncate ${sk.muted}`}>
+              {t('iPhone LiDAR · RoomPlan (.obj / .usdz / .json) · calibrare din fotografie', 'iPhone LiDAR · RoomPlan (.obj / .usdz / .json) · photo calibration', 'iPhone LiDAR · RoomPlan (.obj / .usdz / .json) · calibrage photo')}
+            </span>
+          </span>
+          <span className={`shrink-0 h-5 px-1.5 rounded-full border text-[10px] font-mono inline-flex items-center ${sk.brassBadge}`}>3D</span>
+        </button>
+      )}
 
       {/* Cote exacte: lungime × lățime × înălțime */}
       <div className="grid grid-cols-3 gap-2">

@@ -24,6 +24,7 @@
 import { formatLei } from '@/app/lib/format';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { ChevronDown, LayoutGrid, SlidersHorizontal, Sparkles } from 'lucide-react';
 import Navbar from '@/app/components/layout/Navbar';
 import {
@@ -74,6 +75,8 @@ import StudioHeaderBar from '@/app/components/studio/StudioHeaderBar';
 import StrengthSlider from '@/app/components/studio/StrengthSlider';
 import { analyzeErgonomics, type OptimizationGoalId } from '@/app/lib/studio/ergonomics';
 import { sendBomToB2b } from '@/app/lib/b2b/procurementSync';
+import { syncWorkspaceDimensions } from '@/app/lib/b2b/portfolio';
+import type { RoomMeasurement } from '@/app/lib/studio/lidarParser';
 import PlanLimitNotice from '@/app/components/studio/PlanLimitNotice';
 import ProjectNameField, { type RenameStatus } from '@/app/components/studio/ProjectNameField';
 import SpaceScenarioPanel from '@/app/components/studio/SpaceScenarioPanel';
@@ -104,6 +107,9 @@ import { fetchActiveModel, isPromptFormat, modelLabel, type ActiveAiModel, type 
 import { LOCALES, tr, trList } from '@/app/lib/i18n';
 import { describeSelection, exportMask, hasSelection, loadImageSize, positionLabel, strokeBounds, type MaskStroke } from '@/app/lib/studio/mask';
 import { mergeRegionalItems, parseDetectedItems, type DetectedItem } from '@/app/lib/studio/detectedItems';
+
+// „Scanare LiDAR & Măsurare Cameră”: încărcată doar la prima deschidere (parser + canvas 3D în afara bundle-ului principal)
+const LidarScanModal = dynamic(() => import('@/app/components/studio/LidarScanModal'), { ssr: false });
 
 /** Un pas din istoricul editării în lanț (imaginea de lucru promovată + obiectele ei). */
 interface StudioStep {
@@ -152,6 +158,7 @@ export default function StudioPage() {
   const [optimizationGoal, setOptimizationGoal] = useState<OptimizationGoalId | null>(null);
   const [applyErgonomics, setApplyErgonomics] = useState(false);
   const [dimensionsOpen, setDimensionsOpen] = useState(true);
+  const [scanOpen, setScanOpen] = useState(false);
   const [isSendingB2b, setIsSendingB2b] = useState(false);
   // „Editează o zonă”: traseele măștii (coordonate de imagine) și mărimea fotografiei
   const [maskStrokes, setMaskStrokes] = useState<MaskStroke[]>([]);
@@ -574,6 +581,30 @@ export default function StudioPage() {
   // Presetare de mărime: lungime × lățime × înălțime dintr-un click (cererea AI și costul se actualizează imediat)
   const handleSizePreset = (preset: RoomSizePreset) =>
     setRoomDimensions((prev) => ({ ...prev, length: preset.length, width: preset.width, height: preset.height }));
+
+  // „Scanare LiDAR & Măsurare Cameră” → cotele Studio (aceeași sursă pentru prompt, ergonomie, cost, BOM și devizul B2B).
+  // Valorile sunt limitate la aceleași praguri ca la introducerea manuală; numărul de uși / ferestre vine doar din RoomPlan.
+  const handleApplyScan = (m: RoomMeasurement) => {
+    const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
+    const heightLimits = getHeightLimits(mode);
+    const next: RoomDimensions = {
+      ...roomDimensions,
+      length: clamp(m.lengthM, DIMENSION_LIMITS.length.min, DIMENSION_LIMITS.length.max),
+      width: clamp(m.widthM, DIMENSION_LIMITS.width.min, DIMENSION_LIMITS.width.max),
+      height: clamp(m.heightM, heightLimits.min, heightLimits.max),
+      doorsCount: m.doors !== undefined ? clamp(Math.round(m.doors), DIMENSION_LIMITS.doorsCount.min, DIMENSION_LIMITS.doorsCount.max) : roomDimensions.doorsCount,
+      windowsCount: m.windows !== undefined ? clamp(Math.round(m.windows), DIMENSION_LIMITS.windowsCount.min, DIMENSION_LIMITS.windowsCount.max) : roomDimensions.windowsCount,
+    };
+    setRoomDimensions(next);
+    setDimensionsOpen(true);
+    // Devizul B2B deja deschis pentru acest proiect primește suprafața nouă (liniile lui rămân)
+    const projectId = loadedProjectIdRef.current;
+    const synced = projectId ? syncWorkspaceDimensions(projectId, { mode, spaceType: selectedSpace, dimensions: next }) : false;
+    const dims = `${next.length.toFixed(2)} × ${next.width.toFixed(2)} × ${next.height.toFixed(2)} m`;
+    setSaveMessage(synced
+      ? t(`Cote aplicate din măsurare: ${dims} · devizul B2B al proiectului a fost actualizat.`, `Measured dimensions applied: ${dims} · the project’s B2B quote was updated.`, `Cotes mesurées appliquées : ${dims} · devis B2B mis à jour.`)
+      : t(`Cote aplicate din măsurare: ${dims}. „Trimite în Deviz B2B” folosește noile cantități.`, `Measured dimensions applied: ${dims}. “Send to B2B quote” uses the new quantities.`, `Cotes mesurées appliquées : ${dims}. « Envoyer au devis B2B » utilise les nouvelles quantités.`));
+  };
 
   // Scenariile (chips) se bifează / debifează; maximum MAX_FOCUS_CHIPS simultan
   const handleToggleFocus = (id: string) =>
@@ -1212,6 +1243,7 @@ export default function StudioPage() {
                 onNumberChange={handleNumberChange}
                 issues={dimensionIssues}
                 disabled={isLoading}
+                onScan={() => setScanOpen(true)}
               >
                 {ergonomicReport && !editArea && (
                   <ErgonomicsPanel
@@ -1225,6 +1257,17 @@ export default function StudioPage() {
                   />
                 )}
               </RoomSizeCard>
+              {scanOpen && (
+                <LidarScanModal
+                  open
+                  onClose={() => setScanOpen(false)}
+                  lang={lang}
+                  isDark={isDark}
+                  current={roomDimensions}
+                  studioPhoto={originalImage}
+                  onApply={handleApplyScan}
+                />
+              )}
 
               {/* 04 · Descriere & Generare: un singur buton principal, bordo */}
               <VisionPanel

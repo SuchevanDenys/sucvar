@@ -102,6 +102,23 @@ export function projectArea(p: SavedProject): number {
   return p.mode === 'exteriors' ? eng.netWallArea : eng.floorArea;
 }
 
+/**
+ * Cote noi pentru un deviz EXISTENT (ex. „Scanare LiDAR & Măsurare Cameră” aplicată în Studio): actualizează
+ * suprafața și ariile pe meserie; liniile de deviz introduse de antreprenor rămân neatinse.
+ * Întoarce false dacă proiectul nu are încă deviz (/b2b îl va porni oricum din cotele proiectului).
+ */
+export function syncWorkspaceDimensions(projectId: string, p: Pick<SavedProject, 'mode' | 'spaceType' | 'dimensions'>): boolean {
+  const ws = loadWorkspace(projectId);
+  if (!ws) return false;
+  const stub = p as SavedProject;
+  return saveWorkspace(projectId, {
+    ...ws,
+    area: +projectArea(stub).toFixed(1) || 1,
+    scope: { ...ws.scope, ...seedScope(stub) },
+    updatedAt: new Date().toISOString(),
+  });
+}
+
 /** Aria pe meserie: gips-carton doar la interioare, sanitare doar la bucătărie. */
 export function seedScope(p: SavedProject): Partial<Record<TradeId, number>> {
   const area = projectArea(p);
