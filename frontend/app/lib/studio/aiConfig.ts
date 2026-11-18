@@ -36,9 +36,10 @@ export const DEFAULT_AI_SETTINGS: AiSettings = {
 };
 
 // Intensitatea transformării (img2img prompt_strength × 100). Cu structura păstrată, serverul o limitează la
-// 62–80; zona 68–75 schimbă complet finisajele și mobilierul, dar ține pereții, ferestrele și unghiul camerei.
+// 55–68 (oglindă a ArchitecturalPromptCompiler.PreserveStrength*): peste ~70 modelele redesenează ușile și
+// ferestrele și pun frigidere / dulapuri înalte peste ele. Zona 58–66 schimbă finisajele, dar ține arhitectura.
 export const AI_STRENGTH = {
-  recommended: 72,
-  sweetSpot: { min: 68, max: 75 },
-  preserveRange: { min: 62, max: 80 },
+  recommended: 62,
+  sweetSpot: { min: 58, max: 66 },
+  preserveRange: { min: 55, max: 68 },
 } as const;

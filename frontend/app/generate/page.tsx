@@ -11,12 +11,20 @@
 //   • `loadedProjectIdRef` ≠ null ⇒ salvarea actualizează proiectul deschis din Arhivă (același id);
 //     o randare nouă îl resetează, deci produce un proiect nou.
 //   • Verificarea planului de aici este doar UX; limita reală este impusă de API (403 LIMIT_REACHED).
+//   • Editare în lanț: `steps` = Original → Varianta 1 → Editare 2…; `steps[activeStep].image` === `originalImage`
+//     (imaginea de lucru trimisă la /api/generate). `detectedItems` descrie ultima randare (sau imaginea de lucru).
+//   • Spațiu de lucru în 3 zone: antet compact (nume · istoric · acțiuni de proiect), panou de control în stânga
+//     (01 Mod de lucru · 02 Spațiu & Stil · 03 Dimensiuni & Ergonomie · 04 Descriere & Generare · Setări avansate),
+//     canvas în dreapta (o singură bară flotantă de acțiuni). `workMode` = redesign | optimize | area.
+//   • „Optimizare spațiu”: analiza ergonomică (lib/studio/ergonomics.ts) e calculată local, instant; regulile ei pleacă
+//     la /api/generate ca `optimizationGoal` + `ergonomicConstraints` (sau doar `ergonomicConstraints` după
+//     „Aplică recomandările în randare” în Redesign). Editarea de zonă nu le trimite niciodată.
 "use client";
 
 import { formatLei } from '@/app/lib/format';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ChevronDown, SlidersHorizontal, Sparkles } from 'lucide-react';
+import { ChevronDown, LayoutGrid, SlidersHorizontal, Sparkles } from 'lucide-react';
 import Navbar from '@/app/components/layout/Navbar';
 import {
   DEFAULT_SCOPE,
@@ -37,7 +45,7 @@ import { getProjectById, renameProjectInDb, saveProjectToDb } from '@/app/lib/su
 import { buildBom } from '@/app/lib/procurement';
 import { getMonthlyUsage, recordGeneration, resolvePlan } from '@/app/lib/plan/client';
 import { usePlan } from '@/app/lib/plan/usePlan';
-import { getSkin, EYEBROW } from '@/app/lib/theme/skin';
+import { getSkin } from '@/app/lib/theme/skin';
 import { usePrefs } from '@/app/lib/theme/usePrefs';
 import { STORAGE_KEYS, readStorage, removeStorage, writeStorage } from '@/app/lib/storage';
 import { ACCEPTED_PHOTO_TYPES, LOADING_STEPS_RO, LOADING_STEPS_EN, type NumberField } from '@/app/lib/studio/constants';
@@ -60,8 +68,12 @@ import DimensionsPanel from '@/app/components/studio/DimensionsPanel';
 import ExpertAiSettings from '@/app/components/studio/ExpertAiSettings';
 import RoomStylePicker from '@/app/components/studio/RoomStylePicker';
 import RoomSizeCard, { INTERIOR_SIZE_PRESETS, type RoomSizePreset } from '@/app/components/studio/RoomSizeCard';
-import SourcePhotoCard from '@/app/components/studio/SourcePhotoCard';
-import { StudioCard } from '@/app/components/studio/StudioCard';
+import ModeSelector, { type WorkMode } from '@/app/components/studio/ModeSelector';
+import ErgonomicsPanel from '@/app/components/studio/ErgonomicsPanel';
+import StudioHeaderBar from '@/app/components/studio/StudioHeaderBar';
+import StrengthSlider from '@/app/components/studio/StrengthSlider';
+import { analyzeErgonomics, type OptimizationGoalId } from '@/app/lib/studio/ergonomics';
+import { sendBomToB2b } from '@/app/lib/b2b/procurementSync';
 import PlanLimitNotice from '@/app/components/studio/PlanLimitNotice';
 import ProjectNameField, { type RenameStatus } from '@/app/components/studio/ProjectNameField';
 import SpaceScenarioPanel from '@/app/components/studio/SpaceScenarioPanel';
@@ -91,6 +103,15 @@ import { apiFetch, readJson } from '@/app/lib/api-client';
 import { fetchActiveModel, isPromptFormat, modelLabel, type ActiveAiModel, type PromptFormat } from '@/app/lib/studio/aiModel';
 import { LOCALES, tr, trList } from '@/app/lib/i18n';
 import { describeSelection, exportMask, hasSelection, loadImageSize, positionLabel, strokeBounds, type MaskStroke } from '@/app/lib/studio/mask';
+import { mergeRegionalItems, parseDetectedItems, type DetectedItem } from '@/app/lib/studio/detectedItems';
+
+/** Un pas din istoricul editării în lanț (imaginea de lucru promovată + obiectele ei). */
+interface StudioStep {
+  id: string;
+  kind: 'original' | 'variant' | 'edit';
+  image: string;
+  items?: DetectedItem[];
+}
 
 // ── Pagina principală ────────────────────────────────────────────────────────
 export default function StudioPage() {
@@ -118,16 +139,30 @@ export default function StudioPage() {
   const [roomDimensions, setRoomDimensions] = useState<RoomDimensions>(() =>
     dimensionsForSpace('interiors', SPACE_MODES.interiors.spaces[0].id, {
       budget: 'standard',
-      aiStrength: AI_STRENGTH.recommended, // 72 %: zona optimă cu structura păstrată
+      aiStrength: AI_STRENGTH.recommended, // 62 %: zona optimă cu structura păstrată (uși / ferestre fixe)
       scope: DEFAULT_SCOPE,
     }),
   );
   const [originalImage, setOriginalImage] = useState<string | null>(null);
-  // „Editează o zonă” (inpainting): modul activ, traseele măștii (coordonate de imagine) și mărimea fotografiei
-  const [editArea, setEditArea] = useState(false);
+  // Modul de lucru: „Redesign” (toată camera) · „Optimizare spațiu” (reorganizare ergonomică) · „Editează o zonă” (inpainting)
+  const [workMode, setWorkMode] = useState<WorkMode>('redesign');
+  const editArea = workMode === 'area';
+  const setEditArea = (value: boolean) => setWorkMode(value ? 'area' : 'redesign');
+  // „Optimizare spațiu”: obiectivul ales + „Aplică recomandările în randare” (în Redesign) + cardul de cote deschis
+  const [optimizationGoal, setOptimizationGoal] = useState<OptimizationGoalId | null>(null);
+  const [applyErgonomics, setApplyErgonomics] = useState(false);
+  const [dimensionsOpen, setDimensionsOpen] = useState(true);
+  const [isSendingB2b, setIsSendingB2b] = useState(false);
+  // „Editează o zonă”: traseele măștii (coordonate de imagine) și mărimea fotografiei
   const [maskStrokes, setMaskStrokes] = useState<MaskStroke[]>([]);
   const [photoSize, setPhotoSize] = useState<{ width: number; height: number } | null>(null);
   const [regionalNote, setRegionalNote] = useState<string | null>(null);
+  // „Inspector obiecte” + editarea în lanț („Editează acest rezultat”)
+  const [detectedItems, setDetectedItems] = useState<DetectedItem[] | undefined>(undefined);
+  const [steps, setSteps] = useState<StudioStep[]>([]);
+  const [activeStep, setActiveStep] = useState(0);
+  const [lastResultKind, setLastResultKind] = useState<'variant' | 'edit'>('variant');
+  const [promptFocusSignal, setPromptFocusSignal] = useState(0);
   const [aiSettings, setAiSettings] = useState<AiSettings>(DEFAULT_AI_SETTINGS);
   // „Prompt optimizat AI": ultimul prompt compilat (previzualizare sau randare) + cheia intrării care l-a produs
   const [promptInsight, setPromptInsight] = useState<(PromptInsight & { key: string }) | null>(null);
@@ -224,12 +259,41 @@ export default function StudioPage() {
     setGeneratedImage(restored.generatedImage);
     setMaskStrokes([]);
     setRegionalNote(null);
+    setSteps([]);
+    setActiveStep(0);
+    setDetectedItems(restored.detectedItems);
+    // Proiecte salvate înainte de „Inspector obiecte”: hotspoturile se reconstruiesc din brief (fără imagine, fără cotă)
+    if (restored.generatedImage && !restored.detectedItems?.length) {
+      const runId = runIdRef.current;
+      void synthesizeItems({
+        mode: restoredMode,
+        spaceType: restoredSpace.id,
+        styleId: getStyle(restored.styleId).id,
+        customPrompt: brief?.customPrompt || undefined,
+        palette: brief?.palette ?? undefined,
+        lighting: brief?.lighting ?? undefined,
+        dimensions: restoredDims,
+      }).then((items) => {
+        if (items && runId === runIdRef.current) setDetectedItems(items);
+      });
+    }
     setExcludedItemIds([]);
     setProjectName(restored.title ?? '');
     persistedTitleRef.current = restored.title ?? null;
     setRenameStatus('idle');
     setIssueDate(new Date(restored.createdAt).toLocaleDateString(LOCALES[lang]));
   };
+
+  // Hotspoturile pentru un brief fără randare nouă (proiecte vechi). Orice eșec = fără hotspoturi, fără eroare.
+  async function synthesizeItems(payload: Record<string, unknown>): Promise<DetectedItem[] | undefined> {
+    try {
+      const res = await apiFetch('/api/detected-items', { method: 'POST', token: await getAccessToken(), json: payload });
+      if (!res.ok) return undefined;
+      return parseDetectedItems((await readJson<{ detectedItems?: unknown }>(res)).detectedItems);
+    } catch {
+      return undefined;
+    }
+  }
 
   useEffect(() => {
     const restore = async () => {
@@ -284,8 +348,10 @@ export default function StudioPage() {
   // Stilul efectiv (cost, listă, PDF): cel ales, altfel cel dedus din descriere (aceeași regulă ca API-ul)
   const selectedStyleId = styleChoice !== AUTO ? styleChoice : (inferStyleFromText(customPrompt) ?? VISUAL_STYLES[0].id);
   const trimmedPrompt = customPrompt.trim();
-  // Se poate genera cu o fotografie + descriere SAU stil ales
-  const hasIntent = trimmedPrompt.length > 0 || styleChoice !== AUTO;
+  // „Optimizare spațiu” are sens doar pentru interioare (exteriorul / grădina nu au mobilier de reorganizat)
+  const optimizing = workMode === 'optimize' && mode === 'interiors' && optimizationGoal !== null;
+  // Se poate genera cu o fotografie + descriere SAU stil ales SAU un obiectiv de optimizare
+  const hasIntent = trimmedPrompt.length > 0 || styleChoice !== AUTO || optimizing;
   // Editare de zonă: selecția (aproximativă, din trasee) alimentează previzualizarea promptului; exportul o măsoară exact
   const maskSelected = hasSelection(maskStrokes);
   const regionalBounds = useMemo(
@@ -327,6 +393,12 @@ export default function StudioPage() {
   const dimensionIssues = useMemo(
     () => validateDimensions(roomDimensions, mode, lang),
     [roomDimensions, mode, lang],
+  );
+
+  // „Analiză ergonomică”: calcul local, instant, fără cost AI (aceleași reguli ca SpatialErgonomicsAnalyzer.cs)
+  const ergonomicReport = useMemo(
+    () => (mode === 'interiors' ? analyzeErgonomics(selectedSpace, roomDimensions, optimizing ? optimizationGoal : null) : null),
+    [mode, selectedSpace, roomDimensions, optimizing, optimizationGoal],
   );
 
   const specItems = useMemo(
@@ -382,9 +454,6 @@ export default function StudioPage() {
 
   const specRows = buildSpecRows(calculatedMaterials, t);
 
-  // ── Clase ──────────────────────────────────────────────────────────────────
-  const eyebrow = `${EYEBROW} ${sk.dim}`;
-
   // ── Handlers ───────────────────────────────────────────────────────────────
 
   // Schimbarea modului / spațiului resetează configurația și rezultatul anterior,
@@ -404,6 +473,7 @@ export default function StudioPage() {
     );
     setExcludedItemIds([]);
     setGeneratedImage(null);
+    setDetectedItems(undefined);
     setProviderNote(null);
     setSaveMessage(null);
     setErrorMessage(null);
@@ -411,6 +481,7 @@ export default function StudioPage() {
 
   const handleModeChange = (m: DesignMode) => {
     setSpaceTouched(true);
+    if (m !== 'interiors' && workMode === 'optimize') setWorkMode('redesign');
     applySpaceSelection(m, SPACE_MODES[m].spaces[0].id);
   };
 
@@ -433,6 +504,9 @@ export default function StudioPage() {
       setGeneratedImage(null);
       setMaskStrokes([]);
       setRegionalNote(null);
+      setDetectedItems(undefined);
+      setSteps([]);
+      setActiveStep(0);
       setIsDemoResult(false);
       setProviderNote(null);
       setSaveMessage(null);
@@ -444,19 +518,58 @@ export default function StudioPage() {
     }
   };
 
-  // Editare în lanț: rezultatul devine noua fotografie sursă (ex. întâi canapeaua, apoi pardoseala)
+  // „Editează acest rezultat”: randarea devine imaginea de lucru (pas nou în istoric), pensula de mască se activează
+  // și descrierea primește focus — se pictează doar obiectul de schimbat (ex. scaunul), restul randării rămâne neatins.
   const handleUseResultAsSource = () => {
-    if (!generatedImage || !generatedImage.startsWith('data:image/') || isLoading) return;
+    if (!generatedImage || !generatedImage.startsWith('data:image/') || !originalImage || isLoading) return;
+    const base: StudioStep[] = steps.length > 0 ? steps.slice(0, activeStep + 1) : [{ id: 'original', kind: 'original', image: originalImage }];
+    const next = [...base, { id: crypto.randomUUID(), kind: lastResultKind, image: generatedImage, items: detectedItems }];
     runIdRef.current += 1;
     loadedProjectIdRef.current = null;
     setShareProjectId(null);
+    setSteps(next);
+    setActiveStep(next.length - 1);
     setOriginalImage(generatedImage);
     setGeneratedImage(null);
     setMaskStrokes([]);
     setRegionalNote(null);
     setProviderNote(null);
     setSaveMessage(null);
+    setErrorMessage(null);
+    setEditArea(true);
+    // Stilul dedus din descriere rămâne fixat: descrierea se golește (nu se aplică unui singur obiect), dar
+    // contextul camerei (stil, cameră) trebuie să fie același la editarea în lanț.
+    if (styleChoice === AUTO) setStyleChoice(selectedStyleId);
+    setCustomPrompt('');
+    setPromptFocusSignal((n) => n + 1);
   };
+
+  // Istoric: revine la un pas anterior (sau la fotografia originală) ca imagine de lucru; pașii următori rămân
+  // vizibili până la următoarea promovare, care îi înlocuiește (ramură nouă).
+  const handleStepSelect = (index: number) => {
+    const step = steps[index];
+    if (!step || isLoading || (index === activeStep && !generatedImage)) return;
+    runIdRef.current += 1;
+    loadedProjectIdRef.current = null;
+    setShareProjectId(null);
+    setActiveStep(index);
+    setOriginalImage(step.image);
+    setGeneratedImage(null);
+    setDetectedItems(step.items);
+    setMaskStrokes([]);
+    setRegionalNote(null);
+    setProviderNote(null);
+    setSaveMessage(null);
+  };
+
+  const stepLabels = steps.map((step, i) => ({
+    id: step.id,
+    label: step.kind === 'original'
+      ? t('Original', 'Original', 'Original')
+      : step.kind === 'edit'
+        ? `${t('Editare', 'Edit', 'Modification')} ${i}`
+        : `${t('Varianta', 'Variant', 'Variante')} ${i}`,
+  }));
 
   // Presetare de mărime: lungime × lățime × înălțime dintr-un click (cererea AI și costul se actualizează imediat)
   const handleSizePreset = (preset: RoomSizePreset) =>
@@ -471,6 +584,15 @@ export default function StudioPage() {
     });
 
   const handleScopeChange = (scope: ScopeLevel) => setRoomDimensions((p) => ({ ...p, scope }));
+
+  // Modul de lucru: la prima intrare în „Optimizare spațiu”, obiectivul implicit se alege după suprafață
+  const handleWorkModeChange = (next: WorkMode) => {
+    if (next === 'optimize' && optimizationGoal === null) {
+      setOptimizationGoal(roomDimensions.length * roomDimensions.width < 14 ? 'spaciousness' : 'circulation');
+    }
+    if (next === 'optimize') setDimensionsOpen(true); // analiza ergonomică e chiar rezultatul acestui mod
+    setWorkMode(next);
+  };
 
   const handleStyleSelect = (id: string) => {
     setStyleChoice(id);
@@ -512,6 +634,9 @@ export default function StudioPage() {
       setGeneratedImage(null);
       setMaskStrokes([]);
       setRegionalNote(null);
+      setDetectedItems(undefined);
+      setSteps([]);
+      setActiveStep(0);
       setIsDemoResult(false);
       setProviderNote(null);
       setSaveMessage(null);
@@ -538,7 +663,18 @@ export default function StudioPage() {
     dimensions: dims,
     ai: aiSettings,
     ...(regionalBounds ? { selectionBounds: regionalBounds } : {}),
+    ...ergonomicPayload(space, dims),
   });
+
+  // Regulile ergonomice trimise modelului: obiectiv + reguli în „Optimizare spațiu” (structura mereu păstrată),
+  // doar regulile după „Aplică recomandările” în Redesign; niciodată la o editare de zonă (ar privi toată camera).
+  function ergonomicPayload(space: string, dims: RoomDimensions) {
+    if (editArea || mode !== 'interiors' || !(optimizing || applyErgonomics)) return {};
+    const report = analyzeErgonomics(space, dims, optimizing ? optimizationGoal : null);
+    return optimizing
+      ? { optimizationGoal, ergonomicConstraints: report.promptConstraints, preserveStructure: true }
+      : { ergonomicConstraints: report.promptConstraints };
+  }
   const previewSpace = (!spaceTouched && inferSpaceFromText(mode, trimmedPrompt)) || selectedSpace;
   const briefKey = JSON.stringify(buildBriefPayload(previewSpace, roomDimensions));
 
@@ -686,7 +822,8 @@ export default function StudioPage() {
       const data = await readJson<{
         result?: unknown; isDemo?: boolean; warning?: string; vision?: VisionResponse;
         promptUsed?: string; negativePromptUsed?: string; promptEngine?: string; promptFormat?: string; parameters?: PromptInsight['parameters'];
-        regionalEdit?: { position?: string; coverage?: number };
+        regionalEdit?: { position?: string; coverage?: number; bounds?: { x: number; y: number; width: number; height: number } };
+        detectedItems?: unknown;
       }>(res);
       if (!res.ok) {
         const code = typeof data.code === 'string' ? data.code : '';
@@ -729,6 +866,10 @@ export default function StudioPage() {
       setIsDemoResult(Boolean(data.isDemo));
       setProviderNote(typeof data.warning === 'string' ? data.warning : null);
       setVision(data.vision && typeof data.vision === 'object' ? data.vision : null);
+      // Obiectele randării: la o editare de zonă, doar cele din selecție se schimbă (restul camerei e neatins)
+      const nextItems = parseDetectedItems(data.detectedItems);
+      setDetectedItems((prev) => (regional ? mergeRegionalItems(prev, nextItems, data.regionalEdit?.bounds) : nextItems));
+      setLastResultKind(regional ? 'edit' : 'variant');
       const edit = data.regionalEdit;
       setRegionalNote(edit && typeof edit.position === 'string'
         ? `${t('Zonă editată', 'Edited area', 'Zone modifiée')}: ${positionLabel(edit.position, t)} · ${Math.max(1, Math.round((edit.coverage ?? 0) * 100))}% ${t('din cadru · restul fotografiei e neatins', 'of the frame · the rest of the photo is untouched', 'du cadre · le reste de la photo est intact')}`
@@ -766,8 +907,8 @@ export default function StudioPage() {
 
   // Salvarea proiectului: cere cont, convertește randarea într-un Base64 permanent
   // (URL-urile temporare expiră), apoi o trimite în Supabase cu rezervă locală.
-  const handleSaveProject = async () => {
-    if (!originalImage || !generatedImage || isSaving) return;
+  const handleSaveProject = async (): Promise<string | null> => {
+    if (!originalImage || !generatedImage || isSaving) return null;
     setIsSaving(true);
     setSaveMessage(null);
     try {
@@ -775,7 +916,7 @@ export default function StudioPage() {
       const userEmail = sessionEmail ?? readStorage(STORAGE_KEYS.userEmail);
       if (!userEmail) {
         setSaveMessage(t('Autentifică-te pentru a salva proiectul.', 'Sign in to save the project.'));
-        return;
+        return null;
       }
 
       // Serverul întoarce deja un Data URL JPEG permanent; aici e doar o plasă de siguranță
@@ -790,7 +931,7 @@ export default function StudioPage() {
             'The generated image expired or cannot be downloaded. Generate again, then save.',
           ),
         );
-        return;
+        return null;
       }
 
       // Dacă proiectul a fost deschis din Arhivă și nu s-a regenerat, îl actualizăm (același id)
@@ -816,6 +957,7 @@ export default function StudioPage() {
         // Lista de materiale & linkuri (aceeași funcție ca /api/analyze-materials) — Arhiva o afișează direct
         procurementItems: serverBom ?? buildBom({ mode, spaceType: selectedSpace, styleId: selectedStyleId, dimensions: roomDimensions }).items,
         brief,
+        detectedItems,
       };
       const result = await saveProjectToDb(project);
       loadedProjectIdRef.current = project.id; // salvările următoare actualizează, nu duplică
@@ -828,6 +970,7 @@ export default function StudioPage() {
         setShareInCloud(result.savedToCloud);
       }
 
+      const savedId = result.savedToCloud || result.savedLocally ? project.id : null;
       if (result.savedToCloud) {
         setSaveMessage(
           isUpdate
@@ -849,6 +992,7 @@ export default function StudioPage() {
           ),
         );
       }
+      return savedId;
     } catch (err) {
       setSaveMessage(
         t(
@@ -857,8 +1001,33 @@ export default function StudioPage() {
             `Échec de l’enregistrement : ${err instanceof Error ? err.message : 'erreur inconnue'}.`,
         ),
       );
+      return null;
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  // „Trimite în Deviz B2B” (antet): salvează proiectul dacă e nevoie, apoi trimite lista de materiale în devizul lui
+  // (lista calculată de API pentru exact aceste setări, altfel calculul local — aceeași funcție).
+  const handleSendToB2b = async () => {
+    if (!generatedImage || isSendingB2b || isSaving) return;
+    setIsSendingB2b(true);
+    try {
+      const projectId = loadedProjectIdRef.current ?? (await handleSaveProject());
+      if (!projectId) return; // mesajul de salvare explică deja motivul
+      const serverBom = serverBomRef.current?.key === JSON.stringify(procurementInput) ? serverBomRef.current.items : null;
+      const items = serverBom ?? buildBom({ mode, spaceType: selectedSpace, styleId: selectedStyleId, dimensions: roomDimensions, customPrompt: trimmedPrompt || undefined }).items;
+      const r = await sendBomToB2b(
+        { id: projectId, title: resolvedProjectName, mode, spaceType: selectedSpace, styleId: selectedStyleId, dimensions: roomDimensions },
+        items,
+      );
+      setSaveMessage(!r.saved
+        ? t('Memoria browserului este plină — lista nu a putut fi salvată.', 'Browser storage is full — the list could not be saved.')
+        : r.cloud === 'ok'
+          ? t('Trimis în devizul B2B și sincronizat în cloud.', 'Sent to the B2B quote and synced to the cloud.')
+          : t('Trimis în devizul B2B (salvat local; sincronizarea cloud necesită planul Business și o conexiune la internet).', 'Sent to the B2B quote (saved locally; cloud sync needs the Business plan and a connection).'));
+    } finally {
+      setIsSendingB2b(false);
     }
   };
 
@@ -891,6 +1060,7 @@ export default function StudioPage() {
           ? t('Descrie ce vrei să schimbi în zona selectată.', 'Describe what should change in the selected area.', 'Décrivez ce qui doit changer dans la zone sélectionnée.')
           : t('Descrie ce îți dorești, adaugă un material sau alege un stil.', 'Describe your vision, add a material or pick a style.')
     : null;
+  const ctaIcon = optimizing ? <LayoutGrid className="w-4 h-4" aria-hidden /> : <Sparkles className="w-4 h-4" aria-hidden />;
   const generateLabel = (
     isLoading
       ? <span className="flex items-center justify-center gap-2.5">
@@ -898,10 +1068,12 @@ export default function StudioPage() {
           {loadingSteps[loadingTicker.step]}
         </span>
       : <span className="flex items-center justify-center gap-2">
-          <Sparkles className="w-4 h-4" aria-hidden />
+          {ctaIcon}
           {editArea
             ? t('Generează zona selectată', 'Generate selected area', 'Générer la zone sélectionnée')
-            : generatedImage ? t('Generează din nou', 'Generate again') : t('Generează designul', 'Generate design')}
+            : optimizing
+              ? t('Optimizează spațiul', 'Optimize the space', 'Optimiser l’espace')
+              : generatedImage ? t('Generează din nou', 'Generate again') : t('Generează randarea', 'Generate render', 'Générer le rendu')}
         </span>
   );
 
@@ -922,10 +1094,13 @@ export default function StudioPage() {
         />
 
         <div className="max-w-[1440px] mx-auto px-4 sm:px-6 pt-6 sm:pt-8">
-          <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <h1 className={eyebrow}>{t('Studio AI · Denumire proiect', 'AI Studio · Project name', 'Studio IA · Nom du projet')}</h1>
-              <div className="mt-2">
+          {/* ─── ZONA 1 · Antet compact: nume · istoric · acțiuni de proiect ── */}
+          <StudioHeaderBar
+            lang={lang}
+            isDark={isDark}
+            nameField={
+              <>
+                <h1 className="sr-only">{t('Studio AI', 'AI Studio', 'Studio IA')}</h1>
                 <ProjectNameField
                   lang={lang}
                   isDark={isDark}
@@ -936,12 +1111,20 @@ export default function StudioPage() {
                   isSaved={shareProjectId !== null}
                   status={shareProjectId !== null ? renameStatus : 'idle'}
                 />
-              </div>
-            </div>
-            <p className={`pb-7 text-[13px] ${sk.muted}`}>
-              {modeLabel} · {spaceLabel} · {styleChoice === AUTO ? `${t('Stil auto', 'Auto style')}${inferStyleFromText(customPrompt) ? ` (${styleName})` : ''}` : styleName}
-            </p>
-          </div>
+              </>
+            }
+            summary={`${modeLabel} · ${spaceLabel} · ${styleChoice === AUTO ? `${t('Stil auto', 'Auto style')}${inferStyleFromText(customPrompt) ? ` (${styleName})` : ''}` : styleName}${optimizing ? ` · ${t('Optimizare spațiu', 'Space optimization', 'Optimisation')}` : ''}`}
+            steps={stepLabels}
+            activeStep={activeStep}
+            onStepSelect={handleStepSelect}
+            isLoading={isLoading}
+            canSave={Boolean(originalImage && generatedImage)}
+            isSaving={isSaving}
+            onSave={() => void handleSaveProject()}
+            isSending={isSendingB2b}
+            onSendToB2b={() => void handleSendToB2b()}
+            statusMessage={saveMessage}
+          />
 
           <input
             ref={canvasFileRef}
@@ -955,10 +1138,10 @@ export default function StudioPage() {
             }}
           />
 
-          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_420px] gap-6 lg:gap-8 items-start">
+          <div className="grid grid-cols-1 lg:grid-cols-[400px_minmax(0,1fr)] xl:grid-cols-[420px_minmax(0,1fr)] gap-6 lg:gap-8 items-start">
 
-            {/* ─── CANVAS + REZULTATE (stânga pe desktop, primul pe mobil) ───── */}
-            <div className="min-w-0 space-y-6">
+            {/* ─── ZONA 3 · CANVAS (dreapta pe desktop, primul pe mobil) ───── */}
+            <div className="min-w-0 space-y-6 lg:col-start-2 lg:row-start-1">
               <div>
                 <StudioViewport
                   lang={lang}
@@ -969,35 +1152,37 @@ export default function StudioPage() {
                   isDemoResult={isDemoResult}
                   providerNote={providerNote}
                   isLoading={isLoading}
-                  loadingLabel={loadingSteps[loadingTicker.step]}
-                  loadingStep={loadingTicker.step}
-                  loadingSteps={loadingSteps.length}
+                  isPhotoLoading={isPhotoLoading}
                   onFile={(file) => void handlePhotoFile(file)}
                   onPickFile={() => canvasFileRef.current?.click()}
+                  onDemoPhoto={() => void handleDemoPhoto()}
                   editArea={editArea}
-                  onEditAreaChange={setEditArea}
                   maskStrokes={maskStrokes}
                   onMaskStrokesChange={setMaskStrokes}
                   onImageSize={setPhotoSize}
                   regionalNote={regionalNote}
                   onUseResultAsSource={handleUseResultAsSource}
+                  onNewVariant={() => void handleGenerate()}
+                  detectedItems={detectedItems}
+                  rootImage={steps[0]?.image ?? null}
+                  structureLocked={!editArea && (preserveStructure || optimizing)}
                 />
               </div>
             </div>
 
-            {/* ─── PANOU DE CONTROL (dreapta pe desktop; lipit sub navigare, cu derulare proprie) ── */}
-            <div className="min-w-0 space-y-4 lg:row-span-2 lg:sticky lg:top-20 lg:self-start lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-1 lg:pb-4 studio-scroll">
-              <SourcePhotoCard
+            {/* ─── ZONA 2 · PANOU DE CONTROL (stânga pe desktop; lipit sub navigare, cu derulare proprie) ── */}
+            <div className="min-w-0 space-y-4 lg:col-start-1 lg:row-start-1 lg:row-span-2 lg:sticky lg:top-20 lg:self-start lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-1 lg:pb-4 studio-scroll">
+              <ModeSelector
                 lang={lang}
                 isDark={isDark}
-                originalImage={originalImage}
-                isPhotoLoading={isPhotoLoading}
-                isLoading={isLoading}
-                aiStrength={roomDimensions.aiStrength}
-                onFile={(file) => void handlePhotoFile(file)}
-                onDemoPhoto={() => void handleDemoPhoto()}
-                onStrengthChange={(e) => handleNumberChange('aiStrength', e)}
-                showStrength={!isInstructionModel && !editArea}
+                value={workMode}
+                onChange={handleWorkModeChange}
+                canOptimize={mode === 'interiors'}
+                hasPhoto={Boolean(originalImage)}
+                goal={optimizationGoal}
+                onGoalChange={setOptimizationGoal}
+                selectionLabel={regionalBounds ? positionLabel(describeSelection(regionalBounds), t) : null}
+                disabled={isLoading}
               />
 
               <RoomStylePicker
@@ -1014,18 +1199,34 @@ export default function StudioPage() {
                 disabled={isLoading}
               />
 
-              {/* Dimensiuni spațiu: mereu vizibile (cererea AI + costul / lista de materiale folosesc aceleași cote) */}
+              {/* 03 · Dimensiuni & Ergonomie: aceleași cote alimentează cererea AI, analiza ergonomică și costul / devizul */}
               <RoomSizeCard
                 lang={lang}
                 isDark={isDark}
+                step="03"
+                open={dimensionsOpen}
+                onToggle={() => setDimensionsOpen((o) => !o)}
                 roomDimensions={roomDimensions}
                 presets={sizePresets}
                 onPresetSelect={handleSizePreset}
                 onNumberChange={handleNumberChange}
                 issues={dimensionIssues}
                 disabled={isLoading}
-              />
+              >
+                {ergonomicReport && !editArea && (
+                  <ErgonomicsPanel
+                    lang={lang}
+                    isDark={isDark}
+                    report={ergonomicReport}
+                    applied={applyErgonomics}
+                    automatic={optimizing}
+                    onApplyChange={setApplyErgonomics}
+                    disabled={isLoading}
+                  />
+                )}
+              </RoomSizeCard>
 
+              {/* 04 · Descriere & Generare: un singur buton principal, bordo */}
               <VisionPanel
                 lang={lang}
                 isDark={isDark}
@@ -1039,14 +1240,14 @@ export default function StudioPage() {
                 onLightingChange={setLighting}
                 disabled={isLoading}
                 regionalEdit={editArea}
+                optimizing={optimizing}
                 selectionLabel={regionalBounds ? positionLabel(describeSelection(regionalBounds), t) : null}
-              />
-
-              {/* 04 · Generare */}
-              <StudioCard isDark={isDark} step="04" title={t('Generează', 'Generate')}>
-                {plan.limitReached && <PlanLimitNotice lang={lang} isDark={isDark} used={plan.used} limit={plan.limit} />}
-
-                <div className="space-y-2.5">
+                focusSignal={promptFocusSignal}
+                chainedEdit={activeStep > 0}
+                chainContext={activeStep > 0 ? `${spaceLabel} · ${styleName}` : null}
+              >
+                <div className={`space-y-2.5 border-t pt-4 ${sk.line}`}>
+                  {plan.limitReached && <PlanLimitNotice lang={lang} isDark={isDark} used={plan.used} limit={plan.limit} />}
                   <button
                     type="button"
                     onClick={handleGenerate}
@@ -1067,19 +1268,18 @@ export default function StudioPage() {
                       ))}
                     </div>
                   )}
+                  {generateHint && <p className={`text-[12px] ${sk.muted}`}>{generateHint}</p>}
+                  {errorMessage && <p role="alert" className="text-xs text-red-500 font-mono">{errorMessage}</p>}
+                  {gateCode && (
+                    <Link
+                      href={gateCode === 'LIMIT_REACHED' ? '/#planuri' : '/login'}
+                      className={`inline-flex items-center h-9 px-4 rounded-md touch-manipulation text-[13px] font-semibold ${sk.btn}`}
+                    >
+                      {gateCode === 'LIMIT_REACHED' ? t('Vezi planurile', 'View plans') : t('Autentifică-te', 'Sign in')}
+                    </Link>
+                  )}
                 </div>
-
-                {generateHint && <p className={`text-[12px] ${sk.muted}`}>{generateHint}</p>}
-                {errorMessage && <p role="alert" className="text-xs text-red-500 font-mono">{errorMessage}</p>}
-                {gateCode && (
-                  <Link
-                    href={gateCode === 'LIMIT_REACHED' ? '/#planuri' : '/login'}
-                    className={`inline-flex items-center h-9 px-4 rounded-md touch-manipulation text-[13px] font-semibold ${sk.btn}`}
-                  >
-                    {gateCode === 'LIMIT_REACHED' ? t('Vezi planurile', 'View plans') : t('Autentifică-te', 'Sign in')}
-                  </Link>
-                )}
-              </StudioCard>
+              </VisionPanel>
 
               {/* Setări avansate (secundare): proiect, configurație, scenarii, cote, buget, parametri AI */}
               <section className={`border rounded-xl ${sk.card}`}>
@@ -1094,7 +1294,7 @@ export default function StudioPage() {
                     <span className="min-w-0">
                       <span className={`block text-[14px] font-semibold ${sk.strong}`}>{t('Setări avansate', 'Advanced settings')}</span>
                       <span className={`block text-[12px] mt-0.5 truncate ${sk.muted}`}>
-                        {t('Scenarii, goluri, buget, parametri AI', 'Scenarios, openings, budget, AI parameters')}
+                        {t('Scenarii, goluri, buget, intensitate, parametri AI', 'Scenarios, openings, budget, strength, AI parameters', 'Scénarios, ouvertures, budget, intensité, paramètres IA')}
                       </span>
                     </span>
                   </span>
@@ -1102,6 +1302,16 @@ export default function StudioPage() {
                 </button>
                 {isProjectDetailsOpen && (
                   <div className={`px-5 pb-5 pt-4 space-y-5 border-t ${sk.line}`}>
+                    {!isInstructionModel && !editArea && (
+                      <StrengthSlider
+                        lang={lang}
+                        isDark={isDark}
+                        aiStrength={roomDimensions.aiStrength}
+                        onStrengthChange={(e) => handleNumberChange('aiStrength', e)}
+                        isLoading={isLoading}
+                      />
+                    )}
+
                     <SpaceScenarioPanel
                       lang={lang}
                       isDark={isDark}
@@ -1150,7 +1360,7 @@ export default function StudioPage() {
             </div>
 
             {/* ─── REZULTATE & DEVIZ (sub canvas pe desktop, după controale pe mobil) ── */}
-            <div className="min-w-0 space-y-6">
+            <div className="min-w-0 space-y-6 lg:col-start-2">
               {vision && generatedImage && !isLoading && (
                 <VisionSummary lang={lang} isDark={isDark} vision={vision} costTotal={costEstimate.total} />
               )}

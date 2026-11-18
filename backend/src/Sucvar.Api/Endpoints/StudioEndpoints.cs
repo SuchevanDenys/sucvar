@@ -38,6 +38,7 @@ public static class StudioEndpoints
         app.MapPost("/api/generate", Generate).WithTags("Studio").WithName("Generate").RequireActiveAccount();
         app.MapPost("/api/analyze-materials", AnalyzeMaterials).WithTags("Studio").WithName("AnalyzeMaterials").RequireActiveAccount();
         app.MapPost("/api/prompt-preview", PromptPreview).WithTags("Studio").WithName("PromptPreview").RequireActiveAccount();
+        app.MapPost("/api/detected-items", DetectedItems).WithTags("Studio").WithName("DetectedItems").RequireActiveAccount();
         app.MapGet("/api/ai/model", ActiveModel).WithTags("Studio").WithName("ActiveAiModel").AllowAnonymous();
         return app;
     }
@@ -178,6 +179,8 @@ public static class StudioEndpoints
             var request = new ImageGenerationRequest(image, plan.Prompt, plan.NegativePrompt, plan.InferenceSteps, plan.GuidanceScale,
                 plan.Seed, plan.PromptStrength, plan.TransformationStrength, plan.Mode, plan.Brief?.PreserveStructure ?? true,
                 mask?.DataUrl);
+            // 4c. "Shop the look" hotspots (deterministic, no extra paid call; a mask pins the edited object on the region)
+            var detectedItems = RoomObjectExtractor.Extract(RoomObjectExtractor.ContextFrom(payload, plan, mask?.Region));
 
             // 5. Demo mode (no provider credentials)
             if (provider.Id == "demo")
@@ -191,7 +194,7 @@ public static class StudioEndpoints
                         : await images.ToPermanentJpegDataUrlAsync(demo.ImageUrl, ctx.RequestAborted);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException) { /* keep the Unsplash URL (it does not expire) */ }
-                return Results.Json(Response(demoResult, true, plan, providerWarning));
+                return Results.Json(Response(demoResult, true, plan, providerWarning, detectedItems));
             }
 
             // 6. Real call
@@ -232,7 +235,7 @@ public static class StudioEndpoints
                     ? "Zona selectată nu a putut fi îmbinată cu fotografia originală; imaginea afișată este rezultatul brut al modelului, cu link temporar. Generează din nou."
                     : "Imaginea nu a putut fi comprimată permanent; linkul este temporar și expiră în câteva ore. Salvează proiectul imediat.";
             }
-            return Results.Json(Response(permanent, false, plan, warning));
+            return Results.Json(Response(permanent, false, plan, warning, detectedItems));
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -255,7 +258,8 @@ public static class StudioEndpoints
         return Results.Json(body, statusCode: q.Status);
     }
 
-    private static Dictionary<string, object?> Response(string result, bool isDemo, GenerationPlan plan, string? warning)
+    private static Dictionary<string, object?> Response(string result, bool isDemo, GenerationPlan plan, string? warning,
+        IReadOnlyList<DetectedItem>? detectedItems = null)
     {
         var prompt = plan.Prompt;
         var body = new Dictionary<string, object?>
@@ -273,6 +277,7 @@ public static class StudioEndpoints
         if (warning is not null) body["warning"] = warning;
         if (plan.Brief is not null) body["vision"] = DesignVision.ToResponse(plan.Brief); // resolved brief for the Studio summary
         if (plan.Region is { } r) body["regionalEdit"] = RegionResponse(r);
+        if (detectedItems is { Count: > 0 }) body["detectedItems"] = detectedItems;
         return body;
     }
 
@@ -343,6 +348,35 @@ public static class StudioEndpoints
         {
             logger.LogError(ex, "[SUCVAR] /api/prompt-preview");
             return JsonError(500, "INTERNAL_ERROR", "Previzualizarea promptului a eșuat.");
+        }
+    }
+
+    /// <summary>
+    /// <c>POST /api/detected-items</c>: the "Shop the look" hotspots for a Studio brief, without an image and without
+    /// quota — used to rebuild the object inspector of projects saved before <c>detectedItems</c> existed.
+    /// </summary>
+    private static async Task<IResult> DetectedItems(HttpContext ctx, FixedWindowRateLimitStore limiter, ServerConfig config, ILogger<QuotaService> logger)
+    {
+        try
+        {
+            if (limiter.Check(Rules.MaterialsIp, ClientIp(ctx)) is { } ipWait) return TooManyRequests(ctx, ipWait);
+            var (user, authError) = RequestAuth.Require(ctx, config);
+            if (authError is not null) return authError;
+            if (limiter.Check(Rules.MaterialsUser, user!.UserId) is { } userWait) return TooManyRequests(ctx, userWait);
+
+            var (text, tooLarge) = await ReadBodyTextAsync(ctx, MaterialsMaxBodyBytes);
+            if (tooLarge is not null) return tooLarge;
+            if (!TryParseJson(text!, out var body)) return InvalidJson();
+            if (body.ValueKind != JsonValueKind.Object) return JsonError(400, "INVALID_BODY", "Corp invalid: se așteaptă un obiect JSON.");
+            if (DesignVision.Validate(body) is { } visionError) return JsonError(400, visionError.Code, visionError.Message);
+
+            var plan = GenerationPrompt.Create(body);
+            return Results.Json(new { detectedItems = RoomObjectExtractor.Extract(RoomObjectExtractor.ContextFrom(body, plan)) });
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogError(ex, "[SUCVAR] /api/detected-items");
+            return JsonError(500, "INTERNAL_ERROR", "Obiectele randării nu au putut fi calculate.");
         }
     }
 

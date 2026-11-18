@@ -1,11 +1,12 @@
 // app/components/studio/RoomStylePicker.tsx
 // Studio · Cameră & stil — mereu vizibil: categoria (Interior / Exterior / Grădină), tipul camerei (pastile cu
 // pictograme) și stilul arhitectural (carduri cu paleta de culori). „Auto” = stilul se deduce din descriere.
+// Compact: stilul ales apare pe un singur rând; grila completă de stiluri se deschide doar la „Schimbă”.
 "use client";
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
-  Armchair, Bath, BedDouble, Briefcase, Building2, Check, Coffee, CookingPot, DoorOpen, Flower2,
+  Armchair, Bath, BedDouble, Briefcase, Building2, Check, ChevronDown, Coffee, CookingPot, DoorOpen, Flower2,
   Home, type LucideIcon, Shirt, Sofa, Sparkles, Sun, TreePine, Trees, Waves,
 } from 'lucide-react';
 import { SPACE_MODES, VISUAL_STYLES, getStyle } from '@/app/data/catalog';
@@ -64,9 +65,16 @@ export default function RoomStylePicker({
   // Bordura inactivă alunecă spre bordo la hover (cartonașe de stil și pastile de cameră)
   const idleHoverBorder = isDark ? 'hover:border-[#C94A6A]/50' : 'hover:border-[#5C1628]/35';
   const idleCard = `${sk.line} ${idleHoverBorder}`;
+  const [stylesOpen, setStylesOpen] = useState(false);
+  const chosen = styleChoice === AUTO ? null : getStyle(styleChoice);
+  // Alegerea unui stil închide grila (decizia e luată; rândul compact o confirmă)
+  const pickStyle = (id: string) => {
+    onStyleChange(id);
+    setStylesOpen(false);
+  };
 
   return (
-    <StudioCard isDark={isDark} step="02" title={t('Cameră & stil', 'Room & style')}>
+    <StudioCard isDark={isDark} step="02" title={t('Spațiu & Stil', 'Space & Style', 'Espace & style')}>
       {/* Categoria */}
       <div role="radiogroup" aria-label={t('Categorie', 'Category')} className={`grid grid-cols-3 p-1 rounded-lg ${isDark ? 'bg-[#110D0F]' : 'bg-[#F5F2EF]'}`}>
         {MODE_IDS.map((m) => (
@@ -119,13 +127,43 @@ export default function RoomStylePicker({
       {/* Stilul arhitectural */}
       <div className="space-y-2">
         <p className={`text-[13px] font-medium ${sk.strong}`}>{t('Stil arhitectural', 'Architectural style')}</p>
+        <button
+          type="button"
+          onClick={() => setStylesOpen((o) => !o)}
+          aria-expanded={stylesOpen}
+          disabled={disabled}
+          className={`w-full flex items-center gap-3 rounded-lg border p-2.5 text-left cursor-pointer touch-manipulation transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${sk.line} ${idleHoverBorder}`}
+        >
+          {chosen ? (
+            <span className="flex h-8 w-14 shrink-0 overflow-hidden rounded-md" aria-hidden>
+              {chosen.palette.slice(0, 4).map((sw) => <span key={sw.hex} className="flex-1" style={{ backgroundColor: sw.hex }} />)}
+            </span>
+          ) : (
+            <span className={`flex h-8 w-14 shrink-0 items-center justify-center rounded-md ${isDark ? 'bg-[#231B1E]' : 'bg-[#F5F2EF]'} ${sk.muted}`} aria-hidden>
+              <Sparkles className="w-4 h-4" />
+            </span>
+          )}
+          <span className="min-w-0 flex-1">
+            <span className={`block truncate text-[13px] font-medium ${sk.strong}`}>
+              {chosen ? tr(lang, chosen.nameRo, chosen.nameEn) : `${t('Auto', 'Auto')}${autoStyleName ? ` · ${autoStyleName}` : ''}`}
+            </span>
+            <span className={`block truncate text-[11.5px] ${sk.muted}`}>
+              {chosen ? t('Stil ales', 'Chosen style', 'Style choisi') : t('Dedus din descriere', 'Inferred from your brief', 'Déduit de la description')}
+            </span>
+          </span>
+          <span className={`flex shrink-0 items-center gap-1 text-[12px] font-medium ${sk.brandText}`}>
+            {stylesOpen ? t('Închide', 'Close') : t('Schimbă', 'Change', 'Changer')}
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${stylesOpen ? 'rotate-180' : ''}`} aria-hidden />
+          </span>
+        </button>
+        {stylesOpen && (
         <div role="radiogroup" aria-label={t('Stil arhitectural', 'Architectural style')} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 gap-2">
           <button
             type="button"
             role="radio"
             aria-checked={styleChoice === AUTO}
             disabled={disabled}
-            onClick={() => onStyleChange(AUTO)}
+            onClick={() => pickStyle(AUTO)}
             className={`relative text-left rounded-lg border p-2.5 cursor-pointer touch-manipulation ${TACTILE} disabled:opacity-50 disabled:cursor-not-allowed ${styleChoice === AUTO ? activeRing : idleCard}`}
           >
             <span className={`flex h-6 items-center gap-1.5 ${sk.muted}`}>
@@ -146,7 +184,7 @@ export default function RoomStylePicker({
                 role="radio"
                 aria-checked={active}
                 disabled={disabled}
-                onClick={() => onStyleChange(v.id)}
+                onClick={() => pickStyle(v.id)}
                 className={`relative text-left rounded-lg border p-2.5 cursor-pointer touch-manipulation ${TACTILE} disabled:opacity-50 disabled:cursor-not-allowed ${active ? activeRing : idleCard}`}
               >
                 <span className="flex h-6 overflow-hidden rounded-md" aria-hidden>
@@ -164,7 +202,8 @@ export default function RoomStylePicker({
             );
           })}
         </div>
-        {styleChoice !== AUTO && <StyleSpecCard style={getStyle(styleChoice)} lang={lang} isDark={isDark} />}
+        )}
+        {stylesOpen && styleChoice !== AUTO && <StyleSpecCard style={getStyle(styleChoice)} lang={lang} isDark={isDark} />}
       </div>
     </StudioCard>
   );

@@ -46,10 +46,17 @@ interface RoomSizeCardProps {
   /** Mesaje de validare (listă goală = cote valide) */
   issues: string[];
   disabled?: boolean;
+  /** Numărul pasului în panoul de control (ex. „03”). */
+  step?: string;
+  /** Card pliabil (controlat de părinte); cotele rămân vizibile ca rezumat în antet. */
+  open?: boolean;
+  onToggle?: () => void;
+  /** Conținut suplimentar sub cote (ex. „Analiză ergonomică”). */
+  children?: React.ReactNode;
 }
 
 export default function RoomSizeCard({
-  lang, isDark, roomDimensions, presets, onPresetSelect, onNumberChange, issues, disabled,
+  lang, isDark, roomDimensions, presets, onPresetSelect, onNumberChange, issues, disabled, step, open, onToggle, children,
 }: RoomSizeCardProps) {
   const sk = getSkin(isDark);
   const t = (ro: string, en: string, fr?: string) => tr(lang, ro, en, fr);
@@ -67,7 +74,11 @@ export default function RoomSizeCard({
   return (
     <StudioCard
       isDark={isDark}
-      title={t('Dimensiuni spațiu', 'Room dimensions', 'Dimensions de la pièce')}
+      step={step}
+      collapsible={onToggle !== undefined}
+      open={open}
+      onToggle={onToggle}
+      title={children ? t('Dimensiuni & Ergonomie', 'Dimensions & Ergonomics', 'Dimensions & ergonomie') : t('Dimensiuni spațiu', 'Room dimensions', 'Dimensions de la pièce')}
       hint={t(
         'AI-ul proporționează mobilierul după cote; costul și materialele se recalculează instant.',
         'The AI scales furniture to these dimensions; cost and materials update instantly.',
@@ -136,6 +147,8 @@ export default function RoomSizeCard({
           ))}
         </ul>
       )}
+
+      {children}
     </StudioCard>
   );
 }

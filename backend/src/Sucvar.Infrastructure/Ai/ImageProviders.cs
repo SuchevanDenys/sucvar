@@ -127,8 +127,11 @@ public sealed partial class ReplicateImageProvider(IHttpClientFactory http, IOpt
             {
                 ["prompt"] = request.Prompt,
                 ["input_image"] = request.ImageDataUrl,
+                // Never crop or stretch the frame: a resized canvas shifts door and window edges
                 ["aspect_ratio"] = "match_input_image",
                 ["output_format"] = "jpg",
+                // Upsampling rewrites the instruction and dilutes the structural lock (doors / windows never covered)
+                ["prompt_upsampling"] = false,
             };
             if (request.Seed is { } kontextSeed) kontext["seed"] = kontextSeed;
             return ($"v1/models/{model}/predictions", new JsonObject { ["input"] = kontext });
@@ -141,7 +144,10 @@ public sealed partial class ReplicateImageProvider(IHttpClientFactory http, IOpt
             ["negative_prompt"] = request.NegativePrompt,
             ["num_inference_steps"] = request.InferenceSteps,
             ["guidance_scale"] = request.GuidanceScale,
-            ["prompt_strength"] = request.PromptStrength,
+            // Structure lock: conservative band (0.55–0.68) so the model cannot redraw openings
+            ["prompt_strength"] = request.MaskDataUrl is null
+                ? Sucvar.Domain.Ai.ArchitecturalPromptCompiler.StructureLockedStrength(request.PromptStrength, request.PreserveStructure)
+                : request.PromptStrength,
         };
         if (request.Seed is { } seed) input["seed"] = seed;
         return ("v1/predictions", new JsonObject { ["version"] = AiOptions.Clean(options.Value.ReplicateModelVersion), ["input"] = input });
@@ -260,7 +266,9 @@ public sealed class StableDiffusionImageProvider(IHttpClientFactory http, IOptio
             ["negative_prompt"] = request.NegativePrompt,
             ["steps"] = request.InferenceSteps,
             ["cfg_scale"] = request.GuidanceScale,
-            ["denoising_strength"] = request.TransformationStrength / 100,
+            ["denoising_strength"] = request.MaskDataUrl is null
+                ? Sucvar.Domain.Ai.ArchitecturalPromptCompiler.StructureLockedStrength(request.TransformationStrength / 100, request.PreserveStructure)
+                : request.TransformationStrength / 100,
             ["seed"] = request.Seed ?? -1,
             ["sampler_name"] = string.IsNullOrWhiteSpace(o.SdSampler) ? "DPM++ 2M Karras" : o.SdSampler.Trim(),
             ["width"] = width,

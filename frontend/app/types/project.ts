@@ -3,6 +3,7 @@
 import type { BomItem } from '@/app/lib/procurement';
 import type { DesignMode, RoomDimensions } from './studio';
 import type { DesignBriefMeta } from '@/app/lib/studio/vision';
+import type { DetectedItem } from '@/app/lib/studio/detectedItems';
 
 // A project saved in Supabase / localStorage
 // createdAt is an ISO string (for example "2026-10-17T10:30:00.000Z")
@@ -22,6 +23,8 @@ export interface SavedProject {
   procurementItems?: BomItem[];
   /** Descrierea liberă + opțiunile Studio („Descrie ce îți dorești”); salvată în `dimensions.brief` (jsonb, fără migrare). */
   brief?: DesignBriefMeta;
+  /** „Inspector obiecte” al randării; salvat în `dimensions.detectedItems` (jsonb). Lipsește la proiectele vechi. */
+  detectedItems?: DetectedItem[];
 }
 
 // Exact shape of one row in the Supabase table `projects` (snake_case columns)
@@ -32,7 +35,7 @@ export interface ProjectRow {
   mode: DesignMode; // text
   space_type: string; // text
   style_id: string; // text
-  dimensions: RoomDimensions & { brief?: DesignBriefMeta }; // jsonb (brief = descrierea Studio, opțională)
+  dimensions: RoomDimensions & { brief?: DesignBriefMeta; detectedItems?: DetectedItem[] }; // jsonb (brief = descrierea Studio, opțională)
   original_image: string | null; // text
   generated_image: string | null; // text
   total_budget: number; // numeric

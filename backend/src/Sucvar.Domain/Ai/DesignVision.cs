@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Sucvar.Domain.Catalog;
+using Sucvar.Domain.Studio;
 
 namespace Sucvar.Domain.Ai;
 
@@ -36,9 +37,14 @@ public sealed record DesignBrief(
     bool PreserveStructure,
     IReadOnlyList<VisionMaterial> Materials,
     string? Preset = null,
-    RoomScale? Scale = null)
+    RoomScale? Scale = null,
+    string? OptimizationGoal = null,
+    IReadOnlyList<string>? ErgonomicConstraints = null)
 {
     public bool HasCustomPrompt => CustomPrompt.Length > 0;
+
+    /// <summary>"Optimizare spațiu" or "Aplică recomandările": the compiler adds a space-planning layer.</summary>
+    public bool HasSpacePlanning => OptimizationGoal is not null || ErgonomicConstraints is { Count: > 0 };
 }
 
 /// <summary>
@@ -342,7 +348,10 @@ public static partial class DesignVision
         var prompt = CleanCustomPrompt(Js.AsString(raw));
         if (prompt.Length > CustomPromptMaxLength)
             return new("PROMPT_TOO_LONG", $"Descrierea poate avea cel mult {CustomPromptMaxLength} de caractere.");
-        if (prompt.Length == 0 && RequestedStyle(payload) is null)
+        if (Js.Prop(payload, "ergonomicConstraints") is { } ec && ec.ValueKind is not (JsonValueKind.Array or JsonValueKind.Null))
+            return new("INVALID_CONSTRAINTS", "Recomandările ergonomice trebuie să fie o listă de texte.");
+        // "Optimizare spațiu": a known goal is a complete intent on its own (no description or style needed)
+        if (prompt.Length == 0 && RequestedStyle(payload) is null && RequestedGoal(payload) is null)
             return new("PROMPT_OR_STYLE_REQUIRED", "Descrie ce îți dorești sau alege un stil (cel puțin una dintre ele).");
         return null;
     }
@@ -351,7 +360,19 @@ public static partial class DesignVision
     public static bool IsSmartRequest(JsonElement payload) =>
         !IsBlank(Js.Prop(payload, "customPrompt")) || RequestedStyle(payload) is null ||
         !IsBlank(Js.Prop(payload, "palette")) || !IsBlank(Js.Prop(payload, "lighting")) || !IsBlank(Js.Prop(payload, "preset")) ||
-        Js.Prop(payload, "preserveStructure") is { ValueKind: JsonValueKind.True or JsonValueKind.False };
+        Js.Prop(payload, "preserveStructure") is { ValueKind: JsonValueKind.True or JsonValueKind.False } ||
+        RequestedGoal(payload) is not null || ReadConstraints(payload).Count > 0;
+
+    /// <summary>The known "Optimizare spațiu" goal of the request (unknown ids are ignored), or null.</summary>
+    public static OptimizationGoal? RequestedGoal(JsonElement payload) =>
+        SpatialErgonomicsAnalyzer.GetGoal(Js.AsString(Js.Prop(payload, "optimizationGoal")));
+
+    /// <summary>Optional <c>ergonomicConstraints</c> (array of English rules from the Studio), sanitized.</summary>
+    public static IReadOnlyList<string> ReadConstraints(JsonElement payload) =>
+        Js.Prop(payload, "ergonomicConstraints") is { ValueKind: JsonValueKind.Array } arr
+            ? SpatialErgonomicsAnalyzer.SanitizeConstraints(arr.EnumerateArray()
+                .Where(e => e.ValueKind == JsonValueKind.String).Select(e => e.GetString()).Take(SpatialErgonomicsAnalyzer.MaxConstraints * 2))
+            : [];
 
     /// <summary>Builds the resolved brief: explicit values win, then inference from the text, then defaults.</summary>
     public static DesignBrief Resolve(JsonElement payload, string mode)
@@ -377,6 +398,12 @@ public static partial class DesignVision
         var area = scale.AreaSqm;
         var preserve = Js.Prop(payload, "preserveStructure") is not { ValueKind: JsonValueKind.False };
 
+        // Space planning: the client's rules win (what the Studio showed); a goal alone gets the server's analysis
+        var goal = RequestedGoal(payload);
+        var constraints = ReadConstraints(payload);
+        if (goal is not null && constraints.Count == 0)
+            constraints = SpatialErgonomicsAnalyzer.Analyze(spaceId, scale.Length, scale.Width, scale.Height, goal.Id).PromptConstraints;
+
         return new DesignBrief(
             customPrompt,
             styleId,
@@ -389,7 +416,9 @@ public static partial class DesignVision
             preserve,
             DetectMaterials(customPrompt),
             preset?.Id,
-            scale);
+            scale,
+            goal?.Id,
+            constraints.Count > 0 ? constraints : null);
     }
 
     /// <summary>
@@ -426,6 +455,8 @@ public static partial class DesignVision
         areaSqm = b.AreaSqm,
         preserveStructure = b.PreserveStructure,
         preset = b.Preset,
+        optimizationGoal = b.OptimizationGoal,
+        ergonomicConstraints = b.ErgonomicConstraints ?? [],
         dimensions = b.Scale is { } sc
             ? new { length = sc.Length, width = sc.Width, height = sc.Height, areaSqm = Js.Round(sc.AreaSqm * 10) / 10, volumeM3 = sc.Volume }
             : null,

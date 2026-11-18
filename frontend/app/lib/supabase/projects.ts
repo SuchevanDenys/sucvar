@@ -4,6 +4,7 @@ import type { BomItem } from '@/app/lib/procurement';
 import { normalizeProcurementItems } from '@/app/lib/procurementNormalize';
 import { sanitizeDimensions } from '@/app/lib/studio/validation';
 import { parseBrief } from '@/app/lib/studio/vision';
+import { parseDetectedItems } from '@/app/lib/studio/detectedItems';
 import type {
   DeleteProjectResult,
   DesignMode,
@@ -36,6 +37,7 @@ function readLocalProjects(): SavedProject[] {
         createdAt: String(p.createdAt ?? new Date().toISOString()),
         dimensions: sanitizeDimensions(p.dimensions, p.mode, p.spaceType),
         procurementItems: parseProcurement(p.procurementItems),
+        detectedItems: parseDetectedItems(p.detectedItems),
       }));
   } catch {
     return [];
@@ -82,7 +84,12 @@ function toRow(p: SavedProject, ownerEmail: string): ProjectRow {
     space_type: p.spaceType,
     style_id: p.styleId,
     // Brief-ul Studio stă lângă cote în același jsonb: Arhiva și portalul /p/[id] îl citesc de acolo
-    dimensions: p.brief ? { ...p.dimensions, brief: p.brief } : p.dimensions,
+    // „Inspector obiecte”: hotspoturile randării stau tot în acest jsonb (fără migrare)
+    dimensions: {
+      ...p.dimensions,
+      ...(p.brief ? { brief: p.brief } : {}),
+      ...(p.detectedItems?.length ? { detectedItems: p.detectedItems } : {}),
+    },
     original_image: p.originalImage,
     generated_image: p.generatedImage,
     total_budget: p.totalBudget,
@@ -126,6 +133,7 @@ function fromRow(row: ProjectRow): SavedProject {
     createdAt: String(row.created_at ?? new Date().toISOString()),
     procurementItems: parseProcurement(row.procurement_items),
     brief: parseBrief(row.dimensions) ?? undefined,
+    detectedItems: parseDetectedItems((row.dimensions as { detectedItems?: unknown } | null)?.detectedItems),
   };
 }
 
@@ -257,6 +265,7 @@ export async function fetchProjectsFromDb(userEmail: string): Promise<SavedProje
         originalImage: cp.originalImage || localMatch?.originalImage || null,
         procurementItems: cp.procurementItems ?? localMatch?.procurementItems,
         brief: cp.brief ?? localMatch?.brief,
+        detectedItems: cp.detectedItems ?? localMatch?.detectedItems,
       };
     });
 

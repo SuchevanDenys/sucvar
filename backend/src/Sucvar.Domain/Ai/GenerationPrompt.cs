@@ -400,6 +400,7 @@ public static partial class GenerationPrompt
             materials,                                   // user-named items without an element spec (LED strip, plants…)
             userWords,
             structureCue,
+            ArchitecturalPromptCompiler.SpacePlanningClip(mode, brief.OptimizationGoal, brief.ErgonomicConstraints),
             palette.Length > 0 ? Strip(palette) : "",
             brief.Lighting is not null ? lighting : "",
             ArchitecturalPromptCompiler.ScaleHint(brief.Scale, mode),
@@ -433,7 +434,9 @@ public static partial class GenerationPrompt
             AreaSqm: scale is { AreaKnown: true } ? scale.AreaSqm : null,
             CeilingHeight: scale?.Height,
             ScaleHint: ArchitecturalPromptCompiler.ScaleHint(scale, mode),
-            Details: MergeTerms(Strip(scenarioPrompt), scopePrompt, extraPrompt, brief.PreserveStructure ? Strip(layoutPrompt) : "", Strip(budgetDetails))));
+            Details: MergeTerms(Strip(scenarioPrompt), scopePrompt, extraPrompt, brief.PreserveStructure ? Strip(layoutPrompt) : "", Strip(budgetDetails)),
+            OptimizationGoal: brief.OptimizationGoal,
+            Ergonomics: brief.ErgonomicConstraints));
 
         return (prompt, instruction, new SmartPromptParts(scenePrompt, lockedSpecs, structureCue, PhotographyDirective(mode), userSlots));
     }

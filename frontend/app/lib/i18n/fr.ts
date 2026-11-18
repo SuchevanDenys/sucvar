@@ -1214,7 +1214,6 @@ export const FR: Record<string, string> = {
   "The photo could not be read.": "La photo n’a pas pu être lue.",
   "The photo is too detailed to upload. Try a simpler one.": "La photo est trop détaillée pour être importée. Essayez-en une plus simple.",
   "The project could not be loaded (it was deleted or its data is invalid).": "Le projet n’a pas pu être chargé (il a été supprimé ou ses données sont invalides).",
-  "The room’s architecture stays true to the photo.": "L’architecture de la pièce reste fidèle à la photo.",
   "The server returned an invalid response. Please try again.": "Le serveur a renvoyé une réponse invalide. Veuillez réessayer.",
   "The service": "Le service",
   "The service is provided “as is”. To the extent permitted by law, the operator’s total liability is limited to the amounts paid by the user in the last 12 months. Statutory consumer rights are not affected.": "Le service est fourni « en l’état ». Dans les limites permises par la loi, la responsabilité totale de l’éditeur est limitée aux sommes versées par l’utilisateur au cours des 12 derniers mois. Les droits légaux des consommateurs ne sont pas affectés.",
@@ -1551,7 +1550,7 @@ export const FR: Record<string, string> = {
   "Settings changed since — preview again. ": "Les réglages ont changé depuis — relancez l’aperçu. ",
   "Sign in to preview the prompt.": "Connectez-vous pour prévisualiser le prompt.",
   "Preview failed.": "L’aperçu a échoué.",
-  "Keep the room structure (walls, windows)": "Conserver la structure de la pièce (murs, fenêtres)",
+  "Keep the room structure (walls, doors, windows)": "Conserver la structure de la pièce (murs, portes, fenêtres)",
   // Landing §07 — FAQ
   "Questions": "Questions",
   "Frequently asked questions": "Questions fréquentes",

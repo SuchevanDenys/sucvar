@@ -238,7 +238,7 @@ public class SmartStudioEndpointTests : IClassFixture<SucvarApiFactory>
         Assert.Equal("deterministic", body.GetProperty("promptEngine").GetString());
         Assert.DoesNotContain("microcement", body.GetProperty("promptUsed").GetString());
         Assert.Contains("floating furniture", body.GetProperty("negativePromptUsed").GetString());
-        Assert.Equal(0.72, body.GetProperty("parameters").GetProperty("promptStrength").GetDouble(), 3);
+        Assert.Equal(0.68, body.GetProperty("parameters").GetProperty("promptStrength").GetDouble(), 3); // 72 % → structure-lock ceiling
         var vision = body.GetProperty("vision");
         Assert.Equal(12, vision.GetProperty("dimensions").GetProperty("areaSqm").GetDouble());
         Assert.Equal("walls", vision.GetProperty("userSpecs")[1].GetProperty("slot").GetString());
@@ -443,10 +443,11 @@ public class ArchitecturalPromptCompilerTests
     }
 
     [Theory]
-    [InlineData(null, true, 0.72)]
-    [InlineData(95, true, 0.8)]
-    [InlineData(40, true, 0.62)]
-    [InlineData(70, true, 0.7)]
+    [InlineData(null, true, 0.62)]
+    [InlineData(95, true, 0.68)]
+    [InlineData(40, true, 0.55)]
+    [InlineData(60, true, 0.6)]
+    [InlineData(70, true, 0.68)]
     [InlineData(50, false, 0.8)]
     [InlineData(100, false, 0.9)]
     public void Strength_is_calibrated_to_the_structure_mode(int? aiStrength, bool preserve, double expected)
@@ -533,14 +534,16 @@ public class InstructionPromptTests
         }));
         var instruction = plan.Instruction;
 
-        Assert.StartsWith("Redesign this living room photo into a photorealistic fully furnished living room interior in an ", instruction);
+        Assert.StartsWith("Edit this exact room photograph while strictly preserving 100% of its existing architectural shell", instruction);
+        Assert.Contains("Redesign this living room photo into a photorealistic fully furnished living room interior in an ", instruction);
         Assert.Contains("Preserve the exact room geometry: keep the same walls, ceiling, windows, doors", instruction);
         Assert.Contains("same camera position, angle and perspective", instruction);
         Assert.Contains("Client requirements, highest priority, follow them exactly: natural matte white oak plank flooring; " +
                         "warm alabaster white matte walls; deep bordeaux upholstered sofa; warm 3000K indirect lighting.", instruction);
         Assert.Contains("Color palette:", instruction);
         Assert.Contains("Room size: about 12 m², 2.55 m ceiling height; scale everything accordingly (small apartment room", instruction);
-        Assert.EndsWith(ArchitecturalPromptCompiler.PhotographyInstruction("interiors") + ".", instruction);
+        Assert.Contains(ArchitecturalPromptCompiler.PhotographyInstruction("interiors") + ".", instruction);
+        Assert.EndsWith(ArchitecturalPromptCompiler.StructureLock("interiors") + ".", instruction); // closing lock owns the tail
 
         // User requirements come before every other descriptive layer
         var requirements = instruction.IndexOf("Client requirements", StringComparison.Ordinal);
@@ -581,7 +584,8 @@ public class InstructionPromptTests
         try
         {
             var plan = GenerationPrompt.Create(Payload(new { mode = "gardens", customPrompt = "grădină cu plante", areaSqm = 85.5 }));
-            Assert.StartsWith("Redesign this residential garden photo into a photorealistic landscaped residential garden", plan.Instruction);
+            Assert.StartsWith("Edit this exact photograph while strictly preserving 100% of its existing architecture", plan.Instruction);
+            Assert.Contains("Redesign this residential garden photo into a photorealistic landscaped residential garden", plan.Instruction);
             Assert.Contains("Preserve the exact architecture and site", plan.Instruction);
             Assert.Contains("about 85.5 m²", plan.Instruction);
         }
@@ -606,7 +610,10 @@ public class InstructionPromptTests
     {
         var plan = GenerationPrompt.Create(Payload(new { mode = "interiors", spaceType = "kitchen", styleId = "modern" }));
         Assert.Null(plan.Brief);
-        Assert.StartsWith("Redesign this kitchen photo into a photorealistic fully furnished kitchen interior.", plan.Instruction);
+        Assert.StartsWith("Edit this exact room photograph while strictly preserving 100% of its existing architectural shell", plan.Instruction);
+        Assert.Contains("Redesign this kitchen photo into a photorealistic fully furnished kitchen interior.", plan.Instruction);
+        Assert.Contains("Kitchen placement rule", plan.Instruction);
+        Assert.EndsWith("clearly visible in their exact original locations.", plan.Instruction);
         Assert.Contains("Preserve the exact room geometry", plan.Instruction);
         Assert.Contains("Target design:", plan.Instruction);
         Assert.Equal(PromptFormat.Clip, plan.Format);
@@ -661,7 +668,7 @@ public class ReplicateProviderTests
         var input = body["input"]!.AsObject();
         Assert.Equal(Image, input["image"]!.GetValue<string>());
         Assert.Equal("lowres", input["negative_prompt"]!.GetValue<string>());
-        Assert.Equal(0.72, input["prompt_strength"]!.GetValue<double>());
+        Assert.Equal(0.68, input["prompt_strength"]!.GetValue<double>()); // structure lock caps the requested 0.72
         Assert.Equal(9, input["guidance_scale"]!.GetValue<double>());
         Assert.Equal(40, input["num_inference_steps"]!.GetValue<int>());
         Assert.Equal(5, input["seed"]!.GetValue<long>());
@@ -795,7 +802,8 @@ public class InstructionEndpointTests : IClassFixture<SucvarApiFactory>
         Assert.Equal(HttpStatusCode.OK, res.StatusCode);
         var body = await res.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("instruction", body.GetProperty("promptFormat").GetString());
-        Assert.StartsWith("Redesign this living room photo", body.GetProperty("prompt").GetString());
+        Assert.StartsWith("Edit this exact room photograph", body.GetProperty("prompt").GetString());
+        Assert.Contains("Redesign this living room photo", body.GetProperty("prompt").GetString());
         Assert.Contains("deep bordeaux upholstered sofa", body.GetProperty("prompt").GetString());
         Assert.Equal("", body.GetProperty("negativePrompt").GetString());
         Assert.Equal(JsonValueKind.Null, body.GetProperty("maxTokens").ValueKind);
@@ -933,7 +941,8 @@ public class RegionalEditTests : IClassFixture<SucvarApiFactory>
         var payload = Payload(new { mode = "interiors", customPrompt = "canapea bordo", selectionBounds = new { x = 0.5, y = 0.5, width = 0, height = 0.2 } });
         var plan = GenerationPrompt.Create(payload);
         Assert.Null(plan.Region); // zero-width bounds are not a selection
-        Assert.StartsWith("Redesign this living room photo", plan.Instruction);
+        Assert.StartsWith("Edit this exact room photograph", plan.Instruction);
+        Assert.Contains("Redesign this living room photo", plan.Instruction);
     }
 
     // ── Routing ────────────────────────────────────────────────────────────────

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
+using Sucvar.Domain.Studio;
 
 namespace Sucvar.Domain.Ai;
 
@@ -21,7 +22,9 @@ public sealed record InstructionBrief(
     double? AreaSqm,
     double? CeilingHeight,
     string ScaleHint,
-    string Details);
+    string Details,
+    string? OptimizationGoal = null,
+    IReadOnlyList<string>? Ergonomics = null);
 
 /// <summary>
 /// One explicit instruction from the user's free text, compiled into English: the room element it targets
@@ -50,8 +53,11 @@ public sealed record RoomScale(double? Length, double? Width, double? Height, do
 public static partial class ArchitecturalPromptCompiler
 {
     // ── Calibration (img2img prompt_strength / denoising) ────────────────────────
-    /// <summary>Sweet spot with structure locked: finishes change completely, geometry stays.</summary>
-    public const double PreserveStrengthMin = 0.62, PreserveStrengthMax = 0.8, RecommendedStrength = 0.72;
+    /// <summary>
+    /// Conservative band with structure locked: finishes change, but doors, windows and walls stay pinned to the
+    /// source pixels (above ~0.7 img2img models start redrawing openings and pushing tall furniture over them).
+    /// </summary>
+    public const double PreserveStrengthMin = 0.55, PreserveStrengthMax = 0.68, RecommendedStrength = 0.62;
     public const double RedesignStrengthMin = 0.8, RedesignStrengthMax = 0.9;
     /// <summary>Smart-path defaults when the request carries no explicit AI settings (frontend mirrors them).</summary>
     public const int SmartInferenceStepsDefault = 40;
@@ -73,7 +79,7 @@ public static partial class ArchitecturalPromptCompiler
                             "plastic textures, oversaturated, cartoon, blurry, watermark, text";
         const string tail = "messy clutter, lowres, distorted furniture, warped lines, duplicated objects, logo";
         var merged = GenerationPrompt.MergeTerms(custom, core,
-            preserveStructure ? "moved walls, changed window positions, altered room geometry" : "",
+            preserveStructure ? "moved walls, changed window positions, altered room geometry, blocked doorways, covered windows" : "",
             tail,
             mode == "interiors" ? "empty room, unfurnished" : "");
         return FitTerms(merged, AiLimits.MaxPromptTokens);
@@ -89,12 +95,15 @@ public static partial class ArchitecturalPromptCompiler
     /// </summary>
     public static string Instruction(InstructionBrief b)
     {
-        var sentences = new List<string>
-        {
-            $"Redesign this {b.Space} photo into a photorealistic {Subject(b.Mode, b.Space)}" +
-            (string.IsNullOrWhiteSpace(b.StyleName) ? "" : $" in {Article(b.StyleName)} {b.StyleName} style"),
-            StructureInstruction(b.Mode, b.PreserveStructure),
-        };
+        var sentences = new List<string>();
+        // FLUX Kontext weighs the opening and the closing of the instruction most: the structural lock owns both
+        if (b.PreserveStructure) sentences.Add(StructureAnchor(b.Mode));
+        sentences.Add($"Redesign this {b.Space} photo into a photorealistic {Subject(b.Mode, b.Space)}" +
+                      (string.IsNullOrWhiteSpace(b.StyleName) ? "" : $" in {Article(b.StyleName)} {b.StyleName} style"));
+        sentences.Add(StructureInstruction(b.Mode, b.PreserveStructure));
+        if (b.PreserveStructure) sentences.AddRange(RoomProtections(b.Mode, b.Space));
+        // "Optimizare spațiu": the space-planning brief comes right after the structure rules — it is the point of the render
+        sentences.AddRange(SpacePlanningSentences(b.Mode, b.OptimizationGoal, b.Ergonomics));
 
         // The client's words lead every descriptive layer: element specs (exact), extra named items, then mood words
         var specs = b.UserSpecs.Where(s => s.Length > 0).ToList();
@@ -115,19 +124,123 @@ public static partial class ArchitecturalPromptCompiler
         if (SizeSentence(b) is { Length: > 0 } size) sentences.Add(size);
         Layer("Design details", b.Details);
         sentences.Add(PhotographyInstruction(b.Mode));
+        if (b.PreserveStructure) sentences.Add(StructureLock(b.Mode));
 
         return string.Join(" ", sentences.Select(s => s.TrimEnd(' ', ',', ';', '.') + "."));
     }
 
     /// <summary>Instruction for legacy (style + dimensions only) requests: the historical layers as target design.</summary>
     public static string LegacyInstruction(string mode, string space, string targetDesign) => string.Join(" ",
-        new[]
+        new[] { StructureAnchor(mode), $"Redesign this {space} photo into a photorealistic {Subject(mode, space)}", StructureInstruction(mode, preserveStructure: true) }
+            .Concat(RoomProtections(mode, space))
+            .Concat(
+            [
+                Clean(targetDesign) is { Length: > 0 } design ? $"Target design: {design}" : "",
+                PhotographyInstruction(mode),
+                StructureLock(mode),
+            ])
+            .Where(s => s.Length > 0).Select(s => s.TrimEnd(' ', ',', ';', '.') + "."));
+
+    // ── Structural invariants (doors, doorways, windows never covered) ─────────────
+
+    /// <summary>
+    /// Opening anchor of every structure-preserving instruction: this is an edit of the exact photograph, and the
+    /// architectural shell (openings, ceiling, beams, wall angles) stays at its original pixel position.
+    /// </summary>
+    public static string StructureAnchor(string mode) => mode == "interiors"
+        ? "Edit this exact room photograph while strictly preserving 100% of its existing architectural shell: keep every door, doorway, " +
+          "door frame, window, window sill, ceiling height, beam, column, and wall angle in its exact original pixel position and perspective"
+        : "Edit this exact photograph while strictly preserving 100% of its existing architecture: keep every door, doorway, door frame, " +
+          "window, window sill, building volume, roofline, column, and terrain line in its exact original pixel position and perspective";
+
+    /// <summary>Closing hard lock: openings are never covered, blocked, removed or replaced by furniture.</summary>
+    public static string StructureLock(string mode) => mode == "interiors"
+        ? "CRITICAL ARCHITECTURAL CONSTRAINTS: Never cover, block, remove, or replace any existing door, doorway, or window with refrigerators, " +
+          "tall pantry cabinets, wardrobes, or furniture. Keep all door swing paths and window openings completely unobstructed and clearly " +
+          "visible in their exact original locations"
+        : "CRITICAL ARCHITECTURAL CONSTRAINTS: Never cover, block, remove, or replace any existing door, doorway, or window with planting, " +
+          "pergolas, structures, or furniture. Keep every entrance and window opening completely unobstructed and clearly visible in its exact " +
+          "original location";
+
+    /// <summary>
+    /// Room-specific placement rules (tall / bulky items only on solid walls) plus the camera and light invariants
+    /// shared by every structure-preserving render.
+    /// </summary>
+    public static IReadOnlyList<string> RoomProtections(string mode, string space)
+    {
+        var rules = new List<string>();
+        if (mode == "interiors")
         {
-            $"Redesign this {space} photo into a photorealistic {Subject(mode, space)}",
-            StructureInstruction(mode, preserveStructure: true),
-            Clean(targetDesign) is { Length: > 0 } design ? $"Target design: {design}" : "",
-            PhotographyInstruction(mode),
-        }.Where(s => s.Length > 0).Select(s => s.TrimEnd(' ', ',', ';', '.') + "."));
+            var room = RoomKind(space);
+            if (room is not null && RoomRules.TryGetValue(room, out var rule)) rules.Add(rule);
+        }
+        rules.Add("Preserve the exact camera focal length, the perspective vanishing points, the floor plane boundaries and the natural light " +
+                  "entering through the existing windows");
+        return rules;
+    }
+
+    private static readonly Dictionary<string, string> RoomRules = new(StringComparer.Ordinal)
+    {
+        ["kitchen"] = "Kitchen placement rule: put the refrigerator, the oven and every tall cabinet or pantry unit only along solid, uninterrupted " +
+                      "wall segments or where cabinetry already stands, never in front of a door, doorway or window; keep the existing doors, " +
+                      "windows and the kitchen workflow clearances in front of the counters strictly intact",
+        ["bathroom"] = "Bathroom placement rule: keep the shower, bathtub, toilet and washbasin in their existing plumbing positions and put tall " +
+                       "storage only on solid wall segments, never in front of the door or the window",
+        ["living"] = "Living room placement rule: put bookcases, media walls, tall shelving and display cabinets only on solid wall segments, never " +
+                     "in front of a door, balcony door or window, and keep the passage between doors clear",
+        ["bedroom"] = "Bedroom placement rule: put wardrobes and tall storage only on solid wall segments, never in front of a door or window, " +
+                      "and keep the bed clear of the door swing",
+    };
+
+    /// <summary>The room family of a space noun ("master bedroom" → bedroom); null for spaces with no specific rule.</summary>
+    private static string? RoomKind(string space)
+    {
+        var s = space.ToLowerInvariant();
+        if (s.Contains("kitchen") || s.Contains("bucatari") || s.Contains("bucătări")) return "kitchen";
+        if (s.Contains("bath") || s.Contains("baie")) return "bathroom";
+        if (s.Contains("bedroom") || s.Contains("dormitor")) return "bedroom";
+        if (s.Contains("living")) return "living";
+        return null;
+    }
+
+    /// <summary>
+    /// Provider-side guard for img2img models (SD / versioned Replicate): with structure locked, the denoising strength
+    /// never leaves the conservative band, whatever the caller computed. Unlocked requests pass through unchanged.
+    /// </summary>
+    public static double StructureLockedStrength(double strength, bool preserveStructure) => preserveStructure
+        ? Math.Clamp(Math.Round(strength, 2), PreserveStrengthMin, PreserveStrengthMax)
+        : strength;
+
+    // ── Space optimization ("Optimizare spațiu" / "Analiză ergonomică") ──────────────
+
+    /// <summary>
+    /// Authoritative space-planning sentences for instruction models (FLUX Kontext): the goal, the furniture
+    /// reorganisation rules, the deterministic ergonomic constraints and the hard architectural limits. Empty when
+    /// the request carries neither a goal nor constraints, or for non-interior modes.
+    /// </summary>
+    public static IReadOnlyList<string> SpacePlanningSentences(string mode, string? goalId, IReadOnlyList<string>? constraints)
+    {
+        var goal = SpatialErgonomicsAnalyzer.GetGoal(goalId);
+        var rules = (constraints ?? []).Select(c => Clean(c)).Where(c => c.Length > 0).ToList();
+        if (mode != "interiors" || (goal is null && rules.Count == 0)) return [];
+        var sentences = new List<string>();
+        if (goal is not null) sentences.Add($"Space optimization goal: {goal.InstructionEn}");
+        sentences.Add("Reorganize the furniture layout with professional space planning: reposition furniture for an ergonomic flow, " +
+                      "replace or scale down bulky pieces with compact, well-proportioned ones, maximize vertical storage, keep walkways clear " +
+                      "and never place furniture in front of windows or door swings, maximizing natural daylight");
+        if (rules.Count > 0) sentences.Add($"Ergonomic rules, follow them exactly: {string.Join("; ", rules)}");
+        sentences.Add("Strictly keep the structural walls, the ceiling height and the exact position and size of every window and door; " +
+                      "only movable furniture, built-in joinery, finishes and lighting may change");
+        return sentences;
+    }
+
+    /// <summary>The goal's compact CLIP cue (plus a generic walkway cue for constraint-only requests).</summary>
+    public static string SpacePlanningClip(string mode, string? goalId, IReadOnlyList<string>? constraints)
+    {
+        if (mode != "interiors") return "";
+        if (SpatialErgonomicsAnalyzer.GetGoal(goalId) is { } goal) return goal.ClipEn;
+        return constraints is { Count: > 0 } ? "ergonomic space planning, clear walkways, uncluttered floor" : "";
+    }
 
     /// <summary>What the instruction asks the model to keep (or free) — the core of structure preservation.</summary>
     public static string StructureInstruction(string mode, bool preserveStructure) => (mode, preserveStructure) switch
