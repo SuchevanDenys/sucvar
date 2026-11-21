@@ -15,7 +15,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
 
 API_PROJECT="backend/src/Sucvar.Api"
-API_PORT=5080   # launchSettings.json "http" profile + backend/.env ASPNETCORE_URLS
+API_PORT=5080   # launchSettings.json "http" profile binds 0.0.0.0:5080 (localhost + LAN for the iPhone bridge).
+                # Not 5000: macOS AirPlay Receiver (ControlCenter) listens there.
 WEB_PORT=3000   # Cors:AllowedOrigins in appsettings*.json allows only this origin
 WATCH=1
 
@@ -156,6 +157,7 @@ start WEB "$C_WEB" pnpm --dir frontend dev --port "$WEB_PORT"
 set +m
 
 log "API → http://localhost:$API_PORT  (health: /health, docs: /scalar)"
+log "API (LAN / iPhone RoomPlan) → http://$(scutil --get LocalHostName 2>/dev/null || hostname -s).local:$API_PORT"
 log "WEB → http://localhost:$WEB_PORT"
 log "Press Ctrl+C to stop both."
 

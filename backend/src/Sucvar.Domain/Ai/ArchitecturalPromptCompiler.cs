@@ -24,7 +24,14 @@ public sealed record InstructionBrief(
     string ScaleHint,
     string Details,
     string? OptimizationGoal = null,
-    IReadOnlyList<string>? Ergonomics = null);
+    IReadOnlyList<string>? Ergonomics = null,
+    ScanGeometry? Scan = null);
+
+/// <summary>
+/// "Proiect scanat 3D (LiDAR)": the source image is a perspective render of an imported 3D room scan. Exact scanned
+/// size (metres) and the openings the scan detected (null = unknown).
+/// </summary>
+public sealed record ScanGeometry(double? LengthM, double? WidthM, double? HeightM, int? Doors, int? Windows);
 
 /// <summary>
 /// One explicit instruction from the user's free text, compiled into English: the room element it targets
@@ -72,6 +79,12 @@ public static partial class ArchitecturalPromptCompiler
     /// Anti-artifact negative prompt, ordered by importance (the encoder truncates the tail). The user's own
     /// negative (when it differs from the stock default) leads; structure-violation cues follow when preserving.
     /// </summary>
+    public static string NegativePrompt(string mode, bool preserveStructure, string? userNegative, bool scanSource)
+    {
+        var baseNegative = NegativePrompt(mode, preserveStructure, userNegative);
+        return scanSource ? FitTerms(GenerationPrompt.MergeTerms(ScanNegatives, baseNegative), AiLimits.MaxPromptTokens) : baseNegative;
+    }
+
     public static string NegativePrompt(string mode, bool preserveStructure, string? userNegative)
     {
         var custom = string.IsNullOrWhiteSpace(userNegative) || userNegative.Trim() == AiLimits.DefaultNegativePrompt ? "" : userNegative;
@@ -96,12 +109,21 @@ public static partial class ArchitecturalPromptCompiler
     public static string Instruction(InstructionBrief b)
     {
         var sentences = new List<string>();
-        // FLUX Kontext weighs the opening and the closing of the instruction most: the structural lock owns both
-        if (b.PreserveStructure) sentences.Add(StructureAnchor(b.Mode));
-        sentences.Add($"Redesign this {b.Space} photo into a photorealistic {Subject(b.Mode, b.Space)}" +
-                      (string.IsNullOrWhiteSpace(b.StyleName) ? "" : $" in {Article(b.StyleName)} {b.StyleName} style"));
-        sentences.Add(StructureInstruction(b.Mode, b.PreserveStructure));
-        if (b.PreserveStructure) sentences.AddRange(RoomProtections(b.Mode, b.Space));
+        if (b.Scan is { } scan)
+        {
+            // 3D LiDAR source: synthesis from a spatial model, not an edit of a photograph. The scan owns the geometry.
+            sentences.AddRange(ScanSynthesisSentences(b.Space, b.StyleName, scan));
+            sentences.AddRange(RoomProtections(b.Mode, b.Space));
+        }
+        else
+        {
+            // FLUX Kontext weighs the opening and the closing of the instruction most: the structural lock owns both
+            if (b.PreserveStructure) sentences.Add(StructureAnchor(b.Mode));
+            sentences.Add($"Redesign this {b.Space} photo into a photorealistic {Subject(b.Mode, b.Space)}" +
+                          (string.IsNullOrWhiteSpace(b.StyleName) ? "" : $" in {Article(b.StyleName)} {b.StyleName} style"));
+            sentences.Add(StructureInstruction(b.Mode, b.PreserveStructure));
+            if (b.PreserveStructure) sentences.AddRange(RoomProtections(b.Mode, b.Space));
+        }
         // "Optimizare spațiu": the space-planning brief comes right after the structure rules — it is the point of the render
         sentences.AddRange(SpacePlanningSentences(b.Mode, b.OptimizationGoal, b.Ergonomics));
 
@@ -124,10 +146,92 @@ public static partial class ArchitecturalPromptCompiler
         if (SizeSentence(b) is { Length: > 0 } size) sentences.Add(size);
         Layer("Design details", b.Details);
         sentences.Add(PhotographyInstruction(b.Mode));
-        if (b.PreserveStructure) sentences.Add(StructureLock(b.Mode));
+        if (b.Scan is not null) sentences.Add(ScanOpeningsLock(b.Scan));
+        else if (b.PreserveStructure) sentences.Add(StructureLock(b.Mode));
 
         return string.Join(" ", sentences.Select(s => s.TrimEnd(' ', ',', ';', '.') + "."));
     }
+
+    // ── 3D LiDAR scan → photorealistic synthesis ("Proiect scanat 3D") ───────────────
+
+    /// <summary>
+    /// Denoising band for a 3D-scan source on img2img models: the flat shaded planes must become real materials, so the
+    /// strength is high, while line conditioning (ControlNet MLSD on the wireframe) keeps walls and openings in place.
+    /// </summary>
+    public const double ScanStrengthMin = 0.8, ScanStrengthMax = 0.92, ScanStrengthDefault = 0.86;
+
+    /// <summary>Clamps the requested strength into the 3D-scan synthesis band.</summary>
+    public static double ScanSynthesisStrength(double requested) =>
+        Math.Clamp(Math.Round(Math.Max(requested, ScanStrengthDefault), 2), ScanStrengthMin, ScanStrengthMax);
+
+    private static string Metres(double v) => v.ToString("0.00", CultureInfo.InvariantCulture);
+
+    private static string Plural(int n, string one, string many) => $"{n} {(n == 1 ? one : many)}";
+
+    /// <summary>"4.85m × 3.90m × 2.65m" (length × width × ceiling height), or "" when the size is unknown.</summary>
+    public static string ScanDimensions(ScanGeometry g) =>
+        g is { LengthM: { } l, WidthM: { } w, HeightM: { } h } ? $"{Metres(l)}m × {Metres(w)}m × {Metres(h)}m" : "";
+
+    /// <summary>"1 door and 2 windows" (only the counts the scan reported).</summary>
+    public static string ScanOpenings(ScanGeometry g)
+    {
+        var parts = new List<string>();
+        if (g.Doors is { } d) parts.Add(Plural(d, "door", "doors"));
+        if (g.Windows is { } w) parts.Add(Plural(w, "window", "windows"));
+        return string.Join(" and ", parts);
+    }
+
+    /// <summary>
+    /// The opening of a 3D-scan instruction: what the source image is, the conversion asked for, the exact scanned
+    /// dimensions and camera, the detected openings rendered as real architecture, and the removal of every guide line.
+    /// </summary>
+    public static IReadOnlyList<string> ScanSynthesisSentences(string space, string? styleName, ScanGeometry g)
+    {
+        var style = string.IsNullOrWhiteSpace(styleName) ? "" : $" in {Article(styleName)} {styleName} style";
+        var sentences = new List<string>
+        {
+            "This image is a 3D LiDAR room scan shown as an architectural perspective model (flat shaded floor, wall and ceiling planes " +
+            "with a structural wireframe), not a photograph",
+            $"Convert this 3D architectural spatial layout and perspective model into a fully furnished, lifelike, photorealistic interior " +
+            $"photograph of a {space}{style}, with natural daylight, realistic textures and materials, and architectural lighting",
+        };
+        var dims = ScanDimensions(g);
+        sentences.Add(dims.Length > 0
+            ? $"Exact scanned room dimensions: {dims} (length × width × ceiling height, {Metres(g.HeightM!.Value)}m ceiling); keep these real proportions, " +
+              "the wall angles, the ceiling height, the floor plane and the eye-level camera position, angle and vanishing points exactly as in the model"
+            : "Keep the scanned room proportions, wall angles, ceiling height, floor plane and the eye-level camera position, angle and vanishing points exactly as in the model");
+        var openings = ScanOpenings(g);
+        sentences.Add(openings.Length > 0
+            ? $"The scan detected {openings}: render every door outline as a real door with its frame and every window outline as a real glazed " +
+              "window with frame, sill and daylight coming through, each in its exact position and size on its wall"
+            : "Render every door outline as a real door with its frame and every window outline as a real glazed window with frame, sill and daylight, " +
+              "each in its exact position and size on its wall");
+        sentences.Add("Replace the flat shaded planes, the wireframe lines, the floor grid and the metric tick marks with real finishes; " +
+                      "no guide lines, grid, outlines or CGI look may remain in the final photograph");
+        return sentences;
+    }
+
+    /// <summary>Closing hard lock for a 3D-scan source: the scanned openings stay real, free and in place.</summary>
+    public static string ScanOpeningsLock(ScanGeometry g)
+    {
+        var openings = ScanOpenings(g);
+        return "CRITICAL ARCHITECTURAL CONSTRAINTS: " +
+               (openings.Length > 0 ? $"the {openings} detected by the 3D scan must stay visible in their exact scanned positions. " : "") +
+               "Never cover, block, remove, or replace any door, doorway, or window with refrigerators, tall pantry cabinets, wardrobes, " +
+               "appliances, or furniture; keep door swing paths and window openings completely unobstructed";
+    }
+
+    /// <summary>Compact CLIP twin of the scan directive (img2img models: SD / Replicate).</summary>
+    public static string ScanClip(ScanGeometry g)
+    {
+        var terms = new List<string> { "photorealistic interior photo from 3D room scan", "real materials replacing flat planes" };
+        if (ScanDimensions(g) is { Length: > 0 } dims) terms.Add($"{dims.Replace(" ", "")} room");
+        if (ScanOpenings(g) is { Length: > 0 } openings) terms.Add($"{openings} unobstructed");
+        return string.Join(", ", terms);
+    }
+
+    /// <summary>Negative cues that keep the scan's rendering artifacts out of the photograph.</summary>
+    public const string ScanNegatives = "wireframe, grid lines, clay render, untextured 3d model, CGI render, outlines";
 
     /// <summary>Instruction for legacy (style + dimensions only) requests: the historical layers as target design.</summary>
     public static string LegacyInstruction(string mode, string space, string targetDesign) => string.Join(" ",

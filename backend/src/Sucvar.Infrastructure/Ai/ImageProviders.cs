@@ -45,6 +45,18 @@ public sealed class AiOptions
     /// will still be billed.
     /// </summary>
     public int GenerationBudgetSeconds { get; set; } = 80;
+    /// <summary>
+    /// Stage-1 vision detector (outlets, switches, radiators, doors, windows, corners) run before a structure-preserving
+    /// render, with the same <see cref="ReplicateApiToken"/>. False = generation without fixture anchors / pixel shield.
+    /// </summary>
+    public bool VisionEnabled { get; set; } = true;
+    /// <summary>Replicate vision-language model: <c>owner/name</c> (official endpoint) or <c>owner/name:version</c>.</summary>
+    public string? VisionModel { get; set; } = DefaultVisionModel;
+    public const string DefaultVisionModel = "qwen/qwen2.5-vl-72b-instruct";
+    /// <summary>Hard budget for the whole detection call (clamped to 0.1–6 s); past it the render proceeds without it.</summary>
+    public int VisionTimeoutMs { get; set; } = 6000;
+    /// <summary>Longest side (px) of the photo sent to the vision model.</summary>
+    public int VisionMaxSide { get; set; } = 768;
     /// <summary>Demo delay (route: 2 s). Tests set 0.</summary>
     public int DemoDelayMs { get; set; } = 2000;
 
@@ -145,9 +157,9 @@ public sealed partial class ReplicateImageProvider(IHttpClientFactory http, IOpt
             ["num_inference_steps"] = request.InferenceSteps,
             ["guidance_scale"] = request.GuidanceScale,
             // Structure lock: conservative band (0.55–0.68) so the model cannot redraw openings
-            ["prompt_strength"] = request.MaskDataUrl is null
-                ? Sucvar.Domain.Ai.ArchitecturalPromptCompiler.StructureLockedStrength(request.PromptStrength, request.PreserveStructure)
-                : request.PromptStrength,
+            ["prompt_strength"] = request.MaskDataUrl is not null ? request.PromptStrength
+                : request.Is3dScanSource ? Sucvar.Domain.Ai.ArchitecturalPromptCompiler.ScanSynthesisStrength(request.PromptStrength)
+                : Sucvar.Domain.Ai.ArchitecturalPromptCompiler.StructureLockedStrength(request.PromptStrength, request.PreserveStructure),
         };
         if (request.Seed is { } seed) input["seed"] = seed;
         return ("v1/predictions", new JsonObject { ["version"] = AiOptions.Clean(options.Value.ReplicateModelVersion), ["input"] = input });
@@ -266,9 +278,9 @@ public sealed class StableDiffusionImageProvider(IHttpClientFactory http, IOptio
             ["negative_prompt"] = request.NegativePrompt,
             ["steps"] = request.InferenceSteps,
             ["cfg_scale"] = request.GuidanceScale,
-            ["denoising_strength"] = request.MaskDataUrl is null
-                ? Sucvar.Domain.Ai.ArchitecturalPromptCompiler.StructureLockedStrength(request.TransformationStrength / 100, request.PreserveStructure)
-                : request.TransformationStrength / 100,
+            ["denoising_strength"] = request.MaskDataUrl is not null ? request.TransformationStrength / 100
+                : request.Is3dScanSource ? Sucvar.Domain.Ai.ArchitecturalPromptCompiler.ScanSynthesisStrength(request.TransformationStrength / 100)
+                : Sucvar.Domain.Ai.ArchitecturalPromptCompiler.StructureLockedStrength(request.TransformationStrength / 100, request.PreserveStructure),
             ["seed"] = request.Seed ?? -1,
             ["sampler_name"] = string.IsNullOrWhiteSpace(o.SdSampler) ? "DPM++ 2M Karras" : o.SdSampler.Trim(),
             ["width"] = width,
@@ -470,6 +482,52 @@ public sealed class SkiaImageProcessor(IHttpClientFactory http) : IImageProcesso
         using var composite = MaskCompositor.Composite(original, result, alpha);
         using var compositeImage = SKImage.FromBitmap(composite);
         using var jpeg = compositeImage.Encode(SKEncodedImageFormat.Jpeg, ResultJpegQuality);
+        return $"data:image/jpeg;base64,{Convert.ToBase64String(jpeg.AsSpan())}";
+    }
+
+    // ── Pixel-level MEP fixture shield ──────────────────────────────────────────
+
+    /// <summary>Feather (px) of a shielded fixture patch: small boxes need a short, subtle ramp.</summary>
+    public const int ShieldFeather = 3;
+
+    public async Task<string> ShieldFixturesAsync(string sourceDataUrl, string generatedSource,
+        IReadOnlyList<Sucvar.Domain.Ai.DetectedFixture> shields, CancellationToken ct = default)
+    {
+        var generated = await ReadSourceAsync(generatedSource, ct);
+        return ShieldJpegDataUrl(DecodeDataUrl(sourceDataUrl), generated, shields);
+    }
+
+    /// <summary>
+    /// <c>generated + (source − generated) · α</c> on the source frame (≤ 1280 px wide, generated image covered onto it),
+    /// where α is 1 inside each padded fixture rectangle, feathered over <see cref="ShieldFeather"/> px inside its edge,
+    /// and exactly 0 everywhere else — outside the boxes the render is byte-for-byte the model's.
+    /// </summary>
+    public static string ShieldJpegDataUrl(byte[] source, byte[] generated, IReadOnlyList<Sucvar.Domain.Ai.DetectedFixture> shields)
+    {
+        int srcW, srcH;
+        using (var codec = SKCodec.Create(new MemoryStream(source)) ?? throw new InvalidDataException("unreadable source"))
+            (srcW, srcH) = MaskCompositor.OrientedSize(codec.EncodedOrigin, codec.Info.Width, codec.Info.Height);
+        var scale = srcW > ResultMaxWidth ? (double)ResultMaxWidth / srcW : 1d;
+        var outW = Math.Max(1, (int)Math.Round(srcW * scale));
+        var outH = Math.Max(1, (int)Math.Round(srcH * scale));
+
+        var photo = new SKSamplingOptions(SKCubicResampler.Mitchell);
+        using var original = MaskCompositor.RenderUpright(source, outW, outH, cover: false, SKColors.White, photo);
+        using var result = MaskCompositor.RenderUpright(generated, outW, outH, cover: true, SKColors.White, photo);
+
+        var mask = new byte[outW * outH];
+        foreach (var f in shields)
+        {
+            var (x, y, w, h) = Sucvar.Domain.Ai.RoomFixtures.ShieldRect(f);
+            int x0 = Math.Clamp((int)Math.Floor(x * outW), 0, outW), x1 = Math.Clamp((int)Math.Ceiling((x + w) * outW), 0, outW);
+            int y0 = Math.Clamp((int)Math.Floor(y * outH), 0, outH), y1 = Math.Clamp((int)Math.Ceiling((y + h) * outH), 0, outH);
+            for (var py = y0; py < y1; py++) Array.Fill(mask, (byte)255, py * outW + x0, x1 - x0);
+        }
+        var alpha = MaskCompositor.FeatherAlpha(mask, outW, outH, ShieldFeather);
+        // Composite keeps its first bitmap wherever α = 0: here that is the generated render
+        using var shielded = MaskCompositor.Composite(result, original, alpha);
+        using var image = SKImage.FromBitmap(shielded);
+        using var jpeg = image.Encode(SKEncodedImageFormat.Jpeg, ResultJpegQuality);
         return $"data:image/jpeg;base64,{Convert.ToBase64String(jpeg.AsSpan())}";
     }
 

@@ -202,7 +202,10 @@ public sealed record ImageGenerationRequest(
     bool PreserveStructure = true,
     // "Edit selected area": binary PNG data URL aligned to the source pixels (white = edit, black = keep). Null = full
     // redesign. Providers that can inpaint use it natively; the API composites the result through it either way.
-    string? MaskDataUrl = null);
+    string? MaskDataUrl = null,
+    // "Proiect scanat 3D (LiDAR)": the source is a perspective render of a 3D scan, not a photo — img2img models use the
+    // high synthesis band (flat planes → real materials) instead of the photo structure-lock band.
+    bool Is3dScanSource = false);
 
 /// <summary>Inputs for the optional LLM "Prompt Architect" (all already validated by the Domain).</summary>
 public sealed record PromptEnhancementRequest(
@@ -229,6 +232,17 @@ public interface IPromptEnhancer
     bool IsConfigured { get; }
     /// <summary>Comma-separated English render terms, or null when nothing usable came back.</summary>
     Task<string?> EnhanceAsync(PromptEnhancementRequest request, CancellationToken ct = default);
+}
+
+/// <summary>
+/// Stage 1 of the precision pipeline: a vision-language model that locates outlets, switches, radiators, doors, windows
+/// and structural corners on the source photo before generation. Best effort by contract: disabled, slow (strict
+/// timeout), failing or unparsable ⇒ an empty list, never an exception (only the caller's own cancellation propagates).
+/// </summary>
+public interface IRoomFixtureDetector
+{
+    bool IsConfigured { get; }
+    Task<IReadOnlyList<Sucvar.Domain.Ai.DetectedFixture>> DetectAsync(string imageDataUrl, CancellationToken ct = default);
 }
 
 /// <summary>Provider output: a URL or data URL, plus whether it came from the demo provider (no real AI call).</summary>
@@ -278,6 +292,13 @@ public interface IImageProcessor
     /// every pixel outside the selection comes from the original photo. Returns a permanent JPEG data URL.
     /// </summary>
     Task<string> CompositeRegionAsync(string sourceDataUrl, string generatedSource, string maskDataUrl, CancellationToken ct = default);
+    /// <summary>
+    /// Pixel-level MEP fixture shield: downloads (if needed) the generated image, frames it on the source photo (same frame as
+    /// <see cref="CompositeRegionAsync"/>) and restores the source pixels over each padded fixture box through a feathered
+    /// alpha. Every pixel outside the boxes is the generated image's. Returns a permanent JPEG data URL (one encode).
+    /// </summary>
+    Task<string> ShieldFixturesAsync(string sourceDataUrl, string generatedSource, IReadOnlyList<Sucvar.Domain.Ai.DetectedFixture> shields,
+        CancellationToken ct = default);
 }
 
 /// <summary>A validated selection mask: binary PNG data URL at the source size and the selection it describes.</summary>

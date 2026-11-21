@@ -1,23 +1,32 @@
 // app/components/studio/LidarScanModal.tsx
 // „Scanare LiDAR & Măsurare Cameră” — fereastra comună Studio (03 Dimensiuni & Ergonomie) și Deviz B2B.
-//   Tab 1 · Import scanare 3D (.obj / .usdz / .usda / .json RoomPlan) + scanarea demo → vizualizator wireframe.
+//   Tab 1 · Import scanare 3D (.zip Scaniverse / Polycam, .obj + .mtl + .jpg, .usdz / .usda / .json RoomPlan) + demo.
+//     „Scanează live cu iPhone (RoomPlan)” (`IphoneBridgePanel`): cod de 6 cifre, aplicația iOS trimite scanarea la
+//     /api/studio/lidar/upload, iar fișierul primit trece prin același `runParse` ca un import manual.
+//     Plasă reală (OBJ cu fețe) → vizualizatorul WebGL texturat (`LidarMeshCanvas`: Vedere ansamblu / Unghi interior
+//     1 / 2, cote 3D); fără fețe (JSON / USD / demo) → vizualizatorul schematic (`LidarWireframeCanvas`).
 //   Tab 2 · Calibrare din fotografie / cameră live (4 colțuri de podea + referință verticală).
 //   Dreapta: rezumatul cotelor + „Aplică dimensiunile în Studio & B2B” (părintele decide ce actualizează).
+//   Studio (`onGenerateFrom3d`): vizualizatorul are și perspectiva interioară (Unghi 1 · Colț intrare / Unghi 2 · Spre
+//   fereastră / Unghi 3 · Unghiul tău), iar „Generează din acest proiect 3D” trimite randarea 1280 × 800 ca sursă Studio
+//   (plasa reală: exact vederea WebGL curentă, fără cote).
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Box, Camera, Check, FileBox, Info, ScanLine, Sparkles, TriangleAlert, Upload, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Box, Camera, Check, FileBox, Info, Orbit, ScanLine, Smartphone, Sparkles, TriangleAlert, Upload, Wand2, X } from 'lucide-react';
 import { LOCALES, tr } from '@/app/lib/i18n';
 import { EYEBROW, getSkin } from '@/app/lib/theme/skin';
 import type { Language } from '@/app/types';
 import {
+  ACCEPTED_COMPANION_EXTENSIONS,
   ACCEPTED_SCAN_EXTENSIONS,
   STANDARD_DOOR_AREA,
   STANDARD_WINDOW_AREA,
   ScanParseError,
   loadDemoScan,
   measurementFromScan,
-  parseScanFile,
+  parseScanFiles,
   type LengthUnit,
   type RoomMeasurement,
   type RoomScan,
@@ -25,6 +34,22 @@ import {
   type UpAxis,
 } from '@/app/lib/studio/lidarParser';
 import type { CalibrationOutcome } from '@/app/lib/studio/perspective';
+import {
+  cameraPresetLabel,
+  defaultCameraAngle,
+  defaultOrbitView,
+  interiorMeshView,
+  meshPresetLabel,
+  meshViewAngle,
+  renderScanToStudioImage,
+  type MeshView,
+  type MeshViewPreset,
+  type ScanCameraAngle,
+  type ScanCameraPreset,
+} from '@/app/lib/studio/scanRender';
+import { renderScanMeshToImage, supportsWebGL2 } from '@/app/lib/studio/meshRenderer';
+import IphoneBridgePanel from './IphoneBridgePanel';
+import LidarMeshCanvas from './LidarMeshCanvas';
 import LidarWireframeCanvas from './LidarWireframeCanvas';
 import PhotoCalibrator from './PhotoCalibrator';
 
@@ -48,23 +73,59 @@ interface Props {
   onApply: (m: RoomMeasurement) => void;
   /** Text suplimentar sub butonul de aplicare (ex. ce se recalculează în B2B). */
   applyNote?: string;
+  /**
+   * Studio: „Generează din acest proiect 3D” — cotele + perspectiva interioară randată (PNG 1280 × 800) devin sursa
+   * Studio („Proiect scanat 3D”). Absent (ex. /b2b) = doar aplicarea cotelor.
+   */
+  onGenerateFrom3d?: (r: { scan: RoomScan; angle: ScanCameraAngle; image: string; measurement: RoomMeasurement; view?: MeshView }) => void;
+  /** Deschide direct puntea live iPhone (cod de asociere + așteptarea scanării). */
+  initialBridge?: boolean;
 }
 
-const MAX_SCAN_BYTES = 250 * 1024 * 1024;
+export type { ScanCameraAngle };
 
-export default function LidarScanModal({ open, onClose, lang, isDark, current, studioPhoto, onApply, applyNote }: Props) {
+const MAX_SCAN_BYTES = 250 * 1024 * 1024;
+const isAccepted = (name: string, list: readonly string[]) => list.some((ext) => name.toLowerCase().endsWith(ext));
+
+export default function LidarScanModal({ open, onClose, lang, isDark, current, studioPhoto, onApply, applyNote, onGenerateFrom3d, initialBridge = false }: Props) {
   const sk = getSkin(isDark);
   const t = useCallback((ro: string, en: string, fr?: string) => tr(lang, ro, en, fr), [lang]);
   const [tab, setTab] = useState<'scan' | 'photo'>('scan');
+  // Puntea iPhone: montată = cod activ + interogare; demontată (ascunsă / alt tab / fereastră închisă) = nicio cerere
+  const [bridgeOn, setBridgeOn] = useState(initialBridge);
   const [scan, setScan] = useState<RoomScan | null>(null);
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [override, setOverride] = useState<{ upAxis?: UpAxis; unit?: LengthUnit }>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [photo, setPhoto] = useState<CalibrationOutcome | null>(null);
+  // Vizualizatorul: orbită 3D sau perspectiva interioară; unghiul ales e și cel trimis în Studio
+  const [viewMode, setViewMode] = useState<'orbit' | 'interior'>('orbit');
+  const [angle, setAngle] = useState<ScanCameraAngle>({ preset: 'window' });
+  const orbitRef = useRef({ yaw: 0, pitch: 0 });
+  const onViewChange = useCallback((v: { yaw: number; pitch: number }) => {
+    orbitRef.current = v;
+  }, []);
+  // Plasa reală (WebGL): vederea curentă (citită de captură), versiunea presetării și presetarea afișată ca activă
+  const meshViewRef = useRef<MeshView>(defaultOrbitView());
+  const [meshVersion, setMeshVersion] = useState(0);
+  const [meshPreset, setMeshPreset] = useState<MeshViewPreset>('overview');
+  const [glFailed, setGlFailed] = useState(false);
+  const onMeshCommit = useCallback((v: MeshView) => setMeshPreset(v.preset), []);
+  const onGlUnsupported = useCallback(() => setGlFailed(true), []);
   const inputRef = useRef<HTMLInputElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+
+  /** Scanare nouă: vederea revine la orbită, unghiul Studio la presetarea potrivită (spre fereastră / din intrare). */
+  const showScan = useCallback((next: RoomScan | null) => {
+    setScan(next);
+    setViewMode('orbit');
+    if (next) setAngle(defaultCameraAngle(next));
+    meshViewRef.current = defaultOrbitView();
+    setMeshPreset('overview');
+    setMeshVersion((n) => n + 1);
+  }, []);
 
   // Părintele poate trimite un `onClose` nou la fiecare randare: îl citim dintr-un ref, ca efectul de mai jos
   // (focus + blocarea derulării) să ruleze doar la deschidere / închidere, nu la fiecare randare a Studio-ului.
@@ -97,12 +158,21 @@ export default function LidarScanModal({ open, onClose, lang, isDark, current, s
     }
     switch (e.code) {
       case 'empty': return t('Fișierul este gol.', 'The file is empty.', 'Le fichier est vide.');
-      case 'unsupported': return t('Format nesuportat. Folosește .obj, .usdz, .usda sau .json (RoomPlan).', 'Unsupported format. Use .obj, .usdz, .usda or .json (RoomPlan).', 'Format non pris en charge. Utilisez .obj, .usdz, .usda ou .json (RoomPlan).');
+      case 'unsupported': return t('Format nesuportat. Folosește .zip (Scaniverse / Polycam), .obj (+ .mtl + .jpg), .usdz, .usda sau .json (RoomPlan).', 'Unsupported format. Use .zip (Scaniverse / Polycam), .obj (+ .mtl + .jpg), .usdz, .usda or .json (RoomPlan).', 'Format non pris en charge. Utilisez .zip (Scaniverse / Polycam), .obj (+ .mtl + .jpg), .usdz, .usda ou .json (RoomPlan).');
+      case 'zip-no-model': return t('Arhiva .zip nu conține un model 3D (.obj, .json RoomPlan sau .usda).', 'The .zip archive has no 3D model (.obj, RoomPlan .json or .usda).', 'L’archive .zip ne contient aucun modèle 3D (.obj, .json RoomPlan ou .usda).');
       case 'no-vertices': return t('Nu am găsit geometrie (vârfuri) în fișier.', 'No geometry (vertices) found in the file.', 'Aucune géométrie (sommets) trouvée.');
       case 'invalid-json': return t('JSON invalid — verifică exportul RoomPlan.', 'Invalid JSON — check the RoomPlan export.', 'JSON invalide — vérifiez l’export RoomPlan.');
       case 'no-room': return t('JSON-ul nu conține pereți RoomPlan (`walls`) sau `dimensions` cu lungime / lățime / înălțime.', 'The JSON has no RoomPlan walls or length / width / height dimensions.', 'Le JSON ne contient ni murs RoomPlan ni dimensions.');
-      case 'zip-invalid': return t('Arhiva USDZ este coruptă sau într-un format ZIP necunoscut.', 'The USDZ archive is corrupt or uses an unknown ZIP format.', 'L’archive USDZ est corrompue ou dans un format ZIP inconnu.');
+      case 'zip-invalid': return t('Arhiva (.zip / .usdz) este coruptă sau într-un format ZIP necunoscut.', 'The archive (.zip / .usdz) is corrupt or uses an unknown ZIP format.', 'L’archive (.zip / .usdz) est corrompue ou dans un format ZIP inconnu.');
       case 'usdz-empty': return t('Pachetul USDZ nu conține un strat USD.', 'The USDZ package has no USD layer.', 'Le paquet USDZ ne contient aucune couche USD.');
+      case 'degenerate': {
+        const size = e.detail ? ` (${e.detail})` : '';
+        return t(
+          `Geometria nu descrie o cameră${size}: lipsesc pereții sau înălțimea. Exportă scanarea completă a camerei.`,
+          `The geometry does not describe a room${size}: walls or height are missing. Export the full room scan.`,
+          `La géométrie ne décrit pas une pièce${size} : murs ou hauteur manquants. Exportez le scan complet de la pièce.`,
+        );
+      }
       case 'usdz-binary': {
         const found = e.detail ? ` (${t('detectat', 'detected', 'détecté')}: ${e.detail})` : '';
         return t(
@@ -114,50 +184,103 @@ export default function LidarScanModal({ open, onClose, lang, isDark, current, s
     }
   }, [t]);
 
-  const runParse = useCallback(async (f: File, opts: { upAxis?: UpAxis; unit?: LengthUnit }) => {
+  const runParse = useCallback(async (list: File[], opts: { upAxis?: UpAxis; unit?: LengthUnit }) => {
     setBusy(true);
     setError(null);
     try {
-      setScan(await parseScanFile(f, opts));
+      showScan(await parseScanFiles(list, opts));
     } catch (e) {
-      setScan(null);
+      showScan(null);
       setError(errorText(e));
     } finally {
       setBusy(false);
     }
-  }, [errorText]);
+  }, [errorText, showScan]);
 
-  const acceptFile = (f: File | undefined) => {
-    if (!f) return;
-    const name = f.name.toLowerCase();
-    if (!ACCEPTED_SCAN_EXTENSIONS.some((ext) => name.endsWith(ext))) {
+  // Un fișier de scanare (.zip / .obj / .usdz / .usda / .json) + opțional .mtl și texturile (selecție multiplă)
+  const acceptFiles = (list: FileList | null | undefined) => {
+    const all = Array.from(list ?? []);
+    if (!all.length) return;
+    const picked = all.filter((f) => isAccepted(f.name, ACCEPTED_SCAN_EXTENSIONS) || isAccepted(f.name, ACCEPTED_COMPANION_EXTENSIONS));
+    if (!picked.some((f) => isAccepted(f.name, ACCEPTED_SCAN_EXTENSIONS))) {
       setError(errorText(new ScanParseError('unsupported')));
       return;
     }
-    if (f.size > MAX_SCAN_BYTES) {
-      setError(t('Fișierul depășește 250 MB. Exportă scanarea cu o rezoluție mai mică.', 'The file exceeds 250 MB. Export the scan at a lower resolution.', 'Le fichier dépasse 250 Mo.'));
+    if (picked.reduce((s, f) => s + f.size, 0) > MAX_SCAN_BYTES) {
+      setError(t('Fișierele depășesc 250 MB. Exportă scanarea cu o rezoluție mai mică.', 'The files exceed 250 MB. Export the scan at a lower resolution.', 'Les fichiers dépassent 250 Mo.'));
       return;
     }
-    setFile(f);
+    setFiles(picked);
     setOverride({});
-    void runParse(f, {});
+    void runParse(picked, {});
   };
 
+  // Scanarea primită live de pe iPhone: aceeași cale ca un fișier ales manual (unitate / axă re-parsabile)
+  const onBridgeScan = useCallback((file: File) => {
+    setFiles([file]);
+    setOverride({});
+    void runParse([file], {});
+  }, [runParse]);
+
   const loadDemo = () => {
-    setFile(null);
+    setFiles([]);
     setOverride({});
     setError(null);
-    setScan(loadDemoScan());
+    showScan(loadDemoScan());
   };
 
   const reparse = (next: { upAxis?: UpAxis; unit?: LengthUnit }) => {
     setOverride(next);
-    if (file) void runParse(file, next);
+    if (files.length) void runParse(files, next);
   };
 
   const onPhotoResult = useCallback((r: CalibrationOutcome | null) => setPhoto(r), []);
 
-  if (!open) return null;
+  const pickView = (preset: ScanCameraPreset | 'orbit') => {
+    if (preset === 'orbit') {
+      setViewMode('orbit');
+      return;
+    }
+    // „Unghiul tău”: direcția orbitei de acum (dacă e deja activ, unghiul rămâne cel capturat)
+    setAngle((prev) => (preset === 'custom' ? (viewMode === 'interior' && prev.preset === 'custom' ? prev : { preset, yaw: orbitRef.current.yaw }) : { preset }));
+    setViewMode('interior');
+  };
+
+  // Plasa reală se randează texturat (WebGL2); fără fețe / fără WebGL2 → vizualizatorul schematic
+  const useMesh = Boolean(scan?.mesh) && !glFailed && typeof document !== 'undefined' && supportsWebGL2();
+
+  // Plasa reală: presetările vizualizatorului WebGL („Vedere ansamblu” / „Unghi interior 1” / „Unghi interior 2”)
+  const pickMeshView = (preset: 'overview' | 'entry' | 'window') => {
+    if (!scan) return;
+    meshViewRef.current = preset === 'overview' ? defaultOrbitView() : interiorMeshView(scan, { preset });
+    setMeshPreset(preset);
+    setMeshVersion((n) => n + 1);
+  };
+
+  const generateFrom3d = async () => {
+    if (!scan || !onGenerateFrom3d || busy) return;
+    try {
+      if (useMesh) {
+        // Exact vederea WebGL curentă (fără cotele 2D), 1280 × 800
+        setBusy(true);
+        const view = { ...meshViewRef.current };
+        const image = await renderScanMeshToImage(scan, view);
+        onGenerateFrom3d({ scan, angle: meshViewAngle(view), image, measurement: measurementFromScan(scan), view });
+      } else {
+        const image = renderScanToStudioImage(scan, angle);
+        onGenerateFrom3d({ scan, angle, image, measurement: measurementFromScan(scan) });
+      }
+      onClose();
+    } catch {
+      setError(t('Perspectiva 3D nu a putut fi randată în acest browser.', 'The 3D perspective could not be rendered in this browser.', 'La perspective 3D n’a pas pu être rendue dans ce navigateur.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Fără `document` (SSR) nu randăm nimic; componenta e oricum încărcată cu `dynamic(..., { ssr: false })`,
+  // deci markup-ul serverului și al primei randări client coincid (nicio nepotrivire la hidratare).
+  if (!open || typeof document === 'undefined') return null;
 
   // ── Măsurătoarea activă ──
   let measurement: RoomMeasurement | null = null;
@@ -179,6 +302,7 @@ export default function LidarScanModal({ open, onClose, lang, isDark, current, s
     };
   }
 
+  const can3d = Boolean(onGenerateFrom3d) && tab === 'scan';
   const num = (n: number, d = 2) => n.toLocaleString(LOCALES[lang], { minimumFractionDigits: d, maximumFractionDigits: d });
   const eyebrow = `${EYEBROW} ${sk.dim}`;
   const tabBtn = (on: boolean) =>
@@ -200,6 +324,10 @@ export default function LidarScanModal({ open, onClose, lang, isDark, current, s
       case 'implausible-size': return t('Atenție: dimensiunile nu par ale unei camere — verifică unitatea / axa.', 'Warning: the size does not look like a room — check unit / axis.', 'Attention : dimensions peu plausibles — vérifiez unité / axe.');
       case 'usda-entry': return t(`Citit din stratul ASCII ${n.value}`, `Read from ASCII layer ${n.value}`, `Lu depuis la couche ASCII ${n.value}`);
       case 'json-entry': return t(`Citit din JSON-ul RoomPlan inclus (${n.value})`, `Read from the bundled RoomPlan JSON (${n.value})`, `Lu depuis le JSON RoomPlan inclus (${n.value})`);
+      case 'zip-entry': return t(`Model 3D citit din arhivă: ${n.value}`, `3D model read from the archive: ${n.value}`, `Modèle 3D lu depuis l’archive : ${n.value}`);
+      case 'textured-mesh': return t(`Plasă reală texturată (${n.value}) — randată 3D în WebGL`, `Real textured mesh (${n.value}) — rendered in 3D with WebGL`, `Maillage réel texturé (${n.value}) — rendu 3D WebGL`);
+      case 'vertex-colors': return t('Plasă reală cu culori pe vârfuri — randată 3D în WebGL', 'Real mesh with vertex colours — rendered in 3D with WebGL', 'Maillage réel aux couleurs par sommet — rendu 3D WebGL');
+      case 'texture-missing': return t(`Textura „${n.value}” lipsește — adaug-o alături de .obj (sau importă arhiva .zip întreagă).`, `Texture “${n.value}” is missing — add it next to the .obj (or import the whole .zip).`, `Texture « ${n.value} » manquante — ajoutez-la à côté du .obj (ou importez le .zip complet).`);
     }
   };
 
@@ -224,11 +352,16 @@ export default function LidarScanModal({ open, onClose, lang, isDark, current, s
     width: 'l',
     height: 'H',
     hint: t('Trage pentru rotire, rotița sau ciupirea pentru zoom.', 'Drag to orbit, scroll or pinch to zoom.', 'Glisser pour pivoter, molette ou pincement pour zoomer.'),
+    showDims: t('Arată cote 3D', 'Show 3D dimensions', 'Afficher les cotes 3D'),
+    loadingTexture: t('Se încarcă textura…', 'Loading texture…', 'Chargement de la texture…'),
   };
 
-  return (
+  // Portal în <body>: fereastra iese din contextul de suprapunere al coloanei Studio (`lg:sticky` creează unul propriu,
+  // deci un `z-[100]` din interiorul ei rămânea sub canvas-ul din dreapta) și din panourile /b2b.
+  // Pe mobil fereastra pornește de sus (`items-start`), ca un conținut mai înalt decât ecranul să poată fi derulat.
+  return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center overflow-y-auto bg-[#110D0F]/60 backdrop-blur-sm p-4 print:hidden"
+      className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center overflow-y-auto bg-black/60 backdrop-blur-sm p-4 print:hidden"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -284,6 +417,34 @@ export default function LidarScanModal({ open, onClose, lang, isDark, current, s
 
             {tab === 'scan' ? (
               <div className="space-y-4" role="tabpanel">
+                {/* Puntea live iPhone RoomPlan */}
+                {bridgeOn ? (
+                  <div className="space-y-1.5">
+                    <IphoneBridgePanel lang={lang} isDark={isDark} onScan={onBridgeScan} />
+                    <button type="button" onClick={() => setBridgeOn(false)} className={`text-[12px] underline underline-offset-2 cursor-pointer ${sk.dim}`}>
+                      {t('Oprește puntea iPhone', 'Stop the iPhone bridge', 'Arrêter la liaison iPhone')}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setBridgeOn(true)}
+                    className={`w-full flex items-center gap-3 rounded-xl border px-4 py-3.5 text-left cursor-pointer touch-manipulation transition-colors ${sk.line} ${isDark ? 'bg-[#C94A6A]/[0.06] hover:bg-[#C94A6A]/[0.12]' : 'bg-[#5C1628]/[0.03] hover:bg-[#5C1628]/[0.07]'}`}
+                  >
+                    <span className={`shrink-0 w-10 h-10 flex items-center justify-center rounded-full ${isDark ? 'bg-[#C94A6A]/15 text-[#E07F98]' : 'bg-[#5C1628]/[0.07] text-[#5C1628]'}`}>
+                      <Smartphone className="w-5 h-5" aria-hidden />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className={`block text-[14px] font-semibold ${sk.strong}`}>
+                        {t('Scanează live cu iPhone (RoomPlan)', 'Scan live with iPhone (RoomPlan)', 'Scanner en direct avec l’iPhone (RoomPlan)')}
+                      </span>
+                      <span className={`block text-[12px] ${sk.muted}`}>
+                        {t('Cod de asociere de 6 cifre · scanarea apare aici automat', '6-digit pairing code · the scan appears here automatically', 'Code à 6 chiffres · le scan apparaît ici automatiquement')}
+                      </span>
+                    </span>
+                  </button>
+                )}
+
                 {/* Zona de încărcare */}
                 <div
                   onDragOver={(e) => {
@@ -294,7 +455,7 @@ export default function LidarScanModal({ open, onClose, lang, isDark, current, s
                   onDrop={(e) => {
                     e.preventDefault();
                     setDragOver(false);
-                    acceptFile(e.dataTransfer.files?.[0]);
+                    acceptFiles(e.dataTransfer.files);
                   }}
                   className={`rounded-xl border border-dashed px-4 py-5 transition-colors ${
                     dragOver ? (isDark ? 'border-[#C94A6A] bg-[#C94A6A]/10' : 'border-[#5C1628] bg-[#5C1628]/[0.05]') : `${sk.line} ${isDark ? 'bg-[#110D0F]' : 'bg-[#FAF8F6]'}`
@@ -309,7 +470,11 @@ export default function LidarScanModal({ open, onClose, lang, isDark, current, s
                         {t('Trage aici scanarea camerei', 'Drop the room scan here', 'Déposez le scan de la pièce ici')}
                       </p>
                       <p className={`text-[12px] ${sk.muted}`}>
-                        .obj · .usdz · .usda · .json (Apple RoomPlan) — Polycam, Scaniverse, 3D Scanner App, RoomPlan
+                        {t(
+                          '.zip Scaniverse / Polycam (obj + mtl + jpg) · .obj + textură (selectează-le împreună) · .usdz · .usda · .json RoomPlan',
+                          '.zip Scaniverse / Polycam (obj + mtl + jpg) · .obj + texture (select them together) · .usdz · .usda · .json RoomPlan',
+                          '.zip Scaniverse / Polycam (obj + mtl + jpg) · .obj + texture (sélectionnez-les ensemble) · .usdz · .usda · .json RoomPlan',
+                        )}
                       </p>
                     </div>
                     <button
@@ -323,10 +488,11 @@ export default function LidarScanModal({ open, onClose, lang, isDark, current, s
                     <input
                       ref={inputRef}
                       type="file"
-                      accept=".obj,.usdz,.usda,.json,model/obj,model/vnd.usdz+zip,application/json"
+                      accept=".zip,.obj,.mtl,.jpg,.jpeg,.png,.webp,.usdz,.usda,.json,application/zip,model/obj,model/vnd.usdz+zip,application/json,image/jpeg,image/png,image/webp"
+                      multiple
                       className="hidden"
                       onChange={(e) => {
-                        acceptFile(e.target.files?.[0]);
+                        acceptFiles(e.target.files);
                         e.target.value = '';
                       }}
                     />
@@ -358,9 +524,82 @@ export default function LidarScanModal({ open, onClose, lang, isDark, current, s
                   </div>
                 )}
 
+                {scan && useMesh && (
+                  <>
+                    <LidarMeshCanvas
+                      scan={scan}
+                      isDark={isDark}
+                      labels={canvasLabels}
+                      viewRef={meshViewRef}
+                      viewVersion={meshVersion}
+                      onViewCommit={onMeshCommit}
+                      onUnsupported={onGlUnsupported}
+                      // 16:10 = exact raportul capturii Studio (STUDIO_SCAN_SIZE 1280 × 800): încadrarea văzută e cea trimisă AI-ului
+                      className={`aspect-[16/10] border ${sk.line}`}
+                    />
+                    <div className="space-y-1.5">
+                      <div role="group" aria-label={t('Unghiul camerei 3D', '3D camera angle', 'Angle de la caméra 3D')} className={`flex flex-wrap gap-1 rounded-2xl sm:rounded-full border p-1 ${sk.line}`}>
+                        {(['overview', 'entry', 'window'] as const).map((v) => {
+                          const on = meshPreset === v;
+                          return (
+                            <button
+                              key={v}
+                              type="button"
+                              aria-pressed={on}
+                              onClick={() => pickMeshView(v)}
+                              className={`inline-flex flex-1 min-w-[130px] items-center justify-center gap-1.5 h-8 px-3 rounded-full text-[12px] font-medium whitespace-nowrap cursor-pointer touch-manipulation transition-colors ${on ? sk.segOn : sk.segOff}`}
+                            >
+                              {v === 'overview' && <Orbit className="w-3.5 h-3.5" aria-hidden />}
+                              {meshPresetLabel(v, t)}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <p className={`text-[11px] ${sk.dim}`}>
+                        {meshPreset === 'overview'
+                          ? t('Plasa reală scanată: trage pentru rotire, rotița / ciupirea pentru zoom. Pereții din față se ascund automat.', 'The real scanned mesh: drag to orbit, scroll / pinch to zoom. Front walls hide automatically.', 'Le maillage réel : glissez pour pivoter, molette / pincement pour zoomer. Les murs avant se masquent.')
+                          : t('Interior la nivelul ochilor: trage pentru a privi în jur, rotița pentru câmpul vizual. Vederea curentă (fără cote) devine sursa Studio.', 'Eye-level interior: drag to look around, scroll for the field of view. The current view (without dimensions) becomes the Studio source.', 'Intérieur à hauteur des yeux : glissez pour regarder autour, molette pour le champ de vision. La vue actuelle (sans cotes) devient la source du Studio.')}
+                        {meshPreset === 'custom' && ` · ${meshPresetLabel('custom', t)}`}
+                      </p>
+                    </div>
+                  </>
+                )}
                 {scan && (
                   <>
-                    <LidarWireframeCanvas scan={scan} isDark={isDark} labels={canvasLabels} className={`h-[300px] sm:h-[380px] border ${sk.line}`} />
+                    {!useMesh && <LidarWireframeCanvas
+                      scan={scan}
+                      isDark={isDark}
+                      labels={canvasLabels}
+                      interior={viewMode === 'interior' ? angle : null}
+                      onViewChange={onViewChange}
+                      className={`h-[300px] sm:h-[380px] border ${sk.line}`}
+                    />}
+                    {onGenerateFrom3d && !useMesh && (
+                      <div className="space-y-1.5">
+                        <div role="group" aria-label={t('Unghiul camerei 3D', '3D camera angle', 'Angle de la caméra 3D')} className={`flex flex-wrap gap-1 rounded-2xl sm:rounded-full border p-1 ${sk.line}`}>
+                          {(['orbit', 'entry', 'window', 'custom'] as const).map((v) => {
+                            const on = v === 'orbit' ? viewMode === 'orbit' : viewMode === 'interior' && angle.preset === v;
+                            return (
+                              <button
+                                key={v}
+                                type="button"
+                                aria-pressed={on}
+                                onClick={() => pickView(v)}
+                                className={`inline-flex flex-1 min-w-[140px] items-center justify-center gap-1.5 h-8 px-3 rounded-full text-[12px] font-medium whitespace-nowrap cursor-pointer touch-manipulation transition-colors ${on ? sk.segOn : sk.segOff}`}
+                              >
+                                {v === 'orbit' && <Orbit className="w-3.5 h-3.5" aria-hidden />}
+                                {v === 'orbit' ? t('Orbită 3D', '3D orbit', 'Orbite 3D') : cameraPresetLabel(v, t)}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <p className={`text-[11px] ${sk.dim}`}>
+                          {viewMode === 'interior'
+                            ? t('Perspectivă la nivelul ochilor (1,45 m) — exact imaginea trimisă în Studio.', 'Eye-level perspective (1.45 m) — exactly the image sent to the Studio.', 'Perspective à hauteur des yeux (1,45 m) — exactement l’image envoyée au Studio.')
+                            : t('Rotește modelul și alege „Unghiul tău” pentru a privi camera din direcția aleasă.', 'Orbit the model and pick “Your angle” to look into the room from that direction.', 'Pivotez le modèle puis choisissez « Votre angle ».')}
+                        </p>
+                      </div>
+                    )}
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span className={chip}><Box className="w-3 h-3" aria-hidden /> {sourceLabel(scan.source)}</span>
                       {scan.fileName && scan.source !== 'demo' && <span className={`${chip} max-w-[220px] truncate`}>{scan.fileName}</span>}
@@ -368,6 +607,10 @@ export default function LidarScanModal({ open, onClose, lang, isDark, current, s
                       <span className={chip}>{t('axă', 'up', 'axe')} {scan.upAxis.toUpperCase()}</span>
                       {scan.vertexCount > 0 && <span className={chip}>{scan.vertexCount.toLocaleString(LOCALES[lang])} {t('vârfuri', 'vertices', 'sommets')}</span>}
                       {scan.faceCount > 0 && <span className={chip}>{scan.faceCount.toLocaleString(LOCALES[lang])} {t('fețe', 'faces', 'faces')}</span>}
+                      {scan.mesh && <span className={chip}>{scan.mesh.triangleCount.toLocaleString(LOCALES[lang])} {t('triunghiuri', 'triangles', 'triangles')}</span>}
+                      {scan.mesh && (scan.mesh.textures.length > 0 || scan.mesh.colors) && (
+                        <span className={`${chip} ${sk.brassBadge}`}>{scan.mesh.textures.length > 0 ? t('textură reală', 'real texture', 'texture réelle') : t('culori reale', 'real colours', 'couleurs réelles')}</span>
+                      )}
                       {scan.wallCount > 0 && <span className={chip}>{scan.wallCount} {t('pereți', 'walls', 'murs')}</span>}
                       <span className={chip}>{scan.doorCount} {t('uși', 'doors', 'portes')}</span>
                       <span className={chip}>{scan.windowCount} {t('ferestre', 'windows', 'fenêtres')}</span>
@@ -375,7 +618,7 @@ export default function LidarScanModal({ open, onClose, lang, isDark, current, s
                     </div>
 
                     {/* Corecții manuale pentru fișierele de plasă (OBJ / USD) */}
-                    {file && (scan.source === 'obj' || scan.source === 'usdz') && (
+                    {files.length > 0 && (scan.source === 'obj' || scan.source === 'usdz') && (
                       <div className="flex flex-wrap items-center gap-3 text-[12px]">
                         <span className={sk.muted}>{t('Axă verticală', 'Up axis', 'Axe vertical')}</span>
                         <div className={`inline-flex rounded-full border p-0.5 ${sk.line}`}>
@@ -424,7 +667,8 @@ export default function LidarScanModal({ open, onClose, lang, isDark, current, s
                   <details className={`text-[12px] ${sk.muted}`}>
                     <summary className="cursor-pointer select-none">{t('Cum export o scanare de pe iPhone?', 'How do I export a scan from iPhone?', 'Comment exporter un scan depuis l’iPhone ?')}</summary>
                     <ul className="mt-2 list-disc pl-5 space-y-1">
-                      <li>{t('iPhone 12 Pro+ / iPad Pro cu LiDAR: scanează camera în Polycam, Scaniverse sau 3D Scanner App → Export → OBJ.', 'iPhone 12 Pro+ / iPad Pro with LiDAR: scan in Polycam, Scaniverse or 3D Scanner App → Export → OBJ.', 'iPhone 12 Pro+ / iPad Pro avec LiDAR : scannez dans Polycam, Scaniverse ou 3D Scanner App → Export → OBJ.')}</li>
+                      <li>{t('Scaniverse: Share → Export Model → OBJ → trage aici arhiva .zip direct (modelul + textura .jpg reală).', 'Scaniverse: Share → Export Model → OBJ → drop the .zip here as is (mesh + real .jpg texture).', 'Scaniverse : Share → Export Model → OBJ → déposez le .zip tel quel (maillage + texture .jpg réelle).')}</li>
+                      <li>{t('iPhone 12 Pro+ / iPad Pro cu LiDAR: scanează camera în Polycam, Scaniverse sau 3D Scanner App → Export → OBJ; fișierele dezarhivate se pot selecta împreună (.obj + .mtl + .jpg).', 'iPhone 12 Pro+ / iPad Pro with LiDAR: scan in Polycam, Scaniverse or 3D Scanner App → Export → OBJ; unzipped files can be selected together (.obj + .mtl + .jpg).', 'iPhone 12 Pro+ / iPad Pro avec LiDAR : scannez dans Polycam, Scaniverse ou 3D Scanner App → Export → OBJ ; les fichiers décompressés se sélectionnent ensemble (.obj + .mtl + .jpg).')}</li>
                       <li>{t('Aplicații RoomPlan (ex. „Room Scan”): exportă JSON-ul CapturedRoom pentru pereți, uși și ferestre exacte.', 'RoomPlan apps: export the CapturedRoom JSON for exact walls, doors and windows.', 'Apps RoomPlan : exportez le JSON CapturedRoom pour murs, portes et fenêtres exacts.')}</li>
                       <li>{t('USDZ: acceptat; dacă pachetul are doar un crate binar, îți spunem explicit și îți sugerăm exportul OBJ / JSON.', 'USDZ: supported; if the package only has a binary crate we tell you and suggest the OBJ / JSON export.', 'USDZ : pris en charge ; si le paquet n’a qu’un crate binaire, nous le signalons.')}</li>
                     </ul>
@@ -485,6 +729,26 @@ export default function LidarScanModal({ open, onClose, lang, isDark, current, s
             )}
 
             <div className="mt-auto space-y-2">
+              {can3d && scan && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => void generateFrom3d()}
+                    disabled={busy}
+                    className={`w-full inline-flex items-center justify-center gap-2 h-11 px-3 rounded-full text-[13px] font-semibold whitespace-nowrap cursor-pointer disabled:opacity-60 disabled:cursor-wait ${sk.btn}`}
+                  >
+                    <Wand2 className="w-4 h-4" aria-hidden />
+                    {t('Generează din acest proiect 3D', 'Generate from this 3D project', 'Générer depuis ce projet 3D')}
+                  </button>
+                  <p className={`text-[11px] leading-relaxed ${sk.dim}`}>
+                    {t(
+                      `Aplică toate cotele, ${scan.doorCount} ${scan.doorCount === 1 ? 'ușă' : 'uși'} și ${scan.windowCount} ${scan.windowCount === 1 ? 'fereastră' : 'ferestre'}, apoi trece Studio-ul pe „Proiect scanat 3D” · ${useMesh ? `${meshPresetLabel(meshPreset, t)} (scanarea reală, fără cote)` : cameraPresetLabel(angle.preset, t)}.`,
+                      `Applies every dimension, ${scan.doorCount} door(s) and ${scan.windowCount} window(s), then switches the Studio to “3D scanned project” · ${useMesh ? `${meshPresetLabel(meshPreset, t)} (the real scan, no dimension labels)` : cameraPresetLabel(angle.preset, t)}.`,
+                      `Applique toutes les cotes, ${scan.doorCount} porte(s) et ${scan.windowCount} fenêtre(s), puis passe le Studio en « Projet scanné 3D » · ${useMesh ? `${meshPresetLabel(meshPreset, t)} (le scan réel, sans cotes)` : cameraPresetLabel(angle.preset, t)}.`,
+                    )}
+                  </p>
+                </>
+              )}
               <button
                 type="button"
                 disabled={!measurement}
@@ -493,10 +757,12 @@ export default function LidarScanModal({ open, onClose, lang, isDark, current, s
                   onApply(measurement);
                   onClose();
                 }}
-                className={`w-full inline-flex items-center justify-center gap-2 h-11 px-3 rounded-full text-[13px] font-medium whitespace-nowrap cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${sk.btn}`}
+                className={`w-full inline-flex items-center justify-center gap-2 h-11 px-3 rounded-full text-[13px] font-medium whitespace-nowrap cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${can3d && scan ? sk.btnGhost : sk.btn}`}
               >
                 <Check className="w-4 h-4" aria-hidden />
-                {t('Aplică dimensiunile în Studio & B2B', 'Apply dimensions to Studio & B2B', 'Appliquer les cotes au Studio & B2B')}
+                {can3d && scan
+                  ? t('Aplică doar dimensiunile', 'Apply dimensions only', 'Appliquer uniquement les cotes')
+                  : t('Aplică dimensiunile în Studio & B2B', 'Apply dimensions to Studio & B2B', 'Appliquer les cotes au Studio & B2B')}
               </button>
               <p className={`text-[11px] leading-relaxed ${sk.dim}`}>
                 {applyNote ??
@@ -510,6 +776,7 @@ export default function LidarScanModal({ open, onClose, lang, isDark, current, s
           </aside>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

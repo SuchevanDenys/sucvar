@@ -299,5 +299,12 @@ public static class SpatialErgonomicsAnalyzer
         .Take(MaxConstraints)
         .ToList();
 
-    private static double Round(double v, int digits) => Math.Round(v, digits, MidpointRounding.AwayFromZero);
+    /// <summary>Exact twin of ergonomics.ts <c>round</c>: <c>Math.round((v + Number.EPSILON) * 10^d) / 10^d</c> (1.005 → 1.01).</summary>
+    private static double Round(double v, int digits)
+    {
+        var f = Math.Pow(10, digits);
+        return Js.Round((v + NumberEpsilon) * f) / f;
+    }
+
+    private const double NumberEpsilon = 2.220446049250313e-16; // JS Number.EPSILON
 }

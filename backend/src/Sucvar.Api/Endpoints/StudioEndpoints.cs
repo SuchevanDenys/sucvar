@@ -80,6 +80,7 @@ public static class StudioEndpoints
         IImageProviderSelector providers,
         IImageProcessor images,
         IPromptEnhancer enhancer,
+        IRoomFixtureDetector fixtureDetector,
         GenerationGate gate,
         ILogger<QuotaService> logger)
     {
@@ -176,9 +177,15 @@ public static class StudioEndpoints
             var format = provider.PromptFormatFor(masked);
             if (provider.Id != "demo" && format == PromptFormat.Clip && !masked) plan = await EnhanceAsync(plan, enhancer, ctx.RequestAborted);
             plan = plan.For(format);
+            // 4b'. Two-stage precision: a vision model locates outlets, switches, radiators, doors, windows and corners on
+            // the photo, and the instruction is grounded on their coordinates. Structure-locked full-room photo renders only
+            // (a mask already keeps every unselected pixel; a 3D-scan render has no fixtures). Best effort: ≤ 6 s, [] on failure.
+            var preserve = plan.Brief?.PreserveStructure ?? true;
+            if (provider.Id != "demo" && preserve && !masked && !plan.Is3dScanSource && fixtureDetector.IsConfigured)
+                plan = plan.WithFixtures(await fixtureDetector.DetectAsync(image, ctx.RequestAborted));
             var request = new ImageGenerationRequest(image, plan.Prompt, plan.NegativePrompt, plan.InferenceSteps, plan.GuidanceScale,
                 plan.Seed, plan.PromptStrength, plan.TransformationStrength, plan.Mode, plan.Brief?.PreserveStructure ?? true,
-                mask?.DataUrl);
+                mask?.DataUrl, plan.Is3dScanSource && mask is null);
             // 4c. "Shop the look" hotspots (deterministic, no extra paid call; a mask pins the edited object on the region)
             var detectedItems = RoomObjectExtractor.Extract(RoomObjectExtractor.ContextFrom(payload, plan, mask?.Region));
 
@@ -220,13 +227,31 @@ public static class StudioEndpoints
 
             // 7. Permanent JPEG data URL; on failure keep the temporary URL + warning.
             // 7b. Regional edit: feathered composite through the mask — every unselected pixel comes from the photo.
+            // 7c. Pixel-level MEP shield: small, confident outlets / switches get their original pixels back (feathered),
+            // so a socket is never painted over; on any failure the plain conversion runs instead.
             var permanent = generated.ImageUrl;
             string? warning = providerWarning;
+            var shields = mask is null ? (plan.Fixtures ?? []).Where(RoomFixtures.IsShieldTarget).ToList() : [];
+            var shielded = false;
             try
             {
-                permanent = mask is not null
-                    ? await images.CompositeRegionAsync(image, generated.ImageUrl, mask.DataUrl, ctx.RequestAborted)
-                    : await images.ToPermanentJpegDataUrlAsync(generated.ImageUrl, ctx.RequestAborted);
+                if (mask is not null) permanent = await images.CompositeRegionAsync(image, generated.ImageUrl, mask.DataUrl, ctx.RequestAborted);
+                else
+                {
+                    if (shields.Count > 0)
+                    {
+                        try
+                        {
+                            permanent = await images.ShieldFixturesAsync(image, generated.ImageUrl, shields, ctx.RequestAborted);
+                            shielded = true;
+                        }
+                        catch (Exception ex) when (ex is not OperationCanceledException)
+                        {
+                            logger.LogWarning(ex, "[SUCVAR] Fixture shield failed; keeping the unshielded render");
+                        }
+                    }
+                    if (!shielded) permanent = await images.ToPermanentJpegDataUrlAsync(generated.ImageUrl, ctx.RequestAborted);
+                }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -235,6 +260,7 @@ public static class StudioEndpoints
                     ? "Zona selectată nu a putut fi îmbinată cu fotografia originală; imaginea afișată este rezultatul brut al modelului, cu link temporar. Generează din nou."
                     : "Imaginea nu a putut fi comprimată permanent; linkul este temporar și expiră în câteva ore. Salvează proiectul imediat.";
             }
+            if (shielded) plan = plan with { Fixtures = plan.Fixtures!.Select(f => RoomFixtures.IsShieldTarget(f) ? f with { Shielded = true } : f).ToList() };
             return Results.Json(Response(permanent, false, plan, warning, detectedItems));
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -278,13 +304,17 @@ public static class StudioEndpoints
         if (plan.Brief is not null) body["vision"] = DesignVision.ToResponse(plan.Brief); // resolved brief for the Studio summary
         if (plan.Region is { } r) body["regionalEdit"] = RegionResponse(r);
         if (detectedItems is { Count: > 0 }) body["detectedItems"] = detectedItems;
+        // Stage-1 detections for the Studio's "repere MEP & colțuri" overlay (normalised 0..1 boxes, source frame)
+        if (plan.Fixtures is { Count: > 0 } fixtures)
+            body["detectedFixtures"] = fixtures.Select(f => new { kind = f.Kind, x = f.X, y = f.Y, width = f.Width, height = f.Height, confidence = f.Confidence, shielded = f.Shielded }).ToList();
         return body;
     }
 
     /// <summary>Runs the optional enhancer on smart free-text plans; the deterministic plan is kept on any failure.</summary>
     private static async Task<GenerationPlan> EnhanceAsync(GenerationPlan plan, IPromptEnhancer enhancer, CancellationToken ct)
     {
-        if (!enhancer.IsConfigured || plan.Brief is not { HasCustomPrompt: true } brief || plan.Parts is null) return plan;
+        // A 3D-scan source keeps the deterministic synthesis directive (the enhancer would drop the scan cues)
+        if (!enhancer.IsConfigured || plan.Is3dScanSource || plan.Brief is not { HasCustomPrompt: true } brief || plan.Parts is null) return plan;
         var scale = brief.Scale;
         var enhanced = await enhancer.EnhanceAsync(new PromptEnhancementRequest(
             plan.Mode, brief.SpaceType, brief.StyleId, brief.Palette, brief.Lighting,

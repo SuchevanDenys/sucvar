@@ -4,10 +4,13 @@
 //   • Bucla rAF rulează doar cât se mișcă ceva (tragere, inerție, rotire automată) — 60 FPS, apoi se oprește.
 //   • Grilă de podea 0,5 m, pereți + perimetrul podelei în bordo, goluri (uși / ferestre) în șampanie,
 //     cote flotante L / l / H pe muchiile cele mai apropiate de cameră.
+//   • Mod „perspectivă interioară” (`interior`): vederea de la nivelul ochilor (~1,45 m) din interiorul camerei, exact
+//     imaginea trimisă în Studio (`lib/studio/scanRender.ts`) — fără orbită; unghiul se alege din presetări.
 "use client";
 
 import React, { useCallback, useEffect, useRef } from 'react';
 import type { EdgeKind, RoomScan, Vec3 } from '@/app/lib/studio/lidarParser';
+import { buildInteriorScene, drawInteriorScene, type ScanCameraAngle } from '@/app/lib/studio/scanRender';
 
 interface Props {
   scan: RoomScan;
@@ -15,6 +18,10 @@ interface Props {
   /** Etichetele cotelor (localizate). */
   labels: { length: string; width: string; height: string; hint: string };
   className?: string;
+  /** Perspectiva interioară (sursa Studio „Proiect scanat 3D”); null / absent = orbită 3D. */
+  interior?: ScanCameraAngle | null;
+  /** Unghiul curent al orbitei (pentru „Unghiul tău”), raportat la fiecare cadru desenat. */
+  onViewChange?: (view: { yaw: number; pitch: number }) => void;
 }
 
 interface Palette {
@@ -73,7 +80,7 @@ const MIN_PITCH = 0.08;
 const MAX_PITCH = 1.45;
 const DEFAULT_VIEW = { yaw: -0.72, pitch: 0.55, zoom: 1 };
 
-export default function LidarWireframeCanvas({ scan, isDark, labels, className = '' }: Props) {
+export default function LidarWireframeCanvas({ scan, isDark, labels, className = '', interior = null, onViewChange }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const view = useRef({ ...DEFAULT_VIEW });
@@ -83,7 +90,7 @@ export default function LidarWireframeCanvas({ scan, isDark, labels, className =
   const pinchDist = useRef<number | null>(null);
   const raf = useRef<number | null>(null);
   const size = useRef({ w: 0, h: 0, dpr: 1 });
-  const latest = useRef({ scan, isDark, labels });
+  const latest = useRef({ scan, isDark, labels, interior, onViewChange });
 
   // ── Desen ──
   const draw = useCallback(() => {
@@ -91,11 +98,17 @@ export default function LidarWireframeCanvas({ scan, isDark, labels, className =
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const { scan: s, isDark: dark, labels: lb } = latest.current;
+    const { scan: s, isDark: dark, labels: lb, interior: inside, onViewChange: report } = latest.current;
     const pal = PALETTES[dark ? 'dark' : 'light'];
     const { w, h, dpr } = size.current;
     if (!w || !h) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (inside) {
+      // Aceeași scenă ca exportul Studio (paleta luminoasă: e „fotografia” trimisă modelului, nu o piesă de interfață)
+      drawInteriorScene(ctx, buildInteriorScene(s, inside, w, h));
+      return;
+    }
+    report?.({ yaw: view.current.yaw, pitch: view.current.pitch });
     ctx.fillStyle = pal.bg;
     ctx.fillRect(0, 0, w, h);
 
@@ -250,7 +263,7 @@ export default function LidarWireframeCanvas({ scan, isDark, labels, className =
       raf.current = null;
       const v = velocity.current;
       let moving = false;
-      if (pointers.current.size === 0) {
+      if (pointers.current.size === 0 && !latest.current.interior) {
         if (Math.abs(v.yaw) > 0.0004 || Math.abs(v.pitch) > 0.0004) {
           view.current.yaw += v.yaw;
           view.current.pitch = clamp(view.current.pitch + v.pitch, MIN_PITCH, MAX_PITCH);
@@ -269,9 +282,11 @@ export default function LidarWireframeCanvas({ scan, isDark, labels, className =
   }, [draw]);
 
   useEffect(() => {
-    latest.current = { scan, isDark, labels };
+    latest.current = { scan, isDark, labels, interior, onViewChange };
+    // Desen imediat: `kick` nu face nimic dacă un cadru rAF e deja programat (comutarea orbită ↔ interior nu așteaptă)
+    draw();
     kick();
-  }, [scan, isDark, labels, kick]);
+  }, [scan, isDark, labels, interior, onViewChange, draw, kick]);
 
   // Scanare nouă ⇒ vedere implicită + rotire automată (dacă utilizatorul nu preferă mișcare redusă)
   useEffect(() => {
@@ -304,6 +319,7 @@ export default function LidarWireframeCanvas({ scan, isDark, labels, className =
     const canvas = canvasRef.current;
     if (!canvas) return;
     const onWheel = (e: WheelEvent) => {
+      if (latest.current.interior) return;
       e.preventDefault();
       autoSpin.current = false;
       view.current.zoom = clamp(view.current.zoom * Math.exp(-e.deltaY * 0.0015), 0.45, 4);
@@ -318,6 +334,7 @@ export default function LidarWireframeCanvas({ scan, isDark, labels, className =
   }, []);
 
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (interior) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     autoSpin.current = false;
@@ -351,6 +368,7 @@ export default function LidarWireframeCanvas({ scan, isDark, labels, className =
     kick(); // inerție
   };
   const onKeyDown = (e: React.KeyboardEvent<HTMLCanvasElement>) => {
+    if (interior) return;
     const v = view.current;
     const step: Record<string, () => void> = {
       ArrowLeft: () => (v.yaw -= 0.12),
@@ -377,12 +395,13 @@ export default function LidarWireframeCanvas({ scan, isDark, labels, className =
         role="img"
         tabIndex={0}
         aria-label={`${labels.length} ${scan.lengthM} m · ${labels.width} ${scan.widthM} m · ${labels.height} ${scan.heightM} m. ${labels.hint}`}
-        className="absolute inset-0 h-full w-full cursor-grab touch-none select-none outline-none active:cursor-grabbing focus-visible:ring-2 focus-visible:ring-[#A67C52]/60"
+        className={`absolute inset-0 h-full w-full select-none outline-none focus-visible:ring-2 focus-visible:ring-[#A67C52]/60 ${interior ? '' : 'cursor-grab touch-none active:cursor-grabbing'}`}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
         onDoubleClick={() => {
+          if (interior) return;
           view.current = { ...DEFAULT_VIEW };
           velocity.current = { yaw: 0, pitch: 0 };
           draw();

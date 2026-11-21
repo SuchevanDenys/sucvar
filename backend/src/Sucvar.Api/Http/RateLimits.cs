@@ -23,6 +23,9 @@ public static class Rules
     public static readonly RateLimitRule PortalRead = new("portal:read", 60, 60);
     public static readonly RateLimitRule PortalReviewIp = new("portal:review:ip", 10, 600);
     public static readonly RateLimitRule PortalReviewProject = new("portal:review:project", 3, 600);
+    public static readonly RateLimitRule LidarPairUser = new("lidar:pair:user", 20, 600);
+    public static readonly RateLimitRule LidarPollUser = new("lidar:poll:user", 90, 60); // 2.5 s polling = 24/min
+    public static readonly RateLimitRule LidarUploadIp = new("lidar:upload:ip", 30, 600); // brute-force guard on 6-digit codes
 }
 
 /// <summary>

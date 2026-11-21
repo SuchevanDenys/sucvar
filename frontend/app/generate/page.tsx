@@ -19,6 +19,10 @@
 //   • „Optimizare spațiu”: analiza ergonomică (lib/studio/ergonomics.ts) e calculată local, instant; regulile ei pleacă
 //     la /api/generate ca `optimizationGoal` + `ergonomicConstraints` (sau doar `ergonomicConstraints` după
 //     „Aplică recomandările în randare” în Redesign). Editarea de zonă nu le trimite niciodată.
+//   • Două surse (`studioSource`): „Fotografie cameră” și „Proiect scanat 3D (LiDAR)”. Sursa 3D = perspectiva
+//     interioară randată a scanării (`lib/studio/scanRender.ts`, PNG 1280 × 800) ca imagine de lucru; cât timp imaginea
+//     de lucru este chiar randarea scanării, cererea poartă `is3dScanSource` + `doorCount` / `windowCount`. Fiecare sursă
+//     își păstrează spațiul de lucru (imagine, rezultat, istoric) în `sourceStashRef`: comutarea nu amestecă stările.
 "use client";
 
 import { formatLei } from '@/app/lib/format';
@@ -76,7 +80,18 @@ import StrengthSlider from '@/app/components/studio/StrengthSlider';
 import { analyzeErgonomics, type OptimizationGoalId } from '@/app/lib/studio/ergonomics';
 import { sendBomToB2b } from '@/app/lib/b2b/procurementSync';
 import { syncWorkspaceDimensions } from '@/app/lib/b2b/portfolio';
-import type { RoomMeasurement } from '@/app/lib/studio/lidarParser';
+import type { RoomMeasurement, RoomScan } from '@/app/lib/studio/lidarParser';
+import {
+  cameraYaw,
+  defaultCameraAngle,
+  defaultOrbitView,
+  interiorMeshView,
+  meshViewAngle,
+  renderScanToStudioImage,
+  resolveInteriorCamera,
+  type MeshView,
+  type ScanCameraAngle,
+} from '@/app/lib/studio/scanRender';
 import PlanLimitNotice from '@/app/components/studio/PlanLimitNotice';
 import ProjectNameField, { type RenameStatus } from '@/app/components/studio/ProjectNameField';
 import SpaceScenarioPanel from '@/app/components/studio/SpaceScenarioPanel';
@@ -94,7 +109,7 @@ import {
 } from '@/app/lib/studio/vision';
 import type { BomItem, BomResult } from '@/app/lib/procurement';
 import TelemetryBar from '@/app/components/studio/TelemetryBar';
-import StudioViewport from '@/app/components/studio/StudioViewport';
+import StudioViewport, { type ScanAngleAction, type StudioSource } from '@/app/components/studio/StudioViewport';
 import CostBreakdown from '@/app/components/studio/CostBreakdown';
 import ProcurementPanel from '@/app/components/studio/ProcurementPanel';
 import EngineeringPanel from '@/app/components/studio/EngineeringPanel';
@@ -107,6 +122,7 @@ import { fetchActiveModel, isPromptFormat, modelLabel, type ActiveAiModel, type 
 import { LOCALES, tr, trList } from '@/app/lib/i18n';
 import { describeSelection, exportMask, hasSelection, loadImageSize, positionLabel, strokeBounds, type MaskStroke } from '@/app/lib/studio/mask';
 import { mergeRegionalItems, parseDetectedItems, type DetectedItem } from '@/app/lib/studio/detectedItems';
+import { parseDetectedFixtures, type DetectedFixture } from '@/app/lib/studio/fixtures';
 
 // „Scanare LiDAR & Măsurare Cameră”: încărcată doar la prima deschidere (parser + canvas 3D în afara bundle-ului principal)
 const LidarScanModal = dynamic(() => import('@/app/components/studio/LidarScanModal'), { ssr: false });
@@ -117,6 +133,32 @@ interface StudioStep {
   kind: 'original' | 'variant' | 'edit';
   image: string;
   items?: DetectedItem[];
+}
+
+/** Sursa „Proiect scanat 3D”: scanarea, unghiul camerei interioare și randarea ei (imaginea de lucru inițială). */
+interface ScanSourceState {
+  scan: RoomScan;
+  angle: ScanCameraAngle;
+  image: string;
+  /** Plasa reală (WebGL): vederea exactă capturată ca imagine de lucru. */
+  view?: MeshView;
+}
+
+/** Spațiul de lucru al unei surse, păstrat la comutarea Fotografie ↔ Proiect 3D. */
+interface SourceWorkspace {
+  originalImage: string | null;
+  generatedImage: string | null;
+  steps: StudioStep[];
+  activeStep: number;
+  detectedItems: DetectedItem[] | undefined;
+  maskStrokes: MaskStroke[];
+  regionalNote: string | null;
+  isDemoResult: boolean;
+  providerNote: string | null;
+  vision: VisionResponse | null;
+  lastResultKind: 'variant' | 'edit';
+  projectId: string | null;
+  shareProjectId: string | null;
 }
 
 // ── Pagina principală ────────────────────────────────────────────────────────
@@ -158,7 +200,12 @@ export default function StudioPage() {
   const [optimizationGoal, setOptimizationGoal] = useState<OptimizationGoalId | null>(null);
   const [applyErgonomics, setApplyErgonomics] = useState(false);
   const [dimensionsOpen, setDimensionsOpen] = useState(true);
-  const [scanOpen, setScanOpen] = useState(false);
+  // false = închisă · 'file' = import / demo · 'iphone' = direct puntea live iPhone RoomPlan
+  const [scanOpen, setScanOpen] = useState<false | 'file' | 'iphone'>(false);
+  // Sursa Studio-ului: „Fotografie cameră” sau „Proiect scanat 3D (LiDAR)”; spațiul de lucru al celeilalte surse e păstrat
+  const [studioSource, setStudioSource] = useState<StudioSource>('photo');
+  const [scanSource, setScanSource] = useState<ScanSourceState | null>(null);
+  const sourceStashRef = useRef<Partial<Record<StudioSource, SourceWorkspace>>>({});
   const [isSendingB2b, setIsSendingB2b] = useState(false);
   // „Editează o zonă”: traseele măștii (coordonate de imagine) și mărimea fotografiei
   const [maskStrokes, setMaskStrokes] = useState<MaskStroke[]>([]);
@@ -166,6 +213,9 @@ export default function StudioPage() {
   const [regionalNote, setRegionalNote] = useState<string | null>(null);
   // „Inspector obiecte” + editarea în lanț („Editează acest rezultat”)
   const [detectedItems, setDetectedItems] = useState<DetectedItem[] | undefined>(undefined);
+  // Reperele MEP & colțuri ale unei randări (etapa vizuală din /api/generate); legate de imaginea care le-a produs,
+  // deci dispar singure la alt pas din istoric, altă fotografie sau o randare nouă fără detecții
+  const [fixtureRender, setFixtureRender] = useState<{ image: string; fixtures: DetectedFixture[] } | null>(null);
   const [steps, setSteps] = useState<StudioStep[]>([]);
   const [activeStep, setActiveStep] = useState(0);
   const [lastResultKind, setLastResultKind] = useState<'variant' | 'edit'>('variant');
@@ -235,6 +285,9 @@ export default function StudioPage() {
     runIdRef.current += 1;
     loadedProjectIdRef.current = restored.id;
     setShareProjectId(restored.id);
+    // Un proiect din Arhivă se deschide ca fotografie; scanarea rămâne disponibilă (spațiul ei de lucru pornește din nou)
+    setStudioSource('photo');
+    sourceStashRef.current = {};
     setMode(restoredMode);
     setSelectedSpace(restoredSpace.id);
     const brief = restored.brief;
@@ -465,15 +518,23 @@ export default function StudioPage() {
 
   // Schimbarea modului / spațiului resetează configurația și rezultatul anterior,
   // iar cotele sunt aduse în limitele noului mod (ex: înălțimea unei camere ≤ 6 m).
+  // Cu sursa „Proiect scanat 3D”, cotele și golurile vin din scanare: o cameră nouă nu le înlocuiește cu cele implicite
+  const keepScanGeometry = (modeId: DesignMode) => studioSource === 'scan' && scanSource !== null && modeId === 'interiors';
+  const scannedGeometry = (p: RoomDimensions) => ({ length: p.length, width: p.width, height: p.height, doorsCount: p.doorsCount, windowsCount: p.windowsCount });
+
   const applySpaceSelection = (modeId: DesignMode, spaceId: string) => {
     const nextSpace = getSpace(modeId, spaceId);
+    const keep = keepScanGeometry(modeId);
     runIdRef.current += 1;
     setMode(modeId);
     setSelectedSpace(nextSpace.id);
     // Un spațiu nou pornește de la cotele lui implicite; scenariile alese nu se mai potrivesc și se șterg
     setRoomDimensions((p) =>
       sanitizeDimensions(
-        dimensionsForSpace(modeId, nextSpace.id, { budget: p.budget, aiStrength: p.aiStrength, scope: p.scope }),
+        {
+          ...dimensionsForSpace(modeId, nextSpace.id, { budget: p.budget, aiStrength: p.aiStrength, scope: p.scope }),
+          ...(keep ? scannedGeometry(p) : {}),
+        },
         modeId,
         nextSpace.id,
       ),
@@ -488,6 +549,8 @@ export default function StudioPage() {
 
   const handleModeChange = (m: DesignMode) => {
     setSpaceTouched(true);
+    // Scanarea LiDAR descrie un interior: exterioarele / grădinile revin la sursa foto
+    if (m !== 'interiors' && studioSource === 'scan') handleSourceChange('photo');
     if (m !== 'interiors' && workMode === 'optimize') setWorkMode('redesign');
     applySpaceSelection(m, SPACE_MODES[m].spaces[0].id);
   };
@@ -523,6 +586,121 @@ export default function StudioPage() {
     } finally {
       setIsPhotoLoading(false);
     }
+  };
+
+  // ── Surse: „Fotografie cameră” ↔ „Proiect scanat 3D (LiDAR)” ──────────────
+  const captureWorkspace = (): SourceWorkspace => ({
+    originalImage, generatedImage, steps, activeStep, detectedItems, maskStrokes, regionalNote, isDemoResult, providerNote, vision,
+    lastResultKind, projectId: loadedProjectIdRef.current, shareProjectId,
+  });
+
+  // Restaurează spațiul de lucru al unei surse (sau pornește unul nou de la `image`); un răspuns întârziat e ignorat
+  const restoreWorkspace = (w: SourceWorkspace | null, image: string | null = null) => {
+    runIdRef.current += 1;
+    loadedProjectIdRef.current = w?.projectId ?? null;
+    setShareProjectId(w?.shareProjectId ?? null);
+    setOriginalImage(w ? w.originalImage : image);
+    setGeneratedImage(w?.generatedImage ?? null);
+    setSteps(w?.steps ?? []);
+    setActiveStep(w?.activeStep ?? 0);
+    setDetectedItems(w?.detectedItems);
+    setMaskStrokes(w?.maskStrokes ?? []);
+    setRegionalNote(w?.regionalNote ?? null);
+    setIsDemoResult(w?.isDemoResult ?? false);
+    setProviderNote(w?.providerNote ?? null);
+    setVision(w?.vision ?? null);
+    setLastResultKind(w?.lastResultKind ?? 'variant');
+    setErrorMessage(null);
+  };
+
+  const handleSourceChange = (next: StudioSource) => {
+    if (next === studioSource || isLoading) return;
+    sourceStashRef.current[studioSource] = captureWorkspace();
+    const saved = sourceStashRef.current[next];
+    restoreWorkspace(saved ?? null, next === 'scan' ? scanSource?.image ?? null : null);
+    setStudioSource(next);
+    setSaveMessage(null);
+  };
+
+  const scanDims = (scan: RoomScan) =>
+    `${scan.lengthM.toLocaleString(LOCALES[lang], { minimumFractionDigits: 2, maximumFractionDigits: 2 })} × ${scan.widthM.toLocaleString(LOCALES[lang], { minimumFractionDigits: 2, maximumFractionDigits: 2 })} × ${scan.heightM.toLocaleString(LOCALES[lang], { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m`;
+  const scanOpenings = (scan: RoomScan) =>
+    `${scan.doorCount} ${scan.doorCount === 1 ? t('ușă', 'door', 'porte') : t('uși', 'doors', 'portes')} · ${scan.windowCount} ${scan.windowCount === 1 ? t('fereastră', 'window', 'fenêtre') : t('ferestre', 'windows', 'fenêtres')}`;
+
+  // „Generează din acest proiect 3D”: cotele + golurile scanării se aplică, randarea interioară devine sursa Studio
+  const handleGenerateFrom3d = (r: { scan: RoomScan; angle: ScanCameraAngle; image: string; measurement: RoomMeasurement; view?: MeshView }) => {
+    if (isLoading) return;
+    handleApplyScan(r.measurement);
+    if (studioSource === 'photo') sourceStashRef.current.photo = captureWorkspace();
+    delete sourceStashRef.current.scan; // scanare nouă = spațiu de lucru 3D nou
+    setScanSource({ scan: r.scan, angle: r.angle, image: r.image, view: r.view });
+    restoreWorkspace(null, r.image);
+    setStudioSource('scan');
+    if (workMode === 'area') setWorkMode('redesign'); // pensula de mască nu are sens pe o perspectivă nouă
+    const openings = r.scan.doorCount + r.scan.windowCount > 0 || !r.scan.mesh ? ` · ${scanOpenings(r.scan)}` : '';
+    setSaveMessage(t(
+      `Proiect scanat 3D activ: ${scanDims(r.scan)}${openings}. Descrie stilul și generează randarea fotorealistă.`,
+      `3D scanned project active: ${scanDims(r.scan)}${openings}. Describe the style and generate the photorealistic render.`,
+      `Projet scanné 3D actif : ${scanDims(r.scan)}${openings}. Décrivez le style et générez le rendu photoréaliste.`,
+    ));
+  };
+
+  // Scanarea demo direct ca sursă 3D (parserul se încarcă doar acum, în afara bundle-ului principal)
+  const handleDemoScan = async () => {
+    try {
+      const { loadDemoScan, measurementFromScan } = await import('@/app/lib/studio/lidarParser');
+      const scan = loadDemoScan();
+      const angle = defaultCameraAngle(scan);
+      handleGenerateFrom3d({ scan, angle, image: renderScanToStudioImage(scan, angle), measurement: measurementFromScan(scan) });
+    } catch {
+      setErrorMessage(t('Scanarea demo nu a putut fi încărcată.', 'The demo scan could not be loaded.', 'Le scan démo n’a pas pu être chargé.'));
+    }
+  };
+
+  // „Schimbă unghiul camerei 3D”: presetare sau rotire de ±22,5° a privirii (yaw crescător = spre stânga pe ecran).
+  // Plasa reală (WebGL) se re-randează asincron din vederea capturată; scanările fără plasă — schema 2D.
+  const [scanRendering, setScanRendering] = useState(false);
+  const handleScanAngle = async (action: ScanAngleAction) => {
+    if (!scanSource || isLoading || scanRendering || studioSource !== 'scan') return;
+    const renderError = () => setErrorMessage(t('Perspectiva 3D nu a putut fi randată în acest browser.', 'The 3D perspective could not be rendered in this browser.', 'La perspective 3D n’a pas pu être rendue dans ce navigateur.'));
+    const { scan } = scanSource;
+    if (scan.mesh && scanSource.view) {
+      const turn = (action === 'left' ? 1 : -1) * (Math.PI / 8);
+      const view: MeshView = action === 'overview'
+        ? defaultOrbitView()
+        : action === 'entry' || action === 'window'
+          ? interiorMeshView(scan, { preset: action })
+          : { ...scanSource.view, yaw: scanSource.view.yaw + turn, preset: scanSource.view.kind === 'orbit' ? 'overview' : 'custom' };
+      const run = runIdRef.current;
+      setScanRendering(true);
+      try {
+        const { renderScanMeshToImage } = await import('@/app/lib/studio/meshRenderer');
+        const image = await renderScanMeshToImage(scan, view);
+        if (run !== runIdRef.current) return; // sursa / fotografia s-a schimbat între timp
+        setScanSource({ ...scanSource, angle: meshViewAngle(view), view, image });
+        restoreWorkspace(null, image);
+        setSaveMessage(null);
+      } catch {
+        renderError();
+      } finally {
+        setScanRendering(false);
+      }
+      return;
+    }
+    if (action === 'overview') return;
+    const angle: ScanCameraAngle = action === 'entry' || action === 'window'
+      ? { preset: action }
+      : { preset: 'custom', yaw: cameraYaw(resolveInteriorCamera(scan, scanSource.angle)) + (action === 'left' ? 1 : -1) * (Math.PI / 8) };
+    let image: string;
+    try {
+      image = renderScanToStudioImage(scan, angle);
+    } catch {
+      renderError();
+      return;
+    }
+    setScanSource({ ...scanSource, angle, image });
+    restoreWorkspace(null, image);
+    setSaveMessage(null);
   };
 
   // „Editează acest rezultat”: randarea devine imaginea de lucru (pas nou în istoric), pensula de mască se activează
@@ -572,7 +750,7 @@ export default function StudioPage() {
   const stepLabels = steps.map((step, i) => ({
     id: step.id,
     label: step.kind === 'original'
-      ? t('Original', 'Original', 'Original')
+      ? studioSource === 'scan' ? t('Scan 3D', '3D scan', 'Scan 3D') : t('Original', 'Original', 'Original')
       : step.kind === 'edit'
         ? `${t('Editare', 'Edit', 'Modification')} ${i}`
         : `${t('Varianta', 'Variant', 'Variante')} ${i}`,
@@ -695,7 +873,16 @@ export default function StudioPage() {
     ai: aiSettings,
     ...(regionalBounds ? { selectionBounds: regionalBounds } : {}),
     ...ergonomicPayload(space, dims),
+    ...scanPayload(dims),
   });
+
+  // „Proiect scanat 3D”: doar cât timp imaginea de lucru este chiar randarea scanării (după „Editează acest rezultat”
+  // imaginea de lucru e o fotografie realistă, deci cererea redevine o editare foto obișnuită, cu aceleași cote)
+  const scanSourceActive = studioSource === 'scan' && mode === 'interiors' && scanSource !== null && originalImage === scanSource.image;
+  function scanPayload(dims: RoomDimensions) {
+    // Editarea de zonă privește doar masca (ca regulile ergonomice): directiva de sinteză 3D nu pleacă
+    return scanSourceActive && !editArea ? { is3dScanSource: true, doorCount: dims.doorsCount, windowCount: dims.windowsCount } : {};
+  }
 
   // Regulile ergonomice trimise modelului: obiectiv + reguli în „Optimizare spațiu” (structura mereu păstrată),
   // doar regulile după „Aplică recomandările” în Redesign; niciodată la o editare de zonă (ar privi toată camera).
@@ -823,7 +1010,10 @@ export default function StudioPage() {
     if (inferredSpace && inferredSpace !== selectedSpace) {
       requestSpace = getSpace(mode, inferredSpace).id;
       requestDims = sanitizeDimensions(
-        dimensionsForSpace(mode, requestSpace, { budget: roomDimensions.budget, aiStrength: roomDimensions.aiStrength, scope: roomDimensions.scope }),
+        {
+          ...dimensionsForSpace(mode, requestSpace, { budget: roomDimensions.budget, aiStrength: roomDimensions.aiStrength, scope: roomDimensions.scope }),
+          ...(keepScanGeometry(mode) ? scannedGeometry(roomDimensions) : {}),
+        },
         mode,
         requestSpace,
       );
@@ -855,6 +1045,7 @@ export default function StudioPage() {
         promptUsed?: string; negativePromptUsed?: string; promptEngine?: string; promptFormat?: string; parameters?: PromptInsight['parameters'];
         regionalEdit?: { position?: string; coverage?: number; bounds?: { x: number; y: number; width: number; height: number } };
         detectedItems?: unknown;
+        detectedFixtures?: unknown;
       }>(res);
       if (!res.ok) {
         const code = typeof data.code === 'string' ? data.code : '';
@@ -894,6 +1085,8 @@ export default function StudioPage() {
       loadedProjectIdRef.current = null; // o randare nouă = un proiect nou la salvare
       setShareProjectId(null);
       setGeneratedImage(result);
+      const fixtures = parseDetectedFixtures(data.detectedFixtures);
+      setFixtureRender(fixtures.length > 0 ? { image: result, fixtures } : null);
       setIsDemoResult(Boolean(data.isDemo));
       setProviderNote(typeof data.warning === 'string' ? data.warning : null);
       setVision(data.vision && typeof data.vision === 'object' ? data.vision : null);
@@ -1184,9 +1377,26 @@ export default function StudioPage() {
                   providerNote={providerNote}
                   isLoading={isLoading}
                   isPhotoLoading={isPhotoLoading}
-                  onFile={(file) => void handlePhotoFile(file)}
-                  onPickFile={() => canvasFileRef.current?.click()}
-                  onDemoPhoto={() => void handleDemoPhoto()}
+                  onFile={studioSource === 'photo' ? (file) => void handlePhotoFile(file) : undefined}
+                  onPickFile={studioSource === 'photo' ? () => canvasFileRef.current?.click() : undefined}
+                  onDemoPhoto={studioSource === 'photo' ? () => void handleDemoPhoto() : undefined}
+                  source={studioSource}
+                  onSourceChange={handleSourceChange}
+                  scanUnavailable={mode === 'interiors' ? null : t('Scanarea 3D LiDAR este disponibilă pentru interioare.', '3D LiDAR scans are available for interiors.', 'Le scan 3D LiDAR est disponible pour les intérieurs.')}
+                  scanInfo={studioSource === 'scan' && scanSource
+                    ? scanSource.view
+                      ? {
+                          badge: `${t('Scanare 3D reală', 'Real 3D scan', 'Scan 3D réel')} · ${scanDims(scanSource.scan)}${scanSource.scan.doorCount + scanSource.scan.windowCount > 0 ? ` · ${scanOpenings(scanSource.scan)}` : ''}`,
+                          preset: scanSource.view.preset,
+                          realMesh: true,
+                          busy: scanRendering,
+                        }
+                      : { badge: `${t('Sursă 3D LiDAR', '3D LiDAR source', 'Source 3D LiDAR')} · ${scanDims(scanSource.scan)} · ${scanOpenings(scanSource.scan)}`, preset: scanSource.angle.preset }
+                    : null}
+                  onScanAngle={(a) => void handleScanAngle(a)}
+                  onImportScan={() => setScanOpen('file')}
+                  onIphoneScan={() => setScanOpen('iphone')}
+                  onDemoScan={() => void handleDemoScan()}
                   editArea={editArea}
                   maskStrokes={maskStrokes}
                   onMaskStrokesChange={setMaskStrokes}
@@ -1195,6 +1405,7 @@ export default function StudioPage() {
                   onUseResultAsSource={handleUseResultAsSource}
                   onNewVariant={() => void handleGenerate()}
                   detectedItems={detectedItems}
+                  detectedFixtures={fixtureRender && fixtureRender.image === generatedImage ? fixtureRender.fixtures : undefined}
                   rootImage={steps[0]?.image ?? null}
                   structureLocked={!editArea && (preserveStructure || optimizing)}
                 />
@@ -1243,7 +1454,7 @@ export default function StudioPage() {
                 onNumberChange={handleNumberChange}
                 issues={dimensionIssues}
                 disabled={isLoading}
-                onScan={() => setScanOpen(true)}
+                onScan={() => setScanOpen('file')}
               >
                 {ergonomicReport && !editArea && (
                   <ErgonomicsPanel
@@ -1264,8 +1475,10 @@ export default function StudioPage() {
                   lang={lang}
                   isDark={isDark}
                   current={roomDimensions}
-                  studioPhoto={originalImage}
+                  studioPhoto={studioSource === 'photo' ? originalImage : null}
                   onApply={handleApplyScan}
+                  onGenerateFrom3d={mode === 'interiors' ? handleGenerateFrom3d : undefined}
+                  initialBridge={scanOpen === 'iphone'}
                 />
               )}
 

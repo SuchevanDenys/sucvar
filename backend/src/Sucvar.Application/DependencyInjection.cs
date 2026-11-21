@@ -24,6 +24,7 @@ public static class DependencyInjection
         services.AddScoped<Profile.ProfileService>();
         services.AddScoped<Procurement.ProcurementService>();
         services.AddSingleton<SettingsCache>();
+        services.AddSingleton<Lidar.ILidarBridgeService, Lidar.LidarBridgeService>();
         services.AddScoped<PlatformSettingsService>();
         services.AddScoped<AdminService>();
         services.AddValidatorsFromAssemblyContaining<ReviewRequestValidator>(ServiceLifetime.Singleton);

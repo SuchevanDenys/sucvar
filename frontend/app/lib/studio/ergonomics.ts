@@ -113,11 +113,11 @@ const valid = (v: number | null | undefined, min: number, max: number): number |
 
 /** Analiza ergonomică a unei camere; cotele lipsă / nule se completează cu valorile tipice ale camerei. */
 export function analyzeErgonomics(
-  spaceType: string,
+  spaceType: string | null | undefined,
   dims: { length?: number | null; width?: number | null; height?: number | null },
   goalId: OptimizationGoalId | null = null,
 ): ErgonomicReport {
-  const space = spaceType.trim() || 'living room';
+  const space = spaceType?.trim() || 'living room';
   const defaults = defaultDimensions(space);
   const l = valid(dims.length, 1, 100);
   const w = valid(dims.width, 1, 100);

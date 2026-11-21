@@ -42,7 +42,76 @@ export type ScanNoteCode =
   | 'edges-sampled'
   | 'implausible-size'
   | 'usda-entry'
-  | 'json-entry';
+  | 'json-entry'
+  | 'zip-entry'
+  | 'textured-mesh'
+  | 'vertex-colors'
+  | 'texture-missing';
+
+/** O imagine de textură (JPEG / PNG / WebP) livrată alături de OBJ (arhivă ZIP sau fișiere selectate împreună). */
+export interface ScanTexture {
+  /** Numele de bază al fișierului (fără directoare), ca în `map_Kd`. */
+  name: string;
+  mime: string;
+  data: Uint8Array;
+}
+
+/** Un interval de triunghiuri desenat cu același material. */
+export interface ScanMeshGroup {
+  /** Primul indice (în `indices`) și numărul de indici. */
+  start: number;
+  count: number;
+  /** Textura (`ScanTexture.name`); null = culoare. */
+  texture: string | null;
+  /** Culoarea materialului (Kd din .mtl sau culoarea categoriei), 0–1. */
+  color: [number, number, number];
+}
+
+/**
+ * Plasa reală a scanării, gata pentru GPU: vârfuri de-indexate pe perechi (v, vt), triangulate, în cadrul local al
+ * camerei (metri, Y-sus, aliniată la pereți — același cadru ca `edges` și cotele).
+ */
+export interface ScanMesh {
+  positions: Float32Array;
+  /** u, v pe vârf (convenția OBJ: originea jos-stânga); null = fără coordonate de textură. */
+  uvs: Float32Array | null;
+  /** r, g, b pe vârf (0–1); null = fără culori pe vârf. */
+  colors: Float32Array | null;
+  /**
+   * Normalele netede pe vârf (unitare; medie ponderată cu aria fețelor adiacente, acumulată pe vârful OBJ — cusăturile
+   * UV nu rup umbrirea). Sensul nu e garantat (plasele LiDAR au orientări amestecate): shader-ul le întoarce spre
+   * privitor. (0, 0, 0) = vârf izolat / degenerat → shader-ul folosește normala plană.
+   */
+  normals: Float32Array;
+  indices: Uint32Array;
+  groups: ScanMeshGroup[];
+  /** Texturile folosite de grupuri. */
+  textures: ScanTexture[];
+  /**
+   * true = fețele (CCW) privesc spre interiorul camerei (scanările LiDAR: suprafața văzută de senzor). Cu eliminarea
+   * fețelor din spate, pereții apropiați dispar în vederea de ansamblu („casă de păpuși”) și rămân vizibili din interior.
+   */
+  windingInward: boolean;
+  triangleCount: number;
+}
+
+/**
+ * Peretele unui gol, în cadrul local al camerei: 0 = z 0 (de-a lungul lui x), 1 = x L (de-a lungul lui z),
+ * 2 = z l (de-a lungul lui x), 3 = x 0 (de-a lungul lui z).
+ */
+export type WallIndex = 0 | 1 | 2 | 3;
+
+/** Un gol (ușă / fereastră / deschidere) pe un perete: poziția de-a lungul peretelui (`u0`–`u1`) și pe verticală (`y0`–`y1`), metri. */
+export interface ScanOpening {
+  kind: 'door' | 'window' | 'opening';
+  wall: WallIndex;
+  u0: number;
+  u1: number;
+  y0: number;
+  y1: number;
+  /** true = poziție standard sintetizată (fișierul dă doar numărul golurilor, nu geometria lor). */
+  estimated?: boolean;
+}
 
 export interface ScanNote {
   code: ScanNoteCode;
@@ -73,7 +142,11 @@ export interface RoomScan {
   edges: ScanEdge[];
   /** Eșantion de puncte (x, y, z consecutive) pentru scanările fără fețe. */
   cloud: number[];
+  /** Golurile cu poziția lor pe pereți (exacte din geometrie sau standard, vezi `estimated`). */
+  openings: ScanOpening[];
   notes: ScanNote[];
+  /** Plasa reală (OBJ cu fețe): randată texturat / colorat în locul schemei. Absentă la JSON / USD / demo. */
+  mesh?: ScanMesh;
 }
 
 export type ScanErrorCode =
@@ -84,7 +157,13 @@ export type ScanErrorCode =
   | 'no-room'
   | 'zip-invalid'
   | 'usdz-binary'
-  | 'usdz-empty';
+  | 'usdz-empty'
+  | 'zip-no-model'
+  | 'degenerate';
+
+/** Pragurile sub care o plasă nu mai descrie o cameră (puncte suprapuse, doar podeaua etc.). */
+const MIN_ROOM_SIDE_M = 0.3;
+const MIN_ROOM_HEIGHT_M = 1;
 
 export class ScanParseError extends Error {
   code: ScanErrorCode;
@@ -254,6 +333,26 @@ interface MeshInput {
   faceKinds: (EdgeKind | null)[];
   /** Nume distincte de grupuri pe categorie (RoomPlan → OBJ: Wall0, Door0, Window1…). */
   groups: Record<'wall' | 'door' | 'window' | 'opening', Set<string>>;
+  /** Grupul de gol (Door0, Window1…) al fiecărei fețe, paralel cu `faces` (null = nu e un gol). */
+  faceGroups?: (string | null)[];
+  /** Datele de randare ale plasei reale (OBJ). */
+  render?: RenderInput;
+}
+
+/** Plasa OBJ triangulată, înainte de alinierea la cadrul camerei. */
+interface RenderInput {
+  /** u, v consecutive (`vt`). */
+  uvs: number[];
+  /** r, g, b pe vârf (paralel cu `positions`), deja normalizate 0–1; null = fără culori. */
+  colors: number[] | null;
+  /** Colțurile triunghiurilor: indicele vârfului și al coordonatei de textură (−1 = fără). */
+  triV: number[];
+  triT: number[];
+  /** Grupul de randare al fiecărui triunghi (indice în `slots`). */
+  triSlot: number[];
+  /** Grupurile de randare: textura și culoarea fiecăruia. */
+  slots: { texture: string | null; color: [number, number, number] }[];
+  textures: ScanTexture[];
 }
 
 function percentile(sorted: Float64Array, p: number): number {
@@ -333,6 +432,9 @@ function analyzeMesh(
 
   const floorY = upMin * scale;
   const heightM = (upMax - upMin) * scale;
+  // Plasă degenerată (puncte suprapuse, doar podeaua, o linie): nu descrie o cameră — fără cote de 0 m în Studio
+  if (!(Math.min(frame.length, frame.width) >= MIN_ROOM_SIDE_M && heightM >= MIN_ROOM_HEIGHT_M))
+    throw new ScanParseError('degenerate', `${r2(frame.length)} × ${r2(frame.width)} × ${r2(heightM)} m`);
   const toLocal = (i: number): Vec3 => {
     const px = H1[i] * scale - frame.origin[0];
     const pz = H2[i] * h2Sign * scale - frame.origin[1];
@@ -443,6 +545,25 @@ function analyzeMesh(
 
   const L = frame.length, W = frame.width;
   edges.push(...boxEdges(L, W, heightM));
+  const renderMesh = mesh.render && mesh.render.triV.length >= 3 ? buildRenderMesh(mesh.render, n, toLocal, [L / 2, heightM / 2, W / 2]) : undefined;
+
+  // Golurile: cutia vârfurilor fiecărui grup Door* / Window* / Opening*, proiectată pe peretele cel mai apropiat
+  const openingPts = new Map<string, { kind: ScanOpening['kind']; pts: Vec3[] }>();
+  if (mesh.faceGroups) {
+    for (let f = 0; f < faceCount; f++) {
+      const g = mesh.faceGroups[f];
+      const k = mesh.faceKinds[f];
+      if (!g || (k !== 'door' && k !== 'window' && k !== 'opening')) continue;
+      let entry = openingPts.get(g);
+      if (!entry) openingPts.set(g, (entry = { kind: k, pts: [] }));
+      for (const i of mesh.faces[f]) entry.pts.push(toLocal(i));
+    }
+  }
+  const meshOpenings: ScanOpening[] = [];
+  for (const { kind, pts } of openingPts.values()) {
+    const o = openingFromPoints(kind, pts, L, W, heightM);
+    if (o) meshOpenings.push(o);
+  }
 
   const doorCount = mesh.groups.door.size;
   const windowCount = mesh.groups.window.size;
@@ -471,9 +592,151 @@ function analyzeMesh(
     faceCount,
     edges,
     cloud,
+    openings: meshOpenings,
     notes,
+    mesh: renderMesh,
   });
 }
+
+/**
+ * Plasa GPU: un vârf pe fiecare pereche distinctă (v, vt) — cusăturile texturii rămân exacte —, triunghiurile
+ * ordonate pe grupuri de randare, pozițiile în cadrul local al camerei.
+ */
+function buildRenderMesh(r: RenderInput, vertexCount: number, toLocal: (i: number) => Vec3, center: Vec3): ScanMesh {
+  const triCount = Math.floor(r.triV.length / 3);
+  const uvCount = r.uvs.length / 2;
+  const hasUv = uvCount > 0 && r.triT.some((t) => t >= 0);
+
+  // Vârfurile GPU: (v, vt) → indice nou (fără UV: chiar indicele vârfului)
+  const remap = new Map<number, number>();
+  const srcV: number[] = [];
+  const srcT: number[] = [];
+  const corner = new Uint32Array(triCount * 3);
+  for (let k = 0; k < triCount * 3; k++) {
+    const v = r.triV[k];
+    if (!hasUv) {
+      corner[k] = v;
+      continue;
+    }
+    const t = r.triT[k];
+    const key = v * (uvCount + 1) + (t + 1);
+    let idx = remap.get(key);
+    if (idx === undefined) {
+      idx = srcV.length;
+      remap.set(key, idx);
+      srcV.push(v);
+      srcT.push(t);
+    }
+    corner[k] = idx;
+  }
+  const nv = hasUv ? srcV.length : vertexCount;
+  const positions = new Float32Array(nv * 3);
+  const uvs = hasUv ? new Float32Array(nv * 2) : null;
+  const colors = r.colors ? new Float32Array(nv * 3) : null;
+  for (let i = 0; i < nv; i++) {
+    const v = hasUv ? srcV[i] : i;
+    const p = toLocal(v);
+    positions[i * 3] = p[0];
+    positions[i * 3 + 1] = p[1];
+    positions[i * 3 + 2] = p[2];
+    if (uvs) {
+      const t = srcT[i];
+      if (t >= 0) {
+        uvs[i * 2] = r.uvs[t * 2];
+        uvs[i * 2 + 1] = r.uvs[t * 2 + 1];
+      }
+    }
+    if (colors && r.colors) {
+      colors[i * 3] = r.colors[v * 3];
+      colors[i * 3 + 1] = r.colors[v * 3 + 1];
+      colors[i * 3 + 2] = r.colors[v * 3 + 2];
+    }
+  }
+
+  // Normalele netede: produsul vectorial nenormalizat (= 2 × aria) acumulat pe vârful OBJ, apoi copiat pe vârfurile GPU
+  const acc = new Float64Array(vertexCount * 3);
+  const src = (k: number) => (hasUv ? srcV[corner[k]] : corner[k]);
+  for (let f = 0; f < triCount; f++) {
+    const a = corner[f * 3], b = corner[f * 3 + 1], c = corner[f * 3 + 2];
+    const ax = positions[a * 3], ay = positions[a * 3 + 1], az = positions[a * 3 + 2];
+    const e1x = positions[b * 3] - ax, e1y = positions[b * 3 + 1] - ay, e1z = positions[b * 3 + 2] - az;
+    const e2x = positions[c * 3] - ax, e2y = positions[c * 3 + 1] - ay, e2z = positions[c * 3 + 2] - az;
+    const nx = e1y * e2z - e1z * e2y, ny = e1z * e2x - e1x * e2z, nz = e1x * e2y - e1y * e2x;
+    for (let j = 0; j < 3; j++) {
+      const v = src(f * 3 + j) * 3;
+      acc[v] += nx;
+      acc[v + 1] += ny;
+      acc[v + 2] += nz;
+    }
+  }
+  const normals = new Float32Array(nv * 3);
+  for (let i = 0; i < nv; i++) {
+    const v = (hasUv ? srcV[i] : i) * 3;
+    const x = acc[v], y = acc[v + 1], z = acc[v + 2];
+    const l = Math.hypot(x, y, z);
+    if (l > 1e-12) {
+      normals[i * 3] = x / l;
+      normals[i * 3 + 1] = y / l;
+      normals[i * 3 + 2] = z / l;
+    }
+  }
+
+  // Triunghiurile ordonate pe grup (sortare prin numărare): un singur apel de desen per material
+  const slotCount = Math.max(1, r.slots.length);
+  const counts = new Array<number>(slotCount).fill(0);
+  for (let f = 0; f < triCount; f++) counts[r.triSlot[f] ?? 0]++;
+  const starts = new Array<number>(slotCount).fill(0);
+  for (let s = 1; s < slotCount; s++) starts[s] = starts[s - 1] + counts[s - 1];
+  const cursor = starts.slice();
+  const indices = new Uint32Array(triCount * 3);
+  // Orientarea fețelor: Σ normală · (centroid − centrul camerei), ponderat cu aria (negativ = spre interior)
+  let facing = 0;
+  for (let f = 0; f < triCount; f++) {
+    const s = r.triSlot[f] ?? 0;
+    const o = cursor[s]++ * 3;
+    const a = corner[f * 3], b = corner[f * 3 + 1], c = corner[f * 3 + 2];
+    indices[o] = a;
+    indices[o + 1] = b;
+    indices[o + 2] = c;
+    const ax = positions[a * 3], ay = positions[a * 3 + 1], az = positions[a * 3 + 2];
+    const e1x = positions[b * 3] - ax, e1y = positions[b * 3 + 1] - ay, e1z = positions[b * 3 + 2] - az;
+    const e2x = positions[c * 3] - ax, e2y = positions[c * 3 + 1] - ay, e2z = positions[c * 3 + 2] - az;
+    const nx = e1y * e2z - e1z * e2y, ny = e1z * e2x - e1x * e2z, nz = e1x * e2y - e1y * e2x;
+    const cx = (ax + positions[b * 3] + positions[c * 3]) / 3 - center[0];
+    const cy = (ay + positions[b * 3 + 1] + positions[c * 3 + 1]) / 3 - center[1];
+    const cz = (az + positions[b * 3 + 2] + positions[c * 3 + 2]) / 3 - center[2];
+    facing += nx * cx + ny * cy + nz * cz;
+  }
+  const groups: ScanMeshGroup[] = [];
+  for (let s = 0; s < slotCount; s++) {
+    if (!counts[s]) continue;
+    const slot = r.slots[s] ?? { texture: null, color: DEFAULT_MESH_COLOR };
+    groups.push({ start: starts[s] * 3, count: counts[s] * 3, texture: hasUv ? slot.texture : null, color: slot.color });
+  }
+  const used = new Set(groups.map((g) => g.texture).filter(Boolean));
+  return {
+    positions,
+    uvs,
+    colors,
+    normals,
+    indices,
+    groups,
+    textures: r.textures.filter((t) => used.has(t.name)),
+    windingInward: facing <= 0,
+    triangleCount: triCount,
+  };
+}
+
+const DEFAULT_MESH_COLOR: [number, number, number] = [0.9, 0.87, 0.83];
+/** Culorile categoriilor (RoomPlan → OBJ fără material): pereți calzi, uși șampanie, ferestre reci. */
+const KIND_COLOR: Record<EdgeKind, [number, number, number]> = {
+  wall: [0.93, 0.91, 0.88],
+  floor: [0.84, 0.79, 0.73],
+  door: [0.8, 0.71, 0.6],
+  window: [0.78, 0.86, 0.9],
+  opening: [0.85, 0.8, 0.75],
+  mesh: DEFAULT_MESH_COLOR,
+};
 
 /** Cutia camerei: perimetrul podelei + muchiile verticale + perimetrul tavanului. */
 function boxEdges(L: number, W: number, H: number): ScanEdge[] {
@@ -488,9 +751,73 @@ function boxEdges(L: number, W: number, H: number): ScanEdge[] {
   return out;
 }
 
+/** Golul descris de punctele lui (cadrul local): peretele cel mai apropiat de centru + cutia de-a lungul lui. */
+export function openingFromPoints(kind: ScanOpening['kind'], pts: Vec3[], L: number, W: number, H: number): ScanOpening | null {
+  if (pts.length < 2) return null;
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  for (const [x, y, z] of pts) {
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+    if (z < minZ) minZ = z;
+    if (z > maxZ) maxZ = z;
+  }
+  const cx = (minX + maxX) / 2, cz = (minZ + maxZ) / 2;
+  const dist = [Math.abs(cz), Math.abs(L - cx), Math.abs(W - cz), Math.abs(cx)];
+  const wall = dist.indexOf(Math.min(...dist)) as WallIndex;
+  const along = wall === 0 || wall === 2 ? [minX, maxX] : [minZ, maxZ];
+  const span = wall === 0 || wall === 2 ? L : W;
+  const u0 = clampN(along[0], 0, span), u1 = clampN(along[1], 0, span);
+  const y0 = clampN(minY, 0, H), y1 = clampN(maxY, 0, H);
+  if (u1 - u0 < 0.15 || y1 - y0 < 0.15) return null;
+  return { kind, wall, u0: r2(u0), u1: r2(u1), y0: r2(y0), y1: r2(y1) };
+}
+
+const clampN = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
+
+/** Lungimea peretelui `wall` (L pentru 0 / 2, l pentru 1 / 3). */
+export const wallSpan = (wall: WallIndex, L: number, W: number) => (wall === 0 || wall === 2 ? L : W);
+
+/**
+ * Completează golurile lipsă cu poziții standard (fișierul dă doar numărul lor): ușa 0,90 × 2,10 m lângă colțul
+ * peretelui 3, ferestrele 1,40 × 1,50 m (parapet 0,85 m) centrate pe pereții 2, 1, 0 — câte una pe perete, apoi alternând.
+ */
+export function completeOpenings(existing: ScanOpening[], doors: number, windows: number, L: number, W: number, H: number): ScanOpening[] {
+  const out = existing.slice();
+  const count = (k: ScanOpening['kind']) => out.filter((o) => o.kind === k).length;
+  for (let i = count('door'); i < doors; i++) {
+    const wall: WallIndex = i % 2 === 0 ? 3 : 0;
+    const span = wallSpan(wall, L, W);
+    const w = Math.min(0.9, span * 0.4);
+    const u0 = Math.min(0.3 + Math.floor(i / 2) * 1.3, Math.max(0, span - w));
+    out.push({ kind: 'door', wall, u0: r2(u0), u1: r2(u0 + w), y0: 0, y1: r2(Math.min(2.1, H - 0.1)), estimated: true });
+  }
+  const order: WallIndex[] = [2, 1, 0];
+  const nWin = Math.max(0, windows - count('window'));
+  const perWall = new Map<WallIndex, number>();
+  for (let i = 0; i < nWin; i++) {
+    const wall = order[i % order.length];
+    perWall.set(wall, (perWall.get(wall) ?? 0) + 1);
+  }
+  for (const [wall, n] of perWall) {
+    const span = wallSpan(wall, L, W);
+    const w = Math.min(1.4, (span / n) * 0.6);
+    const y0 = Math.min(0.85, H * 0.32);
+    const y1 = Math.min(y0 + 1.5, H - 0.2);
+    for (let k = 0; k < n; k++) {
+      const c = (span * (k + 0.5)) / n;
+      out.push({ kind: 'window', wall, u0: r2(c - w / 2), u1: r2(c + w / 2), y0: r2(y0), y1: r2(y1), estimated: true });
+    }
+  }
+  return out;
+}
+
 function finalize(scan: RoomScan): RoomScan {
+  const L = r2(scan.lengthM), W = r2(scan.widthM), H = r2(scan.heightM);
   return {
     ...scan,
+    openings: completeOpenings(scan.openings, scan.doorCount, scan.windowCount, L, W, H),
     lengthM: r2(scan.lengthM),
     widthM: r2(scan.widthM),
     heightM: r2(scan.heightM),
@@ -533,52 +860,217 @@ function upHint(text: string): UpAxis | undefined {
   return (m[1] ?? m[2]).toLowerCase() as UpAxis;
 }
 
-export function parseObj(text: string, opts: ParseOptions = {}): RoomScan {
+/** Fișierele însoțitoare ale unui OBJ: materialele (.mtl) și texturile (JPEG / PNG / WebP). */
+export interface ObjAssets {
+  mtl?: { name: string; text: string }[];
+  textures?: ScanTexture[];
+}
+
+interface MtlMaterial {
+  map?: string;
+  kd?: [number, number, number];
+}
+
+const baseName = (p: string) => p.replace(/\\/g, '/').split('/').pop() ?? p;
+
+/** `newmtl` → `map_Kd` (numele de bază, opțiunile `-o 0 0 0`, `-bm 1` etc. sunt ignorate) + `Kd`. */
+export function parseMtl(text: string): Map<string, MtlMaterial> {
+  const out = new Map<string, MtlMaterial>();
+  let cur: MtlMaterial | null = null;
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+    const sp = line.search(/\s/);
+    if (sp < 0) continue;
+    const key = line.slice(0, sp).toLowerCase();
+    const rest = line.slice(sp + 1).trim();
+    if (key === 'newmtl') {
+      cur = {};
+      out.set(rest, cur);
+    } else if (cur && key === 'map_kd') {
+      const tokens = rest.split(/\s+/);
+      let i = 0;
+      while (i < tokens.length - 1 && tokens[i].startsWith('-')) {
+        i++;
+        while (i < tokens.length - 1 && /^-?\d*\.?\d+(?:e[-+]?\d+)?$/i.test(tokens[i])) i++;
+        if (/^(on|off)$/i.test(tokens[i]) && i < tokens.length - 1) i++;
+      }
+      cur.map = baseName(tokens.slice(i).join(' '));
+    } else if (cur && key === 'kd') {
+      const v = rest.split(/\s+/).map(Number);
+      if (v.length >= 3 && v.slice(0, 3).every(Number.isFinite)) cur.kd = [v[0], v[1], v[2]];
+    }
+  }
+  return out;
+}
+
+const MIME_BY_EXT: Record<string, string> = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
+/** Tipul MIME al unei texturi după extensie (null = nu e o imagine acceptată). */
+export function textureMime(name: string): string | null {
+  const ext = name.toLowerCase().split('.').pop() ?? '';
+  return MIME_BY_EXT[ext] ?? null;
+}
+
+export function parseObj(text: string, opts: ParseOptions = {}, assets: ObjAssets = {}, extraNotes: ScanNote[] = []): RoomScan {
   if (!text.trim()) throw new ScanParseError('empty');
   const positions: number[] = [];
   const faces: number[][] = [];
   const faceKinds: (EdgeKind | null)[] = [];
   const groups = emptyGroups();
+  const faceGroups: (string | null)[] = [];
   let currentKind: EdgeKind | null = null;
+  let currentGroup: string | null = null;
+  // Randare: coordonate de textură, culori pe vârf, colțurile triunghiurilor, materialul curent
+  const uvs: number[] = [];
+  const colors: number[] = [];
+  let coloredVertices = 0;
+  let maxColor = 0;
+  const triV: number[] = [];
+  const triT: number[] = [];
+  const triSlot: number[] = [];
+  const slotKeys = new Map<string, number>();
+  const slotDefs: { material: string | null; kind: EdgeKind | null }[] = [];
+  let currentMaterial: string | null = null;
+  let currentSlot = -1;
+  const polyV: number[] = [];
+  const polyT: number[] = [];
 
+  const isSep = (c: number) => c === 32 || c === 9;
   let start = 0;
   const len = text.length;
   while (start < len) {
     let end = text.indexOf('\n', start);
     if (end === -1) end = len;
     const c0 = text.charCodeAt(start);
-    // Linii relevante: „v ”, „f ”, „o ”, „g ” (restul — vn, vt, usemtl, comentarii — sunt ignorate)
-    if (c0 === 118 /* v */ && (text.charCodeAt(start + 1) === 32 || text.charCodeAt(start + 1) === 9)) {
+    const c1 = text.charCodeAt(start + 1);
+    // Linii relevante: „v ”, „vt ”, „f ”, „o ”, „g ”, „usemtl ” (vn, mtllib, comentarii — ignorate)
+    if (c0 === 118 /* v */ && isSep(c1)) {
       const parts = text.slice(start + 2, end).trim().split(/\s+/);
       const x = Number(parts[0]), y = Number(parts[1]), z = Number(parts[2]);
-      if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z)) positions.push(x, y, z);
-    } else if (c0 === 102 /* f */ && (text.charCodeAt(start + 1) === 32 || text.charCodeAt(start + 1) === 9)) {
+      if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z)) {
+        positions.push(x, y, z);
+        // Culori pe vârf (Scaniverse / Polycam / MeshLab): `v x y z r g b`
+        const r = Number(parts[3]), g = Number(parts[4]), b = Number(parts[5]);
+        if (parts.length >= 6 && Number.isFinite(r) && Number.isFinite(g) && Number.isFinite(b)) {
+          colors.push(r, g, b);
+          coloredVertices++;
+          maxColor = Math.max(maxColor, r, g, b);
+        } else colors.push(NaN, NaN, NaN); // completat după normalizare (altfel gri-ul implicit ar fi împărțit la 255)
+      }
+    } else if (c0 === 118 /* v */ && c1 === 116 /* t */ && isSep(text.charCodeAt(start + 2))) {
+      const parts = text.slice(start + 3, end).trim().split(/\s+/);
+      const u = Number(parts[0]), v = Number(parts[1]);
+      uvs.push(Number.isFinite(u) ? u : 0, Number.isFinite(v) ? v : 0);
+    } else if (c0 === 102 /* f */ && isSep(c1)) {
       const parts = text.slice(start + 2, end).trim().split(/\s+/);
       const count = positions.length / 3;
-      const poly: number[] = [];
+      const uvCount = uvs.length / 2;
+      polyV.length = 0;
+      polyT.length = 0;
       for (const p of parts) {
         const raw = parseInt(p, 10); // „12/5/7” → 12
         if (!Number.isFinite(raw) || raw === 0) continue;
         const idx = raw > 0 ? raw - 1 : count + raw;
-        if (idx >= 0 && idx < count) poly.push(idx);
+        if (idx < 0 || idx >= count) continue;
+        let t = -1;
+        const s1 = p.indexOf('/');
+        if (s1 >= 0) {
+          const s2 = p.indexOf('/', s1 + 1);
+          const rawT = parseInt(s2 < 0 ? p.slice(s1 + 1) : p.slice(s1 + 1, s2), 10); // „12//7” → NaN
+          if (Number.isFinite(rawT) && rawT !== 0) {
+            const ti = rawT > 0 ? rawT - 1 : uvCount + rawT;
+            if (ti >= 0 && ti < uvCount) t = ti;
+          }
+        }
+        polyV.push(idx);
+        polyT.push(t);
       }
-      if (poly.length >= 2) {
-        faces.push(poly);
+      if (polyV.length >= 2) {
+        faces.push(polyV.slice());
         faceKinds.push(currentKind);
+        faceGroups.push(currentGroup);
       }
-    } else if ((c0 === 111 /* o */ || c0 === 103 /* g */) && text.charCodeAt(start + 1) === 32) {
+      if (polyV.length >= 3) {
+        if (currentSlot < 0) {
+          const key = `${currentMaterial ?? ''}\u0000${currentMaterial ? '' : currentKind ?? ''}`;
+          let s = slotKeys.get(key);
+          if (s === undefined) {
+            s = slotDefs.length;
+            slotKeys.set(key, s);
+            slotDefs.push({ material: currentMaterial, kind: currentMaterial ? null : currentKind });
+          }
+          currentSlot = s;
+        }
+        // Evantai: (0, k, k + 1)
+        for (let k = 1; k + 1 < polyV.length; k++) {
+          triV.push(polyV[0], polyV[k], polyV[k + 1]);
+          triT.push(polyT[0], polyT[k], polyT[k + 1]);
+          triSlot.push(currentSlot);
+        }
+      }
+    } else if ((c0 === 111 /* o */ || c0 === 103 /* g */) && c1 === 32) {
       const name = text.slice(start + 2, end).trim();
       currentKind = groupKind(name);
+      currentGroup = currentKind === 'door' || currentKind === 'window' || currentKind === 'opening' ? name : null;
       if (currentKind && currentKind !== 'floor' && currentKind !== 'mesh') groups[currentKind].add(name);
+      currentSlot = -1;
+    } else if (c0 === 117 /* u */ && text.startsWith('usemtl', start) && isSep(text.charCodeAt(start + 6))) {
+      currentMaterial = text.slice(start + 7, end).trim() || null;
+      currentSlot = -1;
     }
     start = end + 1;
   }
   if (positions.length < 12) throw new ScanParseError('no-vertices');
-  return analyzeMesh({ positions, faces, faceKinds, groups }, 'obj', {
-    ...opts,
-    explicitUnit: unitHint(text),
-    explicitUp: upHint(text),
+
+  // Materiale → texturi: `map_Kd` după numele de bază; o singură imagine fără .mtl = textura întregii plase
+  const materials = new Map<string, MtlMaterial>();
+  for (const m of assets.mtl ?? []) for (const [k, v] of parseMtl(m.text)) materials.set(k, v);
+  const textures = assets.textures ?? [];
+  const byName = new Map(textures.map((t) => [t.name.toLowerCase(), t] as const));
+  const notes: ScanNote[] = [...extraNotes];
+  const missing = new Set<string>();
+  const slots = (slotDefs.length ? slotDefs : [{ material: null, kind: null }]).map(({ material, kind }) => {
+    const mat = material ? materials.get(material) : undefined;
+    let tex: ScanTexture | undefined;
+    if (mat?.map) {
+      tex = byName.get(mat.map.toLowerCase());
+      if (!tex) {
+        if (textures.length === 1) tex = textures[0];
+        else missing.add(mat.map);
+      }
+    } else if (!mat?.kd && textures.length === 1) {
+      tex = textures[0];
+    }
+    const color = mat?.kd && mat.kd.some((c) => c > 0.02) ? mat.kd : KIND_COLOR[kind ?? 'mesh'];
+    return { texture: tex?.name ?? null, color };
   });
+  const hasUv = uvs.length > 0 && triT.some((t) => t >= 0);
+  const textured = hasUv && slots.some((s) => s.texture);
+  const hasColors = coloredVertices > 0 && coloredVertices >= positions.length / 3 * 0.9;
+  // Culori 0–255 (unele exporturi) → 0–1
+  if (hasColors && maxColor > 1.0001) for (let i = 0; i < colors.length; i++) colors[i] /= 255;
+  if (hasColors) {
+    for (let i = 0; i < colors.length; i++) {
+      if (Number.isNaN(colors[i])) colors[i] = DEFAULT_MESH_COLOR[i % 3];
+      else colors[i] = Math.min(1, Math.max(0, colors[i]));
+    }
+  }
+  if (textured) notes.push({ code: 'textured-mesh', value: [...new Set(slots.map((s) => s.texture).filter(Boolean))].join(', ') });
+  else if (hasColors) notes.push({ code: 'vertex-colors' });
+  for (const m of missing) notes.push({ code: 'texture-missing', value: m });
+
+  return analyzeMesh(
+    {
+      positions,
+      faces,
+      faceKinds,
+      groups,
+      faceGroups,
+      render: triV.length >= 3 ? { uvs, colors: hasColors ? colors : null, triV, triT, triSlot, slots, textures } : undefined,
+    },
+    'obj',
+    { ...opts, explicitUnit: unitHint(text), explicitUp: upHint(text), extraNotes: notes },
+  );
 }
 
 // ── RoomPlan JSON ─────────────────────────────────────────────────────────────
@@ -750,6 +1242,13 @@ export function parseRoomPlanObject(root: Record<string, unknown>, opts: ParseOp
 
   const gross = walls.reduce((s, w) => s + w.w * w.h, 0);
   const holes = [...doors, ...windows, ...openings].reduce((s, o) => s + o.w * o.h, 0);
+  const placed: ScanOpening[] = [];
+  for (const [kind, list] of [['door', doors], ['window', windows], ['opening', openings]] as const) {
+    for (const srf of list) {
+      const o = openingFromPoints(kind, surfaceCorners(srf).map(toLocal), frame.length, frame.width, heightM);
+      if (o) placed.push(o);
+    }
+  }
 
   return finalize({
     source: 'roomplan',
@@ -771,6 +1270,7 @@ export function parseRoomPlanObject(root: Record<string, unknown>, opts: ParseOp
     faceCount: walls.length + doors.length + windows.length + openings.length,
     edges,
     cloud: [],
+    openings: placed,
     notes,
   });
 }
@@ -820,6 +1320,7 @@ function parseDimensionsObject(root: Record<string, unknown>, opts: ParseOptions
     faceCount: 0,
     edges: boxEdges(lengthM, widthM, heightM),
     cloud: [],
+    openings: [],
     notes,
   });
 }
@@ -922,6 +1423,8 @@ const nums = (s: string) => (s.match(/-?\d*\.?\d+(?:[eE][-+]?\d+)?/g) ?? []).map
 interface UsdFrame {
   prim: string | null;
   kind: EdgeKind | null;
+  /** Prim-ul de gol (Door0, Window1…) căruia îi aparține geometria, moștenit de copii. */
+  group: string | null;
   parent: RowMat;
   local: { t: RowMat; r: RowMat; s: RowMat; m: RowMat };
   points: Vec3[];
@@ -941,6 +1444,7 @@ export function evaluateUsda(text: string): UsdaResult {
   const positions: number[] = [];
   const faces: number[][] = [];
   const faceKinds: (EdgeKind | null)[] = [];
+  const faceGroups: (string | null)[] = [];
   const groups = emptyGroups();
   let metersPerUnit: number | undefined;
   let upAxis: UpAxis | undefined;
@@ -948,7 +1452,7 @@ export function evaluateUsda(text: string): UsdaResult {
   const token =
     /def\s+\w+\s+"([^"]*)"|(\{)|(\})|point3f\[\]\s+points\s*=\s*\[([^\]]*)\]|int\[\]\s+faceVertexCounts\s*=\s*\[([^\]]*)\]|int\[\]\s+faceVertexIndices\s*=\s*\[([^\]]*)\]|matrix4d\s+xformOp:transform(?::\w+)?\s*=\s*\(\s*((?:\([^)]*\)\s*,?\s*){4})\)|(?:double3|float3)\s+xformOp:translate(?::\w+)?\s*=\s*\(([^)]*)\)|(?:double3|float3|half3)\s+xformOp:scale(?::\w+)?\s*=\s*\(([^)]*)\)|(?:quatf|quatd|quath)\s+xformOp:orient(?::\w+)?\s*=\s*\(([^)]*)\)|(?:double3|float3)\s+xformOp:rotateXYZ(?::\w+)?\s*=\s*\(([^)]*)\)|double\s+size\s*=\s*(-?[\d.eE+-]+)|metersPerUnit\s*=\s*([\d.eE+-]+)|upAxis\s*=\s*"([YZyz])"/g;
 
-  const root: UsdFrame = { prim: null, kind: null, parent: IDENTITY, local: { t: IDENTITY, r: IDENTITY, s: IDENTITY, m: IDENTITY }, points: [], counts: [], indices: [], cubeSize: null };
+  const root: UsdFrame = { prim: null, kind: null, group: null, parent: IDENTITY, local: { t: IDENTITY, r: IDENTITY, s: IDENTITY, m: IDENTITY }, points: [], counts: [], indices: [], cubeSize: null };
   const stack: UsdFrame[] = [root];
   let pendingPrim: string | null = null;
   const world = (f: UsdFrame) => rowMul(rowMul(rowMul(rowMul(f.local.s, f.local.r), f.local.m), f.local.t), f.parent);
@@ -967,12 +1471,14 @@ export function evaluateUsda(text: string): UsdaResult {
         if (poly.length >= 2) {
           faces.push(poly);
           faceKinds.push(f.kind);
+          faceGroups.push(f.group);
         }
       }
     } else if (!f.points.length) {
       for (const q of CUBE_FACES) {
         faces.push(q.map((i) => base + i));
         faceKinds.push(f.kind);
+        faceGroups.push(f.group);
       }
     }
   };
@@ -987,11 +1493,13 @@ export function evaluateUsda(text: string): UsdaResult {
       const prim = pendingPrim;
       pendingPrim = null;
       const kind = prim ? groupKind(prim) : top.kind;
+      const isNewOpening = Boolean(prim && (kind === 'door' || kind === 'window' || kind === 'opening') && top.kind !== kind);
       if (prim && kind && kind !== 'floor' && kind !== 'mesh' && top.kind !== kind) groups[kind].add(prim);
+      const group = isNewOpening ? prim : kind === top.kind ? top.group : null;
       // Un `{` fără `def` (ex. dicționar de metadate) moștenește transformarea părintelui
       stack.push(
         prim
-          ? { prim, kind, parent: parentWorld, local: { t: IDENTITY, r: IDENTITY, s: IDENTITY, m: IDENTITY }, points: [], counts: [], indices: [], cubeSize: null }
+          ? { prim, kind, group, parent: parentWorld, local: { t: IDENTITY, r: IDENTITY, s: IDENTITY, m: IDENTITY }, points: [], counts: [], indices: [], cubeSize: null }
           : { ...top, prim: null, points: [], counts: [], indices: [], cubeSize: null, parent: parentWorld, local: { t: IDENTITY, r: IDENTITY, s: IDENTITY, m: IDENTITY } },
       );
     } else if (m[3]) {
@@ -1033,7 +1541,7 @@ export function evaluateUsda(text: string): UsdaResult {
     const f = stack.pop()!;
     if (f.prim) closeFrame(f);
   }
-  return { mesh: { positions, faces, faceKinds, groups }, metersPerUnit, upAxis };
+  return { mesh: { positions, faces, faceKinds, groups, faceGroups }, metersPerUnit, upAxis };
 }
 
 const CUBE_FACES = [[0, 1, 2, 3], [4, 5, 6, 7], [0, 1, 5, 4], [2, 3, 7, 6], [1, 2, 6, 5], [0, 3, 7, 4]];
@@ -1106,21 +1614,81 @@ export async function parseUsdz(buf: ArrayBuffer, opts: ParseOptions = {}): Prom
 
 // ── Dispecer după extensie ─────────────────────────────────────────────────
 
-export const ACCEPTED_SCAN_EXTENSIONS = ['.obj', '.usdz', '.usda', '.json'] as const;
+export const ACCEPTED_SCAN_EXTENSIONS = ['.obj', '.usdz', '.usda', '.json', '.zip'] as const;
+/** Fișiere acceptate doar împreună cu un .obj (selecție multiplă): materialele și texturile. */
+export const ACCEPTED_COMPANION_EXTENSIONS = ['.mtl', '.jpg', '.jpeg', '.png', '.webp'] as const;
 
-export async function parseScanFile(
-  file: { name: string; arrayBuffer: () => Promise<ArrayBuffer> },
-  opts: ParseOptions = {},
-): Promise<RoomScan> {
+export interface ScanFileLike {
+  name: string;
+  arrayBuffer: () => Promise<ArrayBuffer>;
+}
+
+export async function parseScanFile(file: ScanFileLike, opts: ParseOptions = {}): Promise<RoomScan> {
   const name = file.name.toLowerCase();
   const o = { ...opts, fileName: file.name };
   const buf = await file.arrayBuffer();
   if (name.endsWith('.usdz')) return parseUsdz(buf, o);
+  if (name.endsWith('.zip')) return parseScanZip(buf, o);
   const text = new TextDecoder().decode(buf);
   if (name.endsWith('.obj')) return parseObj(text, o);
   if (name.endsWith('.usda')) return parseUsda(text, o);
   if (name.endsWith('.json')) return parseRoomPlanJson(text, o);
   throw new ScanParseError('unsupported', file.name);
+}
+
+/** Adaugă un fișier însoțitor (.mtl / imagine) la resursele unui OBJ. */
+function addAsset(assets: Required<ObjAssets>, name: string, data: Uint8Array) {
+  const base = baseName(name);
+  if (/\.mtl$/i.test(base)) assets.mtl.push({ name: base, text: new TextDecoder().decode(data) });
+  else {
+    const mime = textureMime(base);
+    if (mime) assets.textures.push({ name: base, mime, data });
+  }
+}
+
+/**
+ * Arhivă ZIP de scanare (Scaniverse / Polycam / 3D Scanner App): OBJ-ul cel mai mare + .mtl + texturile din arhivă.
+ * Fără OBJ: JSON RoomPlan / USDA inclus (aceeași logică ca USDZ).
+ */
+export async function parseScanZip(buf: ArrayBuffer, opts: ParseOptions = {}): Promise<RoomScan> {
+  if (buf.byteLength === 0) throw new ScanParseError('empty');
+  const entries = readZipDirectory(buf).filter((e) => !e.name.endsWith('/') && !/(^|\/)__MACOSX\//.test(e.name) && !/(^|\/)\._/.test(e.name));
+  const obj = entries.filter((e) => /\.obj$/i.test(e.name)).sort((a, b) => b.size - a.size)[0];
+  if (obj) {
+    const assets: Required<ObjAssets> = { mtl: [], textures: [] };
+    for (const e of entries) {
+      if (e === obj || !/\.(mtl|jpe?g|png|webp)$/i.test(e.name)) continue;
+      addAsset(assets, e.name, await readZipEntry(buf, e));
+    }
+    const text = new TextDecoder().decode(await readZipEntry(buf, obj));
+    return parseObj(text, opts, assets, [{ code: 'zip-entry', value: obj.name }]);
+  }
+  if (entries.some((e) => /\.(json|usda|usdc?)$/i.test(e.name))) return parseUsdz(buf, opts);
+  throw new ScanParseError('zip-no-model');
+}
+
+/**
+ * Selecție multiplă / plasare simultană: o arhivă .zip, un .obj cu .mtl + texturi alături, sau un singur fișier de
+ * scanare (aceeași cale ca `parseScanFile`).
+ */
+export async function parseScanFiles(files: ScanFileLike[], opts: ParseOptions = {}): Promise<RoomScan> {
+  if (!files.length) throw new ScanParseError('empty');
+  const lower = (f: ScanFileLike) => f.name.toLowerCase();
+  const zip = files.find((f) => lower(f).endsWith('.zip'));
+  if (zip) return parseScanFile(zip, opts);
+  const obj = files.find((f) => lower(f).endsWith('.obj'));
+  if (obj) {
+    const assets: Required<ObjAssets> = { mtl: [], textures: [] };
+    for (const f of files) {
+      if (f === obj || !ACCEPTED_COMPANION_EXTENSIONS.some((ext) => lower(f).endsWith(ext))) continue;
+      addAsset(assets, f.name, new Uint8Array(await f.arrayBuffer()));
+    }
+    const text = new TextDecoder().decode(await obj.arrayBuffer());
+    return parseObj(text, { ...opts, fileName: obj.name }, assets);
+  }
+  const main = files.find((f) => ACCEPTED_SCAN_EXTENSIONS.some((ext) => lower(f).endsWith(ext)));
+  if (!main) throw new ScanParseError('unsupported', files.map((f) => f.name).join(', '));
+  return parseScanFile(main, opts);
 }
 
 // ── Scanarea demo: living 4,85 × 3,90 × 2,65 m (format RoomPlan CapturedRoom) ──

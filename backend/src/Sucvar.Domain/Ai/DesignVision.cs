@@ -39,7 +39,10 @@ public sealed record DesignBrief(
     string? Preset = null,
     RoomScale? Scale = null,
     string? OptimizationGoal = null,
-    IReadOnlyList<string>? ErgonomicConstraints = null)
+    IReadOnlyList<string>? ErgonomicConstraints = null,
+    bool Is3dScanSource = false,
+    int? DoorCount = null,
+    int? WindowCount = null)
 {
     public bool HasCustomPrompt => CustomPrompt.Length > 0;
 
@@ -361,7 +364,35 @@ public static partial class DesignVision
         !IsBlank(Js.Prop(payload, "customPrompt")) || RequestedStyle(payload) is null ||
         !IsBlank(Js.Prop(payload, "palette")) || !IsBlank(Js.Prop(payload, "lighting")) || !IsBlank(Js.Prop(payload, "preset")) ||
         Js.Prop(payload, "preserveStructure") is { ValueKind: JsonValueKind.True or JsonValueKind.False } ||
-        RequestedGoal(payload) is not null || ReadConstraints(payload).Count > 0;
+        RequestedGoal(payload) is not null || ReadConstraints(payload).Count > 0 || Is3dScanRequest(payload);
+
+    /// <summary>
+    /// "Proiect scanat 3D (LiDAR)": the source image is the Studio's perspective render of an imported 3D room scan
+    /// (shaded planes + structural wireframe), not a photograph. Interiors only; any other value / mode = photo source.
+    /// </summary>
+    public static bool Is3dScanRequest(JsonElement payload) =>
+        Js.Prop(payload, "is3dScanSource") is { ValueKind: JsonValueKind.True } &&
+        (Js.AsString(Js.Prop(payload, "mode")) ?? "interiors") == "interiors";
+
+    /// <summary>
+    /// Door / window counts detected by the scan: explicit <c>doorCount</c> / <c>windowCount</c> win, else the Studio's
+    /// <c>dimensions.doorsCount</c> / <c>windowsCount</c>; null when absent or not a number (0–50, rounded).
+    /// </summary>
+    public static (int? Doors, int? Windows) ReadOpeningCounts(JsonElement payload)
+    {
+        var dims = Js.IsRecord(Js.Prop(payload, "dimensions")) ? Js.Prop(payload, "dimensions") : null;
+        int? Count(JsonElement? primary, JsonElement? fallback)
+        {
+            foreach (var el in new[] { primary, fallback })
+            {
+                var v = GenerationPrompt.ReadNumber(el, 0, 50, double.NaN);
+                if (!double.IsNaN(v)) return (int)Math.Round(v);
+            }
+            return null;
+        }
+        return (Count(Js.Prop(payload, "doorCount"), Js.Prop(dims, "doorsCount")),
+                Count(Js.Prop(payload, "windowCount"), Js.Prop(dims, "windowsCount")));
+    }
 
     /// <summary>The known "Optimizare spațiu" goal of the request (unknown ids are ignored), or null.</summary>
     public static OptimizationGoal? RequestedGoal(JsonElement payload) =>
@@ -404,6 +435,11 @@ public static partial class DesignVision
         if (goal is not null && constraints.Count == 0)
             constraints = SpatialErgonomicsAnalyzer.Analyze(spaceId, scale.Length, scale.Width, scale.Height, goal.Id).PromptConstraints;
 
+        // 3D LiDAR source: the scan IS the architecture, so the shell is always kept (the toggle cannot free it)
+        var scan3d = mode == "interiors" && Is3dScanRequest(payload);
+        var (doors, windows) = scan3d ? ReadOpeningCounts(payload) : (null, null);
+        if (scan3d) preserve = true;
+
         return new DesignBrief(
             customPrompt,
             styleId,
@@ -418,7 +454,10 @@ public static partial class DesignVision
             preset?.Id,
             scale,
             goal?.Id,
-            constraints.Count > 0 ? constraints : null);
+            constraints.Count > 0 ? constraints : null,
+            scan3d,
+            doors,
+            windows);
     }
 
     /// <summary>
@@ -457,6 +496,9 @@ public static partial class DesignVision
         preset = b.Preset,
         optimizationGoal = b.OptimizationGoal,
         ergonomicConstraints = b.ErgonomicConstraints ?? [],
+        is3dScanSource = b.Is3dScanSource,
+        doorCount = b.DoorCount,
+        windowCount = b.WindowCount,
         dimensions = b.Scale is { } sc
             ? new { length = sc.Length, width = sc.Width, height = sc.Height, areaSqm = Js.Round(sc.AreaSqm * 10) / 10, volumeM3 = sc.Volume }
             : null,

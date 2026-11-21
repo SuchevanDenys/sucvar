@@ -45,6 +45,7 @@ public static class DependencyInjection
         services.AddSingleton<StableDiffusionImageProvider>();
         services.AddSingleton<IImageProviderSelector, ImageProviderSelector>();
         services.AddSingleton<IImageProcessor, SkiaImageProcessor>();
+        services.AddSingleton<IRoomFixtureDetector, ReplicateRoomFixtureDetector>();
         services.Configure<PromptEnhancerOptions>(configuration.GetSection("PromptEnhancer"));
         services.AddSingleton<IPromptEnhancer, LlmPromptEnhancer>();
         services.AddHttpClient(LlmPromptEnhancer.HttpClientName);

@@ -113,6 +113,10 @@ test('OBJ · indici negativi, fără fețe (nor de puncte), erori', () => {
   close(s.heightM, 2.5);
   assert.throws(() => parseObj(''), (e: unknown) => e instanceof ScanParseError && e.code === 'empty');
   assert.throws(() => parseObj('v 1 2 3\n'), (e: unknown) => e instanceof ScanParseError && e.code === 'no-vertices');
+  // Plase degenerate: puncte suprapuse / doar podeaua → respinse, niciodată cote de 0 m
+  const isDegenerate = (e: unknown) => e instanceof ScanParseError && e.code === 'degenerate';
+  assert.throws(() => parseObj('v 1 1 1\nv 1 1 1\nv 1 1 1\nv 1 1 1\nf 1 2 3\n'), isDegenerate);
+  assert.throws(() => parseObj('v 0 0 0\nv 4 0 0\nv 4 0 3\nv 0 0 3\nf 1 2 3 4\n'), isDegenerate);
 });
 
 test('detectUnitAndUp · reguli de plauzibilitate', () => {

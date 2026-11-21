@@ -98,6 +98,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapStudioEndpoints();
+app.MapLidarBridgeEndpoints();
 app.MapBillingEndpoints();
 app.MapB2bEndpoints();
 app.MapPortalEndpoints();

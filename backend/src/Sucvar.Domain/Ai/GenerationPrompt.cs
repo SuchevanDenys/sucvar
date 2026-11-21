@@ -43,6 +43,14 @@ public enum PromptFormat
 /// <param name="Instruction">The same brief as a natural-language editing instruction (used by <see cref="PromptFormat.Instruction"/> models).</param>
 /// <param name="Format">Which prompt <see cref="Prompt"/> currently holds (see <see cref="For"/>).</param>
 /// <param name="Region">Non-null for an "Edit selected area" request: the prompt targets only the masked region.</param>
+/// <param name="Is3dScanSource">
+/// "Proiect scanat 3D (LiDAR)": the source image is a perspective render of a 3D room scan, compiled as a 3D → photorealistic
+/// synthesis (exact scanned dimensions and openings) instead of a photo edit. False for every photo-based request.
+/// </param>
+/// <param name="Fixtures">
+/// Stage-1 vision detections (outlets, switches, radiators, doors, windows, corners) the instruction is grounded on;
+/// null when the detector did not run, empty when it ran and found nothing usable.
+/// </param>
 public sealed record GenerationPlan(
     string Mode,
     string Prompt,
@@ -57,7 +65,9 @@ public sealed record GenerationPlan(
     string Engine = "deterministic",
     string Instruction = "",
     PromptFormat Format = PromptFormat.Clip,
-    SelectionRegion? Region = null)
+    SelectionRegion? Region = null,
+    bool Is3dScanSource = false,
+    IReadOnlyList<DetectedFixture>? Fixtures = null)
 {
     /// <summary>
     /// The plan as the target model reads it. Instruction models get the natural-language instruction as
@@ -66,6 +76,22 @@ public sealed record GenerationPlan(
     public GenerationPlan For(PromptFormat format) => format == PromptFormat.Instruction && Instruction.Length > 0
         ? this with { Prompt = Instruction, NegativePrompt = "", Format = PromptFormat.Instruction }
         : this;
+
+    /// <summary>
+    /// Grounds the plan on the detected fixtures: the coordinate anchor clause goes into the natural-language instruction
+    /// (and into <see cref="Prompt"/> when it already holds that instruction). CLIP prompts are left untouched — a 72-token
+    /// tag list cannot carry coordinates; the pixel shield still protects outlets and switches there.
+    /// </summary>
+    public GenerationPlan WithFixtures(IReadOnlyList<DetectedFixture> fixtures)
+    {
+        if (fixtures.Count == 0) return this with { Fixtures = fixtures };
+        return this with
+        {
+            Fixtures = fixtures,
+            Instruction = RoomFixtures.InjectAnchors(Instruction, fixtures),
+            Prompt = Format == PromptFormat.Instruction ? RoomFixtures.InjectAnchors(Prompt, fixtures) : Prompt,
+        };
+    }
 }
 
 /// <summary>
@@ -305,18 +331,21 @@ public static partial class GenerationPrompt
             var (smartPrompt, instruction, parts) = Compile(brief, mode, scene, smartScenario, scopePrompt, smartLayout.Prompt,
                 budget, windowsCount, extraPrompt);
             var smartNegative = ArchitecturalPromptCompiler.NegativePrompt(mode, brief.PreserveStructure,
-                Js.AsString(Js.Prop(aiEl, "negativePrompt")) is { } rawNeg ? userNegative : null);
+                Js.AsString(Js.Prop(aiEl, "negativePrompt")) is { } rawNeg ? userNegative : null, brief.Is3dScanSource);
 
             // Calibrated strength: preserved structure stays in the 0.62–0.80 band (finishes change, geometry holds),
             // a full redesign needs ≥ 0.80 to move away from the photo. Default = the 0.72 sweet spot.
             var requested = ReadNumber(Js.Prop(dimensionsEl, "aiStrength"), 40, 100, ArchitecturalPromptCompiler.RecommendedStrength * 100) / 100;
-            var smartStrength = ArchitecturalPromptCompiler.CalibrateStrength(requested, brief.PreserveStructure);
+            // A 3D-scan source has no photo pixels to keep: the shaded planes must turn into real materials (high band)
+            var smartStrength = brief.Is3dScanSource
+                ? ArchitecturalPromptCompiler.ScanSynthesisStrength(requested)
+                : ArchitecturalPromptCompiler.CalibrateStrength(requested, brief.PreserveStructure);
             var smartSteps = (int)Js.Round(ReadNumber(Js.Prop(aiEl, "inferenceSteps"), AiLimits.InferenceStepsMin, AiLimits.InferenceStepsMax,
                 ArchitecturalPromptCompiler.SmartInferenceStepsDefault));
             var smartGuidance = ReadNumber(Js.Prop(aiEl, "guidanceScale"), AiLimits.GuidanceMin, AiLimits.GuidanceMax,
                 ArchitecturalPromptCompiler.SmartGuidanceDefault);
             return new GenerationPlan(mode, smartPrompt, smartNegative, smartSteps, smartGuidance, seed, smartStrength,
-                Math.Round(smartStrength * 100), brief, parts, Instruction: instruction);
+                Math.Round(smartStrength * 100), brief, parts, Instruction: instruction, Is3dScanSource: brief.Is3dScanSource);
         }
 
         var prompt = BuildPrompt(
@@ -393,9 +422,14 @@ public static partial class GenerationPrompt
         var structureCue = brief.PreserveStructure ? StructurePreserveCue : StructureRedesignCue;
 
         var lockedSpecs = specs.Select(s => s.PromptEn).ToList();
+        var scale = brief.Scale;
+        ScanGeometry? scan = brief.Is3dScanSource
+            ? new ScanGeometry(scale?.Length, scale?.Width, scale?.Height, brief.DoorCount, brief.WindowCount)
+            : null;
         var segments = new List<string>
         {
             scenePrompt,
+            scan is null ? "" : ArchitecturalPromptCompiler.ScanClip(scan),
             string.Join(", ", lockedSpecs),
             materials,                                   // user-named items without an element spec (LED strip, plants…)
             userWords,
@@ -419,7 +453,6 @@ public static partial class GenerationPrompt
 
         var prompt = Assemble(segments);
 
-        var scale = brief.Scale;
         var instruction = ArchitecturalPromptCompiler.Instruction(new InstructionBrief(
             Mode: mode,
             Space: SpaceNoun(scenePrompt, mode),
@@ -436,7 +469,8 @@ public static partial class GenerationPrompt
             ScaleHint: ArchitecturalPromptCompiler.ScaleHint(scale, mode),
             Details: MergeTerms(Strip(scenarioPrompt), scopePrompt, extraPrompt, brief.PreserveStructure ? Strip(layoutPrompt) : "", Strip(budgetDetails)),
             OptimizationGoal: brief.OptimizationGoal,
-            Ergonomics: brief.ErgonomicConstraints));
+            Ergonomics: brief.ErgonomicConstraints,
+            Scan: scan));
 
         return (prompt, instruction, new SmartPromptParts(scenePrompt, lockedSpecs, structureCue, PhotographyDirective(mode), userSlots));
     }

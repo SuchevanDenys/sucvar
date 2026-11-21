@@ -331,6 +331,10 @@ public sealed class OfflineImageProcessor : IImageProcessor
     public Task<string> CompositeRegionAsync(string sourceDataUrl, string generatedSource, string maskDataUrl, CancellationToken ct = default) =>
         generatedSource.StartsWith("data:") ? _real.CompositeRegionAsync(sourceDataUrl, generatedSource, maskDataUrl, ct) : throw new HttpRequestException("offline");
 
+    public Task<string> ShieldFixturesAsync(string sourceDataUrl, string generatedSource, IReadOnlyList<Sucvar.Domain.Ai.DetectedFixture> shields,
+        CancellationToken ct = default) =>
+        generatedSource.StartsWith("data:") ? _real.ShieldFixturesAsync(sourceDataUrl, generatedSource, shields, ct) : throw new HttpRequestException("offline");
+
     private sealed class NoHttp : IHttpClientFactory
     {
         public HttpClient CreateClient(string name) => throw new HttpRequestException("offline");

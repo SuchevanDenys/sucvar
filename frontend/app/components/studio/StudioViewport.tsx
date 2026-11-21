@@ -3,26 +3,48 @@
 // cadru adaptat raportului real al imaginii), starea de randare (GenerationVeil), previzualizare pe tot ecranul.
 // Toate acțiunile secundare stau într-o singură bară flotantă (pastile icon + etichetă scurtă; doar icon pe ecrane
 // mici) + un meniu „Mai multe” — butoanele nu se mai împrăștie pe rânduri separate:
-//   „Compară cu originalul” · „Inspector obiecte” · „Variantă nouă” · „Editează acest rezultat” · „Descarcă”
+//   „Compară cu originalul” · „Inspector obiecte” · „Afișează repere MEP & colțuri” · „Variantă nouă” · „Editează acest rezultat” · „Descarcă”
 //   meniu: „Ecran complet” · „Schimbă fotografia” · „Ajustează selecția” (doar în „Editează o zonă”).
 // Modul de lucru se alege în panoul din stânga; în „Editează o zonă” fotografia devine canvasul măștii (MaskEditor),
 // singurul loc unde apare bara pensulei (Pensulă / Radieră / Mărime / Anulează / Resetează).
+// Sus: comutatorul celor două surse — „1. Fotografie cameră” (încărcare / demo) și „2. Proiect scanat 3D (LiDAR)”
+// (perspectiva interioară a scanării: insignă cu cotele, unghiul camerei 3D, alt fișier LiDAR). Ambele surse trec prin
+// același canvas: Redesign, Optimizare spațiu, Editează o zonă și „Editează acest rezultat”.
 "use client";
 
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Columns2, Download, Eye, EyeOff, ImagePlus, Lock, Maximize2, MoreHorizontal, PenLine, RefreshCw, ScanSearch, Upload, Wand2,
+  Box, Camera, Columns2, Crosshair, Download, Eye, EyeOff, FileBox, ImagePlus, Lock, Maximize2, MoreHorizontal, PenLine, RefreshCw, RotateCcw, RotateCw,
+  ScanLine, ScanSearch, Smartphone, Sparkles, SwitchCamera, Upload, Wand2,
 } from 'lucide-react';
 import BeforeAfterSlider from '@/app/components/ui/BeforeAfterSlider';
 import ImageLightbox from '@/app/components/ui/ImageLightbox';
 import GenerationVeil from '@/app/components/studio/GenerationVeil';
 import MaskEditor from '@/app/components/studio/MaskEditor';
 import ObjectInspector from '@/app/components/studio/ObjectInspector';
+import FixtureOverlay from '@/app/components/studio/FixtureOverlay';
 import type { DetectedItem } from '@/app/lib/studio/detectedItems';
+import { fixtureSummary, type DetectedFixture } from '@/app/lib/studio/fixtures';
 import type { MaskStroke } from '@/app/lib/studio/mask';
 import { getSkin } from '@/app/lib/theme/skin';
 import type { Language } from '@/app/types';
 import { tr } from '@/app/lib/i18n';
+import { cameraPresetLabel, meshPresetLabel, type MeshViewPreset } from '@/app/lib/studio/scanRender';
+
+/** Sursa Studio-ului: fotografia camerei sau perspectiva interioară a unei scanări 3D LiDAR. */
+export type StudioSource = 'photo' | 'scan';
+/** Acțiunile de unghi din Studio: presetările sau rotirea manuală (±22,5°) a privirii („overview” doar pe plasa reală). */
+export type ScanAngleAction = 'overview' | 'entry' | 'window' | 'left' | 'right';
+
+export interface StudioScanInfo {
+  /** „Sursă 3D LiDAR · 4,85 × 3,90 × 2,65 m · 1 ușă · 2 ferestre”. */
+  badge: string;
+  preset: MeshViewPreset;
+  /** Plasa reală texturată (WebGL): presetările „Vedere ansamblu” / „Unghi interior 1 / 2”. */
+  realMesh?: boolean;
+  /** Unghiul nou se randează (plasa reală, asincron). */
+  busy?: boolean;
+}
 
 interface StudioViewportProps {
   lang: Language;
@@ -53,10 +75,26 @@ interface StudioViewportProps {
   onNewVariant?: () => void;
   /** Obiectele detectate pe randare („Inspector obiecte”). */
   detectedItems?: readonly DetectedItem[];
+  /** Reperele structurale și MEP detectate înainte de randare (doar pentru randarea afișată; [] = fără comutator). */
+  detectedFixtures?: readonly DetectedFixture[];
   /** Fotografia inițială (pentru „Compară cu originalul” când imaginea de lucru e deja o randare). */
   rootImage?: string | null;
   /** Structura e blocată (pereți, uși, ferestre): pastila „Pereți, uși și ferestre blocate” lângă starea canvasului. */
   structureLocked?: boolean;
+  /** Comutatorul de sursă (absent = fără comutator). */
+  source?: StudioSource;
+  onSourceChange?: (source: StudioSource) => void;
+  /** Motivul pentru care „Proiect scanat 3D” nu e disponibil (ex. exterioare); null = disponibil. */
+  scanUnavailable?: string | null;
+  /** Scanarea activă (sursa „Proiect scanat 3D”); null = nicio scanare încă. */
+  scanInfo?: StudioScanInfo | null;
+  onScanAngle?: (action: ScanAngleAction) => void;
+  /** Deschide fereastra „Scanare LiDAR” (import / alt fișier / unghiul tău). */
+  onImportScan?: () => void;
+  /** Puntea live iPhone RoomPlan (fereastra LiDAR deschisă direct pe codul de asociere). */
+  onIphoneScan?: () => void;
+  /** Scanarea demo direct ca sursă 3D. */
+  onDemoScan?: () => void;
 }
 
 interface ToolAction {
@@ -74,8 +112,11 @@ interface ToolAction {
 export default function StudioViewport({
   lang, isDark, originalImage, generatedImage, issueDate, isDemoResult, providerNote, isLoading, isPhotoLoading = false,
   onFile, onPickFile, onDemoPhoto, editArea = false, maskStrokes = [], onMaskStrokesChange, onImageSize, regionalNote,
-  onUseResultAsSource, onNewVariant, detectedItems = [], rootImage = null, structureLocked = false,
+  onUseResultAsSource, onNewVariant, detectedItems = [], detectedFixtures = [], rootImage = null, structureLocked = false,
+  source = 'photo', onSourceChange, scanUnavailable = null, scanInfo = null, onScanAngle, onImportScan, onIphoneScan, onDemoScan,
 }: StudioViewportProps) {
+  const scanMode = source === 'scan';
+  const [anglesOpen, setAnglesOpen] = useState(false);
   const sk = getSkin(isDark);
   const t = (ro: string, en: string, fr?: string) => tr(lang, ro, en, fr);
   const [lightbox, setLightbox] = useState(false);
@@ -92,6 +133,10 @@ export default function StudioViewport({
   const inspecting = canInspect && inspectorOn && !showEditor;
   // Pas anterior din istoric (imaginea de lucru, fără randare nouă): obiectele lui rămân inspectabile
   const inspectWorking = !hasResult && !isLoading && !showEditor && inspectorOn && Boolean(originalImage) && detectedItems.length > 0;
+  // „Afișează repere MEP & colțuri”: opțional, oprit implicit (randarea rămâne curată)
+  const [fixturesOn, setFixturesOn] = useState(false);
+  const canShowFixtures = hasResult && !isLoading && detectedFixtures.length > 0;
+  const showFixtures = canShowFixtures && fixturesOn && !showEditor;
   // „Compară cu originalul”: imaginea „înainte” devine fotografia inițială în loc de imaginea de lucru
   const [compareRoot, setCompareRoot] = useState(false);
   const canCompareRoot = Boolean(rootImage && originalImage && rootImage !== originalImage);
@@ -158,6 +203,22 @@ export default function StudioViewport({
         onClick: () => setInspectorOn((v) => !v),
       });
     }
+    if (canShowFixtures) {
+      const sum = fixtureSummary(detectedFixtures);
+      inline.push({
+        id: 'fixtures',
+        icon: Crosshair,
+        label: t('Afișează repere MEP & colțuri', 'Show MEP & corner markers', 'Afficher repères MEP & angles'),
+        pressed: showFixtures,
+        disabled: showEditor,
+        title: t(
+          `${sum.mep} instalații · ${sum.openings} goluri · ${sum.corners} colțuri detectate înainte de randare${sum.shielded ? ` · ${sum.shielded} prize / întrerupătoare protejate la nivel de pixel` : ''}`,
+          `${sum.mep} MEP fixtures · ${sum.openings} openings · ${sum.corners} corners detected before rendering${sum.shielded ? ` · ${sum.shielded} outlets / switches pixel-protected` : ''}`,
+          `${sum.mep} installations · ${sum.openings} ouvertures · ${sum.corners} angles détectés avant le rendu${sum.shielded ? ` · ${sum.shielded} prises / interrupteurs protégés au pixel près` : ''}`,
+        ),
+        onClick: () => setFixturesOn((v) => !v),
+      });
+    }
     if (onNewVariant) inline.push({ id: 'variant', icon: RefreshCw, label: t('Variantă nouă', 'New variant', 'Nouvelle variante'), onClick: onNewVariant });
     if (onUseResultAsSource) inline.push({ id: 'edit', icon: PenLine, label: t('Editează acest rezultat', 'Edit this result', 'Modifier ce résultat'), primary: true, onClick: onUseResultAsSource });
     inline.push({ id: 'download', icon: Download, label: t('Descarcă', 'Download', 'Télécharger'), onClick: download });
@@ -165,7 +226,7 @@ export default function StudioViewport({
   }
   if (originalImage && !isLoading) {
     overflow.push({ id: 'full', icon: Maximize2, label: t('Ecran complet', 'Full screen'), onClick: () => setLightbox(true) });
-    if (onPickFile) overflow.push({ id: 'photo', icon: Upload, label: t('Schimbă fotografia', 'Change photo'), onClick: onPickFile });
+    if (onPickFile && !scanMode) overflow.push({ id: 'photo', icon: Upload, label: t('Schimbă fotografia', 'Change photo'), onClick: onPickFile });
   }
   // Fără randare: puținele acțiuni stau direct în bară (un meniu cu două opțiuni ar fi un click în plus)
   const pills = inline.length > 0 ? inline : overflow;
@@ -185,10 +246,94 @@ export default function StudioViewport({
 
   const statusLabel = isLoading
     ? t('Randare în curs', 'Rendering')
-    : hasResult ? t('Randare finalizată', 'Render complete') : originalImage ? (editArea ? t('Pictează zona de modificat', 'Paint the area to change', 'Peignez la zone à modifier') : t('Fotografie încărcată', 'Photo loaded')) : t('Canvas', 'Canvas');
+    : hasResult ? t('Randare finalizată', 'Render complete') : originalImage ? (editArea ? t('Pictează zona de modificat', 'Paint the area to change', 'Peignez la zone à modifier') : scanMode ? t('Perspectivă 3D încărcată', '3D perspective loaded', 'Perspective 3D chargée') : t('Fotografie încărcată', 'Photo loaded')) : t('Canvas', 'Canvas');
+
+  // Comutatorul de sursă: segmentat, arhitectural (bordo = activ), dezactivat cât timp se randează
+  const segBtn = (on: boolean) =>
+    `flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 h-9 px-3 rounded-full text-[12.5px] font-medium whitespace-nowrap cursor-pointer touch-manipulation transition-colors disabled:opacity-45 disabled:cursor-not-allowed ${
+      on ? (isDark ? 'bg-[#C94A6A] text-white' : 'bg-[#5C1628] text-white') : sk.segOff
+    }`;
+  const switcher = onSourceChange ? (
+    <div role="tablist" aria-label={t('Sursa proiectului', 'Project source', 'Source du projet')} className={`mb-2.5 flex gap-1 rounded-full border p-1 ${sk.line} ${isDark ? 'bg-[#110D0F]' : 'bg-[#FAF8F6]'}`}>
+      <button type="button" role="tab" aria-selected={!scanMode} disabled={isLoading} onClick={() => onSourceChange('photo')} className={segBtn(!scanMode)}>
+        <Camera className="w-4 h-4 shrink-0" aria-hidden />
+        <span className="truncate">1. {t('Fotografie cameră', 'Room photo', 'Photo de la pièce')}</span>
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={scanMode}
+        disabled={isLoading || Boolean(scanUnavailable)}
+        title={scanUnavailable ?? undefined}
+        onClick={() => onSourceChange('scan')}
+        className={segBtn(scanMode)}
+      >
+        <ScanLine className="w-4 h-4 shrink-0" aria-hidden />
+        <span className="truncate">2. {t('Proiect scanat 3D (LiDAR)', '3D scanned project (LiDAR)', 'Projet scanné 3D (LiDAR)')}</span>
+      </button>
+    </div>
+  ) : null;
+
+  const scanBusy = isLoading || Boolean(scanInfo?.busy);
+  const presetLabel = (p: MeshViewPreset) => (scanInfo?.realMesh ? meshPresetLabel(p, t) : p === 'overview' ? meshPresetLabel(p, t) : cameraPresetLabel(p, t));
+  const smallBtn = `inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-[12px] font-medium whitespace-nowrap cursor-pointer touch-manipulation transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${sk.line} ${sk.segOff}`;
+  const scanStrip = scanMode && scanInfo ? (
+    <div className="mb-2.5 space-y-2 px-1">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={`inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full border px-2.5 h-7 text-[12px] font-medium ${sk.brassBadge}`}>
+          <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${sk.brassDot}`} aria-hidden />
+          <span className="truncate tabular-nums">{scanInfo.badge}</span>
+        </span>
+        <span className={`hidden sm:inline text-[11px] ${sk.dim}`}>{presetLabel(scanInfo.preset)}</span>
+        {scanInfo.busy && <span role="status" aria-label={t('Se randează unghiul', 'Rendering the angle', 'Rendu de l’angle')} className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#A67C52] border-t-transparent" />}
+        <span className="ml-auto flex flex-wrap items-center gap-1.5">
+          {onScanAngle && (
+            <button type="button" aria-expanded={anglesOpen} disabled={scanBusy} onClick={() => setAnglesOpen((o) => !o)} className={smallBtn}>
+              <SwitchCamera className="w-3.5 h-3.5" aria-hidden />
+              {t('Schimbă unghiul camerei 3D', 'Change 3D camera angle', 'Changer l’angle de la caméra 3D')}
+            </button>
+          )}
+          {onImportScan && (
+            <button type="button" disabled={isLoading} onClick={onImportScan} className={smallBtn}>
+              <FileBox className="w-3.5 h-3.5" aria-hidden />
+              {t('Încarcă alt fișier LiDAR', 'Load another LiDAR file', 'Charger un autre fichier LiDAR')}
+            </button>
+          )}
+        </span>
+      </div>
+      {anglesOpen && onScanAngle && (
+        <div role="group" aria-label={t('Unghiul camerei 3D', '3D camera angle', 'Angle de la caméra 3D')} className={`flex flex-wrap items-center gap-1 rounded-2xl sm:rounded-full border p-1 ${sk.line}`}>
+          {(scanInfo.realMesh ? (['overview', 'entry', 'window'] as const) : (['entry', 'window'] as const)).map((p) => (
+            <button
+              key={p}
+              type="button"
+              aria-pressed={scanInfo.preset === p}
+              disabled={scanBusy}
+              onClick={() => onScanAngle(p)}
+              className={`inline-flex h-8 items-center rounded-full px-3 text-[12px] font-medium whitespace-nowrap cursor-pointer touch-manipulation disabled:opacity-40 ${scanInfo.preset === p ? sk.segOn : sk.segOff}`}
+            >
+              {presetLabel(p)}
+            </button>
+          ))}
+          <span aria-hidden className={`mx-1 hidden sm:inline-block h-4 w-px ${isDark ? 'bg-[#2E2427]' : 'bg-[#E8E2E0]'}`} />
+          <span className={`px-1 text-[11px] ${sk.dim}`}>{t('Rotește privirea', 'Turn the view', 'Tourner la vue')}</span>
+          <button type="button" disabled={scanBusy} onClick={() => onScanAngle('left')} aria-label={t('Rotește spre stânga', 'Turn left', 'Tourner à gauche')} title={t('Rotește spre stânga', 'Turn left', 'Tourner à gauche')} className={`inline-flex h-8 w-8 items-center justify-center rounded-full cursor-pointer touch-manipulation disabled:opacity-40 ${scanInfo.preset === 'custom' ? sk.segOn : sk.segOff}`}>
+            <RotateCcw className="w-3.5 h-3.5" aria-hidden />
+          </button>
+          <button type="button" disabled={scanBusy} onClick={() => onScanAngle('right')} aria-label={t('Rotește spre dreapta', 'Turn right', 'Tourner à droite')} title={t('Rotește spre dreapta', 'Turn right', 'Tourner à droite')} className={`inline-flex h-8 w-8 items-center justify-center rounded-full cursor-pointer touch-manipulation disabled:opacity-40 ${scanInfo.preset === 'custom' ? sk.segOn : sk.segOff}`}>
+            <RotateCw className="w-3.5 h-3.5" aria-hidden />
+          </button>
+          <span className={`basis-full px-2 pb-0.5 text-[11px] ${sk.dim}`}>
+            {t('Un unghi nou înlocuiește imaginea de lucru (randările acestei surse se resetează).', 'A new angle replaces the working image (this source’s renders are reset).', 'Un nouvel angle remplace l’image de travail (les rendus de cette source sont réinitialisés).')}
+          </span>
+        </div>
+      )}
+    </div>
+  ) : null;
 
   return (
     <div className={`relative border rounded-xl p-2 sm:p-3 ${sk.card}`}>
+      {switcher}
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-1 pb-2.5">
         <span className={`flex items-center gap-2 text-[12px] ${sk.muted}`}>
           <span className={`h-1.5 w-1.5 rounded-full ${isLoading ? 'bg-amber-500 animate-pulse' : hasResult ? 'bg-emerald-500' : isDark ? 'bg-[#62535A]' : 'bg-[#A99EA1]'}`} />
@@ -234,7 +379,7 @@ export default function StudioViewport({
               ))}
             </div>
             {menu.length > 0 && (
-              <div ref={menuRef} className="relative shrink-0">
+              <div ref={menuRef} className="relative shrink-0">{/* meniul (z-[60]) stă peste hotspot-urile (z-[35]) și fișa (z-50) Inspectorului */}
                 <span aria-hidden className={`mx-0.5 inline-block h-4 w-px align-middle ${isDark ? 'bg-[#2E2427]' : 'bg-[#E8E2E0]'}`} />
                 <button
                   type="button"
@@ -248,7 +393,7 @@ export default function StudioViewport({
                   <MoreHorizontal className="w-4 h-4" aria-hidden />
                 </button>
                 {menuOpen && (
-                  <div role="menu" className={`absolute right-0 top-full z-30 mt-2 min-w-48 rounded-xl border p-1 ${sk.popover}`}>
+                  <div role="menu" className={`absolute right-0 top-full z-[60] mt-2 min-w-48 rounded-xl border p-1 ${sk.popover}`}>
                     {menu.map((a) => (
                       <button
                         key={a.id}
@@ -269,6 +414,8 @@ export default function StudioViewport({
         )}
       </div>
 
+      {scanStrip}
+
       {showEditor ? (
         <MaskEditor
           lang={lang}
@@ -279,6 +426,7 @@ export default function StudioViewport({
           onImageSize={onImageSize}
         />
       ) : hasResult && !isLoading ? (
+        <FixtureOverlay lang={lang} imageSrc={generatedImage as string} fixtures={detectedFixtures} enabled={showFixtures}>
         <ObjectInspector lang={lang} isDark={isDark} imageSrc={generatedImage as string} items={detectedItems} enabled={inspecting}>
           <BeforeAfterSlider
             beforeImg={beforeImage as string}
@@ -290,17 +438,56 @@ export default function StudioViewport({
             className="max-h-[72vh]"
           />
         </ObjectInspector>
+        </FixtureOverlay>
       ) : originalImage ? (
         <div {...dropProps} className={`relative flex items-center justify-center rounded-lg overflow-hidden border ${backdrop} ${dragOver ? 'dropzone-active' : sk.line}`}>
           <ObjectInspector lang={lang} isDark={isDark} imageSrc={originalImage} items={detectedItems} enabled={inspectWorking}>
             {/* eslint-disable-next-line @next/next/no-img-element -- data URL */}
             <img
               src={originalImage}
-              alt={t('Fotografia sursă', 'Source photo')}
+              alt={scanMode ? t('Perspectiva interioară a scanării 3D', 'Interior perspective of the 3D scan', 'Perspective intérieure du scan 3D') : t('Fotografia sursă', 'Source photo')}
               className={`block w-full h-auto max-h-[72vh] object-contain transition-[filter,opacity] duration-700 ${isLoading ? 'opacity-90 saturate-[0.85]' : ''}`}
             />
           </ObjectInspector>
           {isLoading && <GenerationVeil lang={lang} regional={editArea} />}
+        </div>
+      ) : scanMode ? (
+        <div className={`w-full aspect-[4/3] max-h-[72vh] rounded-lg border border-dashed flex flex-col items-center justify-center gap-4 px-6 text-center ${sk.grid} ${sk.line}`}>
+          <span className={`flex h-14 w-14 items-center justify-center rounded-full border ${sk.line} ${isDark ? 'bg-[#1A1416]' : 'bg-white'}`}>
+            <Box className={`w-6 h-6 ${sk.strong}`} aria-hidden />
+          </span>
+          <span>
+            <span className={`block text-[16px] font-semibold tracking-tight ${sk.strong}`}>
+              {t('Generează direct din scanarea 3D a camerei', 'Generate straight from the 3D room scan', 'Générez directement depuis le scan 3D de la pièce')}
+            </span>
+            <span className={`block mt-1.5 max-w-md text-[13px] ${sk.muted}`}>
+              {t(
+                '.zip Scaniverse (obj + jpg) · .obj · RoomPlan .json · .usdz — camera reală scanată, cu textura și cotele ei exacte, devine geometria randării fotorealiste.',
+                '.zip Scaniverse (obj + jpg) · .obj · RoomPlan .json · .usdz — the real scanned room, with its texture and exact dimensions, becomes the geometry of the photorealistic render.',
+                '.zip Scaniverse (obj + jpg) · .obj · RoomPlan .json · .usdz — la pièce réelle scannée, avec sa texture et ses cotes exactes, devient la géométrie du rendu photoréaliste.',
+              )}
+            </span>
+          </span>
+          <span className="flex flex-wrap items-center justify-center gap-2">
+            {onImportScan && (
+              <button type="button" onClick={onImportScan} disabled={isLoading} className={`inline-flex items-center gap-1.5 h-10 px-4 rounded-full text-[13px] font-medium cursor-pointer touch-manipulation disabled:opacity-40 ${sk.btn}`}>
+                <ScanLine className="w-4 h-4" aria-hidden />
+                {t('Importă scanare LiDAR', 'Import LiDAR scan', 'Importer un scan LiDAR')}
+              </button>
+            )}
+            {onIphoneScan && (
+              <button type="button" onClick={onIphoneScan} disabled={isLoading} className={`inline-flex items-center gap-1.5 h-10 px-4 rounded-full text-[13px] font-medium cursor-pointer touch-manipulation disabled:opacity-40 ${sk.btnGhost}`}>
+                <Smartphone className="w-4 h-4" aria-hidden />
+                {t('Scanează live cu iPhone', 'Scan live with iPhone', 'Scanner en direct avec l’iPhone')}
+              </button>
+            )}
+            {onDemoScan && (
+              <button type="button" onClick={onDemoScan} disabled={isLoading} className={`inline-flex items-center gap-1.5 h-10 px-4 rounded-full text-[13px] font-medium cursor-pointer touch-manipulation disabled:opacity-40 ${sk.btnGhost}`}>
+                <Sparkles className="w-4 h-4" aria-hidden />
+                {t('Scanare demo (Living 4,85 × 3,90 × 2,65 m)', 'Demo scan (Living 4.85 × 3.90 × 2.65 m)', 'Scan démo (Séjour 4,85 × 3,90 × 2,65 m)')}
+              </button>
+            )}
+          </span>
         </div>
       ) : (
         <div className="space-y-3">
